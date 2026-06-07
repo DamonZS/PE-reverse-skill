@@ -1,6 +1,6 @@
 # pe-reverse-analyzer
 
-> 通用全平台逆向分析工具 —— 从二进制到可编译源码 | 从暴露面到安全加固
+> 一款最强AI逆向Skill，通用全平台逆向分析工具 —— 从二进制到可编译源码 | 从暴露面到安全加固
 
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android%20%7C%20iOS%20%7C%20Web-blue)
 ![Language](https://img.shields.io/badge/language-Python%203.10%2B-green)
