@@ -1351,9 +1351,9 @@ def _write_makefile(output_dir, project_name, bits):
     if not re.search(r'[A-Za-z]', safe_name):
         safe_name = "target"
     safe_name = re.sub(r'_+', '_', safe_name).strip('_')
-    content = """CC = gcc
-CFLAGS = -Wall -O2 %(arch)s -DUNICODE -D_UNICODE
-LDFLAGS = %(arch)s -mwindows
+    content = f"""CC = gcc
+CFLAGS = -Wall -O2 {arch} -DUNICODE -D_UNICODE
+LDFLAGS = {arch} -mwindows
 LIBS = -lkernel32 -luser32 -ladvapi32 -lws2_32 -lshell32 -lwinmm -lgdi32
 
 SRC_DIR = src
@@ -1361,20 +1361,20 @@ INC_DIR = include
 BUILD_DIR = build
 
 SOURCES = $(wildcard $(SRC_DIR)/*.c)
-OBJECTS = $(patsubst $(SRC_DIR)/%%.c,$(BUILD_DIR)/%%.o,$(SOURCES))
-TARGET = %(project)s.exe
+OBJECTS = $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SOURCES))
+TARGET = {safe_name}.exe
 
 all: $(BUILD_DIR) $(TARGET)
 $(BUILD_DIR):
 \tmkdir -p $(BUILD_DIR)
 $(TARGET): $(OBJECTS)
 \t$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
-$(BUILD_DIR)/%%.o: $(SRC_DIR)/%%.c
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 \t$(CC) $(CFLAGS) -I$(INC_DIR) -c -o $@ $<
 clean:
 \trm -rf $(BUILD_DIR) $(TARGET)
 .PHONY: all clean
-""" % {'arch': arch, 'project': safe_name}
+"""
     with open(output_dir / "Makefile", 'w', encoding='utf-8') as f:
         f.write(content)
 
@@ -1492,7 +1492,7 @@ def _write_apk_settings_gradle(path, name):
         f.write("""pluginManagement {
     repositories { google(); mavenCentral(); gradlePluginPortal() }
 }
-dependencyResolution {
+dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = '%s'

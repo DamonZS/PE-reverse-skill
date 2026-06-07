@@ -204,7 +204,7 @@ def find_xrefs(data, base_addr=0, arch='x86', mode=32):
                 xrefs[target].append(insn.address)
             except:
                 pass
-        elif insn.mnemonic == 'jmp' and not insn.op_str.startswith('0x') == False:
+        elif insn.mnemonic == 'jmp' and insn.op_str.startswith('0x'):
             try:
                 target = int(insn.op_str, 16)
                 xrefs[target].append(insn.address)

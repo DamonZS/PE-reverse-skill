@@ -1,18 +1,23 @@
 ---
 name: pe-reverse-analyzer
 description: >
-  通用全平台逆向分析工具，覆盖 Windows PE/EXE/DLL、Android APK、iOS IPA 三大平台，
-  以及 Web API 安全审计与逆向工程（黑盒）。支持从静态分析 → 加壳检测 → 脱壳 → 反编译到源码 → 修改源码 → 重构建完整链路，
-  以及对外暴露的 Web 服务进行安全评估、配置审计、漏洞发现与修复方案输出。
-  当用户发送二进制文件（.exe/.dll/.apk/.ipa/.app）并要求逆向、分析、脱壳、反编译、修改、重打包、找 flag/序列号/接口时使用，
-  或当用户要求对自己的 Web/API 服务进行安全审计、渗透测试、漏洞扫描与修复时使用。
-  适用于 CTF 逆向题、恶意软件分析、APP 安全审计、Web 安全评估、API 逆向工程。
-
-  内置用户上下文：CTF 大赛应用开发、
-  防御面研究（AI/LLM 安全加固、prompt injection 防御、安全基础设施）、
-  红队自测（用户自有系统的安全审计）。
-  加载本技能后自动注入上述三个方向的通用上下文。
-agent_created: true
+  通用全平台逆向分析工具，覆盖 Windows PE/EXE/DLL、Android APK、iOS IPA 
+  三大平台，以及 API 接口逆向和 Web 主动攻击审计。支持从静态分析→加壳检测→
+  脱壳→反编译到源码→修改源码→重构建完整链路，内含 12 模块 Web 主动攻击引擎。
+triggers:
+  - 逆向
+  - 脱壳
+  - 反编译
+  - 安全审计
+  - 渗透测试
+  - 漏洞扫描
+  - Web攻击
+  - APK分析
+  - PE分析
+  - 加壳检测
+  - 源码重构
+  - 主动攻击
+  - Web安全
 ---
 
 # 逆向分析 Skill — 源码重构导向
@@ -1532,6 +1537,12 @@ python scripts/web_attack.py https://target.com --auth "Bearer eyJ..."
 
 # 跳过可能触发 IDS/WAF 的时间盲注载荷
 python scripts/web_attack.py https://target.com --skip-ids
+
+# 指定输出目录
+python scripts/web_attack.py https://target.com --output-dir ./reports/
+
+# 禁用 SSL 证书验证
+python scripts/web_attack.py https://target.com --no-verify-ssl
 ```
 
 **产出**:

@@ -54,7 +54,7 @@ def analyze_pe(exe_path, deep=False):
     sub_sys = {2: "Windows GUI", 3: "CUI (Console)", 9: "Windows CE", 10: "EFI"} .get(oh.Subsystem, "Other(%d)" % oh.Subsystem)
     import datetime
     ts = pe.FILE_HEADER.TimeDateStamp
-    dt_str = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S") + " UTC"
+    dt_str = datetime.fromtimestamp(ts, tz=datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S") + " UTC"
 
     out("  文件类型:     PE32 (%s-bit)" % bits)
     out("  链接器版本:   %d.%d" % (oh.MajorLinkerVersion, oh.MinorLinkerVersion))

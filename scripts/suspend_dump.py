@@ -223,7 +223,7 @@ def main():
     print(f"  模块基址: 0x{mod_base:08X}")
 
     # 读取 PE Header
-    pe_header = read_mem(h_process, mod_base, 0x400)
+    pe_header = read_mem(h_process, mod_base, 0x1000)  # 4KB to handle large headers
     if not pe_header:
         print(f"[!] 无法读取 PE Header")
         kernel32.TerminateProcess(h_process, 0)

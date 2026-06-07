@@ -325,7 +325,7 @@ def analyze_api(items, output_path=None):
                         schema = infer_json_schema(data)
                         for k, v in list(schema.get('properties', {}).items())[:10]:
                             out('      - %s: %s' % (k, v.get('type', 'unknown')))
-                    elif isinstance(data, list()) and data:
+                    elif isinstance(data, list) and data:
                         out('    响应体: 数组，首项结构:')
                         schema = infer_json_schema(data[0])
                         for k, v in list(schema.get('properties', {}).items())[:10]:
@@ -507,6 +507,7 @@ def main():
         items = load_mitmproxy(args.mitm_log)
 
     elif args.pcap:
+        print("[!] PCAP mode is experimental: HTTP parsing is basic, results will have 'unknown' URLs")
         print('[*] 加载 PCAP 文件: %s' % args.pcap)
         try:
             import scapy.all as scapy
