@@ -24,15 +24,15 @@ from collections import defaultdict
 # ============================================================
 
 def get_capstone():
-    """获取 capstone 模块（自动安装）"""
+    """获取 capstone 模块"""
     try:
         import capstone
         return capstone
     except ImportError:
-        print("[*] capstone 未安装，正在安装...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "capstone", "-q"])
-        import capstone
-        return capstone
+        print("[!] capstone 模块未安装，请手动安装:")
+        print("    pip install capstone")
+        print("    或使用 requirements.txt 安装全部依赖")
+        return None
 
 
 def disassemble(data, base_addr=0, arch='x86', mode=32, count=0):
@@ -336,21 +336,17 @@ def extract_registry_keys(data):
 # ============================================================
 
 def ensure_package(package, import_name=None):
-    """检查 Python 包是否可用，不可用则自动安装"""
+    """检查 Python 包是否可用，不可用则提示用户手动安装"""
     if import_name is None:
         import_name = package
     try:
         __import__(import_name)
         return True
     except ImportError:
-        print("[*] 正在安装 %s..." % package)
-        code = run_cmd('"%s" -m pip install %s -q' % (sys.executable, package))[0]
-        if code == 0:
-            print("[+] %s 安装成功" % package)
-            return True
-        else:
-            print("[-] %s 安装失败" % package)
-            return False
+        print(f"[!] 缺少依赖: {package}")
+        print(f"    请手动安装: pip install {package}")
+        print(f"    或使用 requirements.txt 安装全部依赖")
+        return False
 
 
 # ============================================================

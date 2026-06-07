@@ -1,9 +1,6 @@
 ---
 name: pe-reverse-analyzer
-description: >
-  通用全平台逆向分析工具，覆盖 Windows PE/EXE/DLL、Android APK、iOS IPA 
-  三大平台，以及 API 接口逆向和 Web 主动攻击审计。支持从静态分析→加壳检测→
-  脱壳→反编译到源码→修改源码→重构建完整链路，内含 12 模块 Web 主动攻击引擎。
+description: "通用全平台逆向分析工具，覆盖 Windows PE/EXE/DLL、Android APK、iOS IPA 三大平台，以及 API 接口逆向和 Web 主动攻击审计。支持从静态分析到加壳检测到脱壳到反编译到源码到修改源码到重构建完整链路，内含 12 模块 Web 主动攻击引擎。"
 triggers:
   - 逆向
   - 脱壳
