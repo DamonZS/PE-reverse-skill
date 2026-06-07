@@ -6,7 +6,7 @@
 ![Language](https://img.shields.io/badge/language-Python%203.10%2B-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
-覆盖 **Windows PE/EXE/DLL**、**Web**、**Android APK**、**iOS IPA** 三大平台，以及 **API 接口逆向** 与 **Web API 安全审计**。支持从静态分析 → 加壳检测 → 脱壳 → 反编译到源码 → 修改源码 → 重构建完整链路，以及对外暴露的 Web 服务进行安全评估、配置审计、漏洞发现与修复方案输出。
+覆盖 **Windows PE/EXE/DLL**、**Web**、**Android APK**、**iOS IPA** 四大平台，以及 **API 接口逆向** 与 **Web API 安全审计**。支持从静态分析 → 加壳检测 → 脱壳 → 反编译到源码 → 修改源码 → 重构建完整链路，以及对外暴露的 Web 服务进行安全评估、配置审计、漏洞发现与修复方案输出。
 
 适用于 **CTF 逆向题**、**恶意软件分析**、**APP 安全审计**、**Web 安全评估**、**API 逆向工程**。
 
