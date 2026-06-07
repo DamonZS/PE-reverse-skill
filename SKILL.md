@@ -120,6 +120,18 @@ python scripts/reconstruct.py <target.apk> --output ./reconstructed/
 
 # API → Python/Go SDK
 python scripts/reconstruct.py <flow.xml> --platform api --output ./sdk/
+
+# Web → 主动攻击审计（12 模块全量扫描）
+python scripts/web_attack.py https://target.com
+
+# Web → 只跑指定攻击模块
+python scripts/web_attack.py https://target.com --only sqli,xss,ssrf
+
+# Web → 走 Burp 代理 + 带认证 Token
+python scripts/web_attack.py https://target.com --proxy http://127.0.0.1:8080 --auth "Bearer eyJ..."
+
+# Web → 跳过可能触发 WAF 的载荷
+python scripts/web_attack.py https://target.com --skip-ids
 ```
 
 ---
@@ -491,6 +503,7 @@ ios-deploy --bundle target.app
 | `apk_analyze.py` | Android Studio 项目 | apktool, jadx | ✅ |
 | `ipa_analyze.py` | Xcode 项目（macOS） | class-dump, otool | ✅ |
 | `api_reverse.py` | Python/Go SDK + OpenAPI | mitmproxy（可选） | ✅ |
+| `web_attack.py` | **Web 主动攻击审计报告** | requests | ✅ 主力 |
 | `auto_evolve.py` | 自动进化引擎（新） | standard library | ✅ 自动运行 |
 
 ### 自动进化升级机制 🧬
@@ -1487,6 +1500,45 @@ Python3x.dll 依赖
 **Web API 安全审计也是逆向——逆向的是"暴露面"而非二进制。**
 从外部可见的 HTTP 响应头、API 端点行为、错误消息中还原系统架构、
 发现配置缺陷，与从二进制中还原源码遵循同一思维模式。
+
+### 一键自动化攻击
+
+```bash
+# 全量 12 模块攻击审计（推荐首次使用）
+python scripts/web_attack.py https://target.com
+
+# 模块列表:
+#   sqli          SQL 注入探测 (5 种注入点 × 6 种绕过)
+#   xss           XSS 探测 (反射型 + DOM 型 + 编码绕过)
+#   path_traversal 路径穿越 (双重编码 / Null字节 / Windows+Unix)
+#   cors          CORS 利用链 (Origin 反射 / 子域通配 / Null Origin)
+#   auth_bypass   认证绕过 (JWT 篡改 / 无签名接受 / Header 注入)
+#   ssrf          SSRF 探测 (内网 IP + Cloud 元数据 + 协议绕过)
+#   cmdi          命令注入 + SSTI 模板注入
+#   idor          IDOR 探测 (ID 遍历 + 类型混淆)
+#   param_tampering API 参数篡改 (NoSQL注入 / 批量赋值 / 原型污染)
+#   race_condition 竞态条件 (并发请求状态不一致)
+#   info_extraction 敏感信息提取 (.git / .env / debug / 配置泄露)
+#   smuggling     HTTP 请求走私 (CL.TE / TE.CL)
+
+# 只跑指定模块
+python scripts/web_attack.py https://target.com --only sqli,xss,ssrf,auth_bypass
+
+# 走 Burp Suite 代理
+python scripts/web_attack.py https://target.com --proxy http://127.0.0.1:8080
+
+# 带认证 Token（测试认证后才能触发的漏洞）
+python scripts/web_attack.py https://target.com --auth "Bearer eyJ..."
+
+# 跳过可能触发 IDS/WAF 的时间盲注载荷
+python scripts/web_attack.py https://target.com --skip-ids
+```
+
+**产出**:
+- `web_attack_report_<domain>_<timestamp>.md` — 分级攻击报告
+- `web_attack_raw_<domain>_<timestamp>.json` — 原始请求/响应对
+
+**以下手动流程用于脚本不可用或需要精细控制的场景。**
 
 ### 适用场景
 
