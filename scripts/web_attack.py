@@ -19,7 +19,7 @@ Web 主动攻击审计脚本 — 主动探测而非被动检查
 
 用法:
   python web_attack.py https://target.com
-  python web_attack.py https://target.com --i-am-authorized  # 开启全部主动攻击
+  python web_attack.py https://target.com --i-own-this-target  # 开启全部主动攻击
   python web_attack.py https://target.com --depth 2 --timeout 15
   python web_attack.py https://target.com --skip-ids  # 跳过可能触发 WAF 的模块
   python web_attack.py https://target.com --only sqli,xss,ssrf  # 只跑指定模块
@@ -39,6 +39,7 @@ import json
 import time
 import hashlib
 import argparse
+import sys
 import threading
 from datetime import datetime
 from urllib.parse import urljoin, urlparse, quote, unquote
@@ -258,14 +259,14 @@ class WebAttacker:
     """主动攻击审计引擎"""
 
     def __init__(self, target_url, timeout=10, proxy=None, auth_header=None,
-                 depth=1, skip_ids=False, verify_ssl=False, i_am_authorized=False):
+                 depth=1, skip_ids=False, verify_ssl=False, i_own_this_target=False):
         self.target = target_url.rstrip("/")
         self.parsed = urlparse(self.target)
         self.domain = self.parsed.hostname
         self.timeout = timeout
         self.verify_ssl = verify_ssl
         self.skip_ids = skip_ids
-        self.i_am_authorized = i_am_authorized
+        self.i_own_this_target = i_own_this_target
 
         self._local = threading.local()
 
@@ -1546,8 +1547,11 @@ class WebAttacker:
         print(f"    仅限 CTF / 自有系统 / 书面授权的渗透测试\n")
 
         # 授权执行检查
-        if not self.i_am_authorized:
-            print(f"{YELLOW}[!] 未设置 --i-am-authorized，已禁用高危模块 (ssrf/cmdi/auth_bypass/smuggling){RESET}\n")
+        if not self.i_own_this_target:
+            print(f"\n{RED}[FATAL]{RESET} 必须显式声明目标所有权！")
+            print(f"    请加 --i-own-this-target 参数确认你拥有测试目标的合法授权")
+            print(f"    示例: python web_attack.py https://target.com --i-own-this-target")
+            sys.exit(1)
 
         # 阶段 0: 基线
         self.establish_baseline()
@@ -1570,11 +1574,6 @@ class WebAttacker:
             ("info_extraction", self.attack_info_extraction),
             ("smuggling", self.attack_smuggling),
         ]
-
-        # 未经授权时过滤高危模块
-        if not self.i_am_authorized:
-            high_risk = {"ssrf", "cmdi", "auth_bypass", "smuggling"}
-            modules = [(name, func) for name, func in modules if name not in high_risk]
 
         if only_modules:
             only_set = set(m.strip() for m in only_modules.split(","))
@@ -1771,7 +1770,7 @@ def main():
         description="Web 主动攻击审计脚本 — 主动探测而非被动检查",
         epilog="⚠️  仅对授权目标使用。CTF / 自有系统 / 书面授权的渗透测试。"
     )
-    parser.add_argument("--i-am-authorized", action="store_true",
+    parser.add_argument("--i-own-this-target", action="store_true",
                         help="我确认拥有目标系统的合法授权（开启全部主动攻击模块）")
     parser.add_argument("target", help="目标 URL (如 https://api.target.cn)")
     parser.add_argument("--timeout", type=int, default=10, help="请求超时秒数 (默认 10)")
@@ -1800,7 +1799,7 @@ def main():
         depth=args.depth,
         skip_ids=args.skip_ids,
         verify_ssl=args.verify_ssl,
-        i_am_authorized=args.i_am_authorized,
+        i_own_this_target=args.i_own_this_target,
     )
 
     attacker.run(only_modules=args.only)
