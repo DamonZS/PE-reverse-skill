@@ -257,29 +257,28 @@ class WebAttacker:
     """主动攻击审计引擎"""
 
     def __init__(self, target_url, timeout=10, proxy=None, auth_header=None,
-                 depth=1, skip_ids=False, only_modules=None, verify_ssl=False):
+                 depth=1, skip_ids=False, verify_ssl=False):
         self.target = target_url.rstrip("/")
         self.parsed = urlparse(self.target)
         self.domain = self.parsed.hostname
         self.timeout = timeout
         self.verify_ssl = verify_ssl
-        self.depth = depth
         self.skip_ids = skip_ids
 
-        self.session = requests.Session()
-        self.session.verify = verify_ssl
-        self.session.headers.update({
+        self._local = threading.local()
+
+        self._default_headers = {
             "User-Agent": USER_AGENTS[0],
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
             "Accept-Encoding": "gzip, deflate",
             "Connection": "close",
-        })
+        }
 
-        if proxy:
-            self.session.proxies = {"http": proxy, "https": proxy}
         if auth_header:
-            self.session.headers["Authorization"] = auth_header
+            self._default_headers["Authorization"] = auth_header
+
+        self._default_proxies = {"http": proxy, "https": proxy} if proxy else None
 
         # 发现收集
         self.findings = []
@@ -289,6 +288,18 @@ class WebAttacker:
 
         # 线程锁
         self._lock = threading.Lock()
+
+    @property
+    def session(self):
+        if not hasattr(self._local, 'session'):
+            s = requests.Session()
+            s.verify = self.verify_ssl
+            s.headers.update(self._default_headers)
+            if self._default_proxies:
+                s.proxies = self._default_proxies
+            s.timeout = self.timeout
+            self._local.session = s
+        return self._local.session
 
     def _log_finding(self, module, severity, title, detail, request=None, response=None):
         """记录一个发现"""
@@ -384,8 +395,7 @@ class WebAttacker:
             self._log_finding("baseline", "INFO", "SPA catch-all 检测",
                               "随机路径返回 200，可能为 SPA 前端路由。后续扫描需对比内容长度。")
 
-        # 安全头检测
-        self._check_security_headers(resp) if resp else None
+        # 安全头检测 (仅首页)
         home_resp = self._request("GET", self.target)
         if home_resp:
             self._check_security_headers(home_resp)
@@ -1277,7 +1287,7 @@ class WebAttacker:
             try:
                 parsed = json.loads(content)
                 is_json = True
-            except:
+            except json.JSONDecodeError:
                 pass
 
             sensitive_data = []
@@ -1330,7 +1340,7 @@ class WebAttacker:
                                           "/api/status 配置泄露",
                                           f"未认证获取 {len(leak_fields)} 个配置项: "
                                           f"{'; '.join(leak_fields[:5])}")
-            except:
+            except json.JSONDecodeError:
                 pass
 
     # ───────────────────────────────────────────────────────
@@ -1466,7 +1476,7 @@ class WebAttacker:
                 try:
                     json.loads(resp.text)
                     is_json = True
-                except:
+                except json.JSONDecodeError:
                     pass
 
                 # 确定类别

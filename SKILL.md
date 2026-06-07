@@ -137,6 +137,12 @@ python scripts/web_attack.py https://target.com --proxy http://127.0.0.1:8080 --
 
 # Web → 跳过可能触发 WAF 的载荷
 python scripts/web_attack.py https://target.com --skip-ids
+
+# Web → 指定输出目录
+python scripts/web_attack.py https://target.com --output-dir ./reports/
+
+# Web → 禁用 SSL 证书验证
+python scripts/web_attack.py https://target.com --no-verify-ssl
 ```
 
 ---
@@ -500,7 +506,9 @@ ios-deploy --bundle target.app
 | `deep_decompile.py` | 函数级伪代码 + IAT 重建 | pefile, capstone | ✅ |
 | `suspend_dump.py` | 脱壳后 PE + 段数据 | pefile, capstone, ctypes | ✅ 推荐 |
 | `integrate_v2.py` | 模块化源码整合 | pefile, capstone | ✅ 推荐 |
+| `integrate_final.py` | 最终项目整合（v3） | pefile, capstone | ✅ |
 | `deep_extract.py` | 深度字符串/URL 提取 | pefile | ✅ |
+| `ghidra_headless_decompile.py` | Ghidra Headless 批量反编译 | Ghidra | ✅ |
 | `integrate_sources.py` | v1 整合（分类失败） | pefile | ⚠️ 已废弃 |
 | `auto_unpack.py` | Unicorn 模拟器脱壳 | pefile, capstone, unicorn | ⚠️ 已废弃 |
 | `debug_unpack.py` | Windows 调试 API 脱壳 | pefile, ctypes | ⚠️ 已废弃 |
@@ -1146,8 +1154,6 @@ echo [OK] Build complete!
 - 每次逆向结束后，产出必须复制到这个统一目录
 - 禁止同一个目标的报告、源码、SDK 分散在多个独立目录
 - 目录名用英文/拼音，不含空格
-
----
 
 ---
 
