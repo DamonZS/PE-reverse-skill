@@ -6,7 +6,7 @@
 
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android%20%7C%20iOS%20%7C%20Web-blue)
 ![Language](https://img.shields.io/badge/language-Python%203.10%2B-green)
-![License](https://img.shields.io/badge/license-MIT-orange)
+![License](https://img.shields.io/badge/license-CNF--NC%20%E9%9D%9E%E5%95%86%E4%B8%9A%E5%8D%81%E4%BF%AE-red)
 ![GPT--5.5](https://img.shields.io/badge/GPT--5.5-破甲引擎-red)
 
 作者API中转站 https://api.toporeduce.cn/ 请各位支持一下。
@@ -660,6 +660,40 @@ reconstructed_<name>/
 - **Application 面板** — 查看 Cookie、LocalStorage、SessionStorage、IndexedDB
 - **Console 面板** — 执行 JavaScript、测试 XSS payload
 - **Sources 面板** — 调试 JS、下断点、修改 JS 变量
+
+---
+
+## 许可协议
+
+本项目采用 **CNF-NC 非商业许可协议**（详见 [LICENSE](./LICENSE)）。
+
+### 允许
+
+- 阅读、学习、研究源代码
+- 在非商业目的下运行
+- Fork 用于个人学习（副本仍受本协议约束）
+
+### 禁止
+
+- **禁止商业使用** — 不得直接或间接用于任何商业目的
+- **禁止修改源代码** — 包括人工修改和 AI 自动修改，任何形式的变更均被禁止
+- **禁止再分发** — 未经书面许可不得发布到任何平台
+- **禁止用于非法目的** — 未经授权的逆向工程、破解 DRM、攻击未授权目标等
+
+### GPT-5.5 破甲能力特别声明
+
+本项目内置 GPT-5.5 破甲引擎，该功能解除 AI 模型的内容安全限制。使用者需自行承担使用风险，版权持有人不对使用后果承担责任。
+
+---
+
+## 免责声明
+
+1. 本项目按"现状"提供，不附带任何明示或暗示的保证
+2. 版权持有人不对因使用本项目而产生的任何直接、间接、附带或后果性损害承担责任
+3. 使用者应自行评估法律风险和技术风险，确保使用行为符合当地法律法规
+4. 使用者必须确保在合法授权的前提下使用（CTF 竞赛、自己的程序、书面授权的渗透测试、法律允许的安全研究）
+5. 本项目不提供任何技术支持保证
+6. **使用者对使用本项目的一切行为负全部责任**
 
 ---
 
