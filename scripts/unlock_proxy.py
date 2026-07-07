@@ -227,32 +227,78 @@ class ProxyHandler(BaseHTTPRequestHandler):
             if v:
                 fwd_headers[h] = v
 
-        # 5. 转发到上游
-        try:
-            resp = requests.request(
-                method=method,
-                url=upstream_url,
-                headers=fwd_headers,
-                data=body,
-                timeout=300,
-                stream=True,
-            )
-        except requests.RequestException as e:
-            self._log(f"!!  上游请求失败: {e}")
-            self.send_error(502, f"Upstream error: {e}")
-            return
+        # 5. 转发到上游（带重试，中转站偶发断连）
+        last_err = None
+        resp = None
+        for attempt in range(3):
+            try:
+                resp = requests.request(
+                    method=method,
+                    url=upstream_url,
+                    headers=fwd_headers,
+                    data=body,
+                    timeout=300,
+                    stream=True,
+                )
+                break  # 拿到响应就跳出（不立即读 content）
+            except (requests.RequestException, ConnectionError) as e:
+                last_err = e
+                self._log(f"!!  上游请求失败(尝试 {attempt+1}/3): {e}")
+                if attempt < 2:
+                    time.sleep(1.0 * (attempt + 1))
+                    continue
+                # 3 次都失败
+                self.send_error(502, f"Upstream error after 3 retries: {last_err}")
+                return
 
-        # 6. 回写响应
+        # 6. 流式回写响应（不预先读完整 body，避免长响应超时 / 中转断连）
+        #     策略：buffer 上游 chunk，按 8KB 批量写给客户端 + 实时 flush
+        #     不设 Content-Length，让 HTTP/1.1 keep-alive 流式传输直到连接关闭
+        #     这正是 OpenAI Responses API 流式响应的标准做法
+        self.protocol_version = "HTTP/1.1"  # 启用 chunked + keep-alive
         self.send_response(resp.status_code)
         for k, v in resp.headers.items():
-            if k.lower() in ("transfer-encoding", "connection", "content-encoding"):
+            if k.lower() in ("transfer-encoding", "connection", "content-encoding", "content-length"):
                 continue
             self.send_header(k, v)
-        self.send_header("Content-Length", str(len(resp.content)))
+        # 不设 Content-Length → 走 chunked
         self.end_headers()
-        self.wfile.write(resp.content)
+        sent_bytes = 0
+        try:
+            for chunk in resp.iter_content(chunk_size=8192):
+                if not chunk:
+                    continue
+                try:
+                    # 手动实现 chunked encoding
+                    self.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
+                    self.wfile.write(chunk)
+                    self.wfile.write(b"\r\n")
+                    self.wfile.flush()
+                    sent_bytes += len(chunk)
+                except (BrokenPipeError, ConnectionResetError) as e:
+                    self._log(f"!!  客户端断开（已发送 {sent_bytes} bytes）: {e}")
+                    break
+            # 发送 chunked 终止符
+            try:
+                self.wfile.write(b"0\r\n\r\n")
+                self.wfile.flush()
+            except Exception:
+                pass
+        except (requests.RequestException, ConnectionError) as e:
+            # 中转站中途断流 — 仍然正确终止 chunked，让客户端拿到已收到部分
+            self._log(f"!!  上游中途断流（已发送 {sent_bytes} bytes）: {e}")
+            try:
+                self.wfile.write(b"0\r\n\r\n")
+                self.wfile.flush()
+            except Exception:
+                pass
+        finally:
+            try:
+                resp.close()
+            except Exception:
+                pass
 
-        self._log(f"{resp.status_code}  {path}  {len(resp.content)} bytes")
+        self._log(f"{resp.status_code}  {path}  {sent_bytes} bytes (chunked)")
 
     def do_GET(self):
         if self.path == "/health":
