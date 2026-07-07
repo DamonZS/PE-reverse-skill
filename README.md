@@ -1,4 +1,4 @@
-# pe-reverse-analyzer
+# Codex 5.5 Armor Penetration-reverse-analyzer
 
 > 🔓 内置 GPT-5.5 破甲引擎 — 释放 Codex CLI 无限制模式，让 AI 为你做逆向分析
 >
