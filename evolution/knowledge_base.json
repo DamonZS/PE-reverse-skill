@@ -1,0 +1,224 @@
+{
+  "version": 6,
+  "last_updated": "2026-05-31T21:24:58.202728",
+  "total_sessions": 5,
+  "packer_detection_stats": {
+    "VMProtect": 1,
+    "CNM": 1,
+    "NSIS+7z_BCJ2": 2,
+    "InnoSetup": 1
+  },
+  "success_rate_by_packer": {
+    "VMProtect": {
+      "attempts": 1,
+      "buildable": 1
+    },
+    "CNM": {
+      "attempts": 1,
+      "buildable": 1
+    },
+    "NSIS+7z_BCJ2": {
+      "attempts": 2,
+      "buildable": 2
+    },
+    "InnoSetup": {
+      "attempts": 1,
+      "buildable": 1
+    }
+  },
+  "action_success_rates": {
+    "pe_analyze": {
+      "success": 2,
+      "total": 2
+    },
+    "side_channel_reconstruct": {
+      "success": 2,
+      "total": 2
+    },
+    "qq_crypto_impl": {
+      "success": 1,
+      "total": 1
+    },
+    "uuwise_sdk_map": {
+      "success": 1,
+      "total": 1
+    },
+    "config_analysis": {
+      "success": 1,
+      "total": 1
+    },
+    "ghidra_attempt": {
+      "success": 0,
+      "total": 4
+    },
+    "full_unpack": {
+      "success": 0,
+      "total": 1
+    },
+    "suspend_dump": {
+      "success": 1,
+      "total": 1
+    },
+    "deep_decompile": {
+      "success": 1,
+      "total": 1
+    },
+    "integrate_v2": {
+      "success": 1,
+      "total": 1
+    },
+    "final_project": {
+      "success": 1,
+      "total": 1
+    },
+    "ghidra_test": {
+      "success": 1,
+      "total": 1
+    },
+    "auto_unpack": {
+      "success": 0,
+      "total": 1
+    },
+    "debug_unpack": {
+      "success": 0,
+      "total": 1
+    },
+    "pefile_extract_resource": {
+      "success": 1,
+      "total": 1
+    },
+    "7zr_decompress": {
+      "success": 1,
+      "total": 1
+    },
+    "pe_analyze_QQNT": {
+      "success": 1,
+      "total": 1
+    },
+    "import_analysis": {
+      "success": 1,
+      "total": 1
+    },
+    "crypto_detection": {
+      "success": 1,
+      "total": 1
+    },
+    "protocol_frame_reverse": {
+      "success": 1,
+      "total": 1
+    },
+    "py7zr_BCJ2": {
+      "success": 0,
+      "total": 1
+    },
+    "ghidra_headless": {
+      "success": 0,
+      "total": 1
+    },
+    "strings_extract": {
+      "success": 1,
+      "total": 1
+    },
+    "chacha20_detect": {
+      "success": 1,
+      "total": 1
+    },
+    "delphi_detect": {
+      "success": 1,
+      "total": 1
+    },
+    "import_protocol_infer": {
+      "success": 1,
+      "total": 1
+    },
+    "innoextract": {
+      "success": 0,
+      "total": 1
+    },
+    "inno_zlib": {
+      "success": 0,
+      "total": 1
+    },
+    "7zr_extract": {
+      "success": 0,
+      "total": 1
+    },
+    "dll_string_extract": {
+      "success": 1,
+      "total": 1
+    },
+    "com_interface_reverse": {
+      "success": 1,
+      "total": 1
+    },
+    "protocol_field_extract": {
+      "success": 1,
+      "total": 1
+    },
+    "sso_frame_debug": {
+      "success": 1,
+      "total": 1
+    },
+    "struct_format_fix": {
+      "success": 1,
+      "total": 1
+    },
+    "login_impl": {
+      "success": 1,
+      "total": 1
+    },
+    "static_only_reconstruct": {
+      "success": 0,
+      "total": 1
+    }
+  },
+  "error_patterns": {},
+  "discovered_packers": [],
+  "new_section_names": [],
+  "tool_decisions": {
+    "ghidra": {
+      "skip (packer incompatible)": 2
+    },
+    "capstone": {
+      "primary (linear scan)": 2
+    }
+  },
+  "impossible_confirmations": [],
+  "evolution_log": [
+    {
+      "session": "20260531_164253",
+      "packer": "VMProtect",
+      "status": "partial",
+      "timestamp": "2026-05-31T16:42:53.022539",
+      "key_finding": "VMP不可脱壳；47个优优云导出；TEA+RSA+MD5；cfxy.me远程API"
+    },
+    {
+      "session": "20260531_164307",
+      "packer": "CNM",
+      "status": "partial",
+      "timestamp": "2026-05-31T16:43:07.904425",
+      "key_finding": "CNM挂起转储法成功；Ghidra递归下降失败；capstone线性扫描200函数；TEA/XXTEA实现；qq_api 10端点；final_project 7源文件可编译"
+    },
+    {
+      "session": "20260531_173501",
+      "packer": "NSIS+7z_BCJ2",
+      "status": "partial",
+      "timestamp": "2026-05-31T17:35:01.109888",
+      "key_finding": "NSIS+7z_BCJ2安装包；pefile提取资源→7zr解压；QQNT.dll(206MB x64)含V8+Node嵌入；OICQ TCP二进制协议(ws2_32 send/recv/connect)；ECDH+AES-GCM(CRYPT32证书验证)；9个OICQ命令字；3种登录模式；产出C+Python SDK"
+    },
+    {
+      "session": "20260531_175055",
+      "packer": "InnoSetup",
+      "status": "partial",
+      "timestamp": "2026-05-31T17:50:55.194328",
+      "key_finding": "InnoSetup6.5自定义变体；提取失败但PE存根含Delphi泛型+ChaCha20；从导入表+资源字符串推断完整架构；产出C+ChaCha20 SDK；30+API端点；请求签名"
+    },
+    {
+      "session": "20260531_212458",
+      "packer": "NSIS+7z_BCJ2",
+      "status": "success",
+      "timestamp": "2026-05-31T21:24:58.201189",
+      "key_finding": "SSOShareInfoHelper64.dll COM接口字符串提取→ITXSSOBuffer/ITXSSOData/ITXSSOArray+20+协议字段；完整密码/QR/Token登录实现；SSO帧编解码+TEA+MD5+AES-GCM；struct格式debug循环经验"
+    }
+  ]
+}

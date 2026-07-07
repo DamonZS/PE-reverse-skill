@@ -1,0 +1,100 @@
+{
+  "section_names": {
+    "VMProtect": [
+      ".vmp0",
+      ".vmp1",
+      ".vmp2",
+      ".vmp3",
+      ".vmp"
+    ],
+    "UPX": [
+      "UPX0",
+      "UPX1",
+      "UPX2"
+    ],
+    "Themida": [
+      ".themida",
+      ".themida2",
+      ".tsuserex"
+    ],
+    "ASPack": [
+      ".aspack",
+      ".adata"
+    ],
+    "CNM": [
+      "CNM0",
+      "CNM1",
+      "CNM2"
+    ],
+    "ASProtect": [
+      ".asprotect",
+      ".act_v0",
+      ".rdata0"
+    ],
+    "Enigma": [
+      ".enigma1",
+      ".enigma2"
+    ],
+    "Obsidium": [
+      ".obsidium",
+      ".obscode"
+    ],
+    "PECompact": [
+      ".pec",
+      ".pec2",
+      "PEC2"
+    ],
+    "Molebox": [
+      ".molebox",
+      ".mole"
+    ],
+    "Armadillo": [
+      ".arm",
+      ".text1",
+      ".data1"
+    ],
+    "Safengine": [
+      ".safengine",
+      ".se1",
+      ".se2"
+    ],
+    "Yoda": [
+      ".y0da",
+      ".yP"
+    ],
+    "NSIS": [
+      ".ndata",
+      "nsis"
+    ],
+    "TELock": [
+      ".tls",
+      ".tevl",
+      ".textz"
+    ]
+  },
+  "entry_patterns": {
+    "UPX": [
+      "pusha",
+      "pushad"
+    ],
+    "ASPack": [
+      "pusha\\x68",
+      "call.{4}pusha"
+    ],
+    "CNM": [
+      "pushfd",
+      "pushal",
+      "pushfd\\x0cpushal"
+    ],
+    "VMProtect": [
+      "push\\s+(?:0x[0-9A-Fa-f]+|reg)",
+      "call\\s+.*vmp"
+    ]
+  },
+  "high_entropy_threshold": 7.0,
+  "section_existence_check": [
+    ".text",
+    ".rdata",
+    ".data"
+  ]
+}

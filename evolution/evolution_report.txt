@@ -1,0 +1,47 @@
+============================================================
+PE Reverse Analyzer - Evolution Report
+Generated: 2026-05-31T17:35:49.069056
+============================================================
+
+Total sessions tracked: 3
+Knowledge base version: 4
+Last updated: 2026-05-31T17:35:01.111101
+
+--- Packer Statistics ---
+  CNM: 1 attempts, 1 buildable (100%)
+  NSIS+7z_BCJ2: 1 attempts, 1 buildable (100%)
+  VMProtect: 1 attempts, 1 buildable (100%)
+
+--- Action Success Rates ---
+  ghidra_attempt: 0/4 (0%)
+  pe_analyze: 1/1 (100%)
+  side_channel_reconstruct: 1/1 (100%)
+  qq_crypto_impl: 1/1 (100%)
+  uuwise_sdk_map: 1/1 (100%)
+  config_analysis: 1/1 (100%)
+  full_unpack: 0/1 (0%)
+  suspend_dump: 1/1 (100%)
+  deep_decompile: 1/1 (100%)
+  integrate_v2: 1/1 (100%)
+  final_project: 1/1 (100%)
+  ghidra_test: 1/1 (100%)
+  auto_unpack: 0/1 (0%)
+  debug_unpack: 0/1 (0%)
+  pefile_extract_resource: 1/1 (100%)
+  7zr_decompress: 1/1 (100%)
+  pe_analyze_QQNT: 1/1 (100%)
+  import_analysis: 1/1 (100%)
+  crypto_detection: 1/1 (100%)
+  protocol_frame_reverse: 1/1 (100%)
+  py7zr_BCJ2: 0/1 (0%)
+  ghidra_headless: 0/1 (0%)
+
+--- Common Errors ---
+
+--- Discovered Packers ---
+
+--- New Section Names ---
+
+--- Impossible Confirmations ---
+
+============================================================

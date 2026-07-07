@@ -1,0 +1,208 @@
+[
+  {
+    "session_id": "20260531_164253",
+    "timestamp": "2026-05-31T16:42:53.022539",
+    "binary": {
+      "path": "F:/baiduyun/QQ机器人/QQ机器人升级版/晨风QQ机器人.exe",
+      "size": 6083072,
+      "md5": ""
+    },
+    "actions_executed": [],
+    "actions_succeeded": [
+      "pe_analyze",
+      "side_channel_reconstruct",
+      "qq_crypto_impl",
+      "uuwise_sdk_map",
+      "config_analysis"
+    ],
+    "actions_failed": [
+      {
+        "name": "ghidra_attempt",
+        "error": "Failed: ghidra_attempt"
+      },
+      {
+        "name": "full_unpack",
+        "error": "Failed: full_unpack"
+      },
+      {
+        "name": "ghidra_attempt",
+        "error": "VMProtect code not visible to recursive descent"
+      }
+    ],
+    "packer_type": "VMProtect",
+    "packer_detection_method": null,
+    "buildable_project": true,
+    "project_line_count": 1302,
+    "errors_encountered": [],
+    "workarounds_found": [],
+    "new_patterns_discovered": [],
+    "tool_decisions": {
+      "ghidra": "skip (packer incompatible)",
+      "capstone": "primary (linear scan)"
+    },
+    "final_status": "partial",
+    "notes": "VMP不可脱壳；47个优优云导出；TEA+RSA+MD5；cfxy.me远程API"
+  },
+  {
+    "session_id": "20260531_164307",
+    "timestamp": "2026-05-31T16:43:07.904425",
+    "binary": {
+      "path": "F:/baiduyun/QQ群排名技术/群排名优化软件.exe",
+      "size": 2412544,
+      "md5": ""
+    },
+    "actions_executed": [],
+    "actions_succeeded": [
+      "suspend_dump",
+      "deep_decompile",
+      "integrate_v2",
+      "final_project",
+      "ghidra_test"
+    ],
+    "actions_failed": [
+      {
+        "name": "ghidra_attempt",
+        "error": "Failed: ghidra_attempt"
+      },
+      {
+        "name": "auto_unpack",
+        "error": "Failed: auto_unpack"
+      },
+      {
+        "name": "debug_unpack",
+        "error": "Failed: debug_unpack"
+      },
+      {
+        "name": "ghidra_attempt",
+        "error": "CNM code not visible to recursive descent"
+      }
+    ],
+    "packer_type": "CNM",
+    "packer_detection_method": null,
+    "buildable_project": true,
+    "project_line_count": 2371,
+    "errors_encountered": [],
+    "workarounds_found": [],
+    "new_patterns_discovered": [],
+    "tool_decisions": {
+      "ghidra": "skip (packer incompatible)",
+      "capstone": "primary (linear scan)"
+    },
+    "final_status": "partial",
+    "notes": "CNM挂起转储法成功；Ghidra递归下降失败；capstone线性扫描200函数；TEA/XXTEA实现；qq_api 10端点；final_project 7源文件可编译"
+  },
+  {
+    "session_id": "20260531_173501",
+    "timestamp": "2026-05-31T17:35:01.109888",
+    "binary": {
+      "path": "H:/迅雷下载/QQ_9.9.30-260511_x64_01.exe",
+      "size": 291649704,
+      "md5": ""
+    },
+    "actions_executed": [],
+    "actions_succeeded": [
+      "pefile_extract_resource",
+      "7zr_decompress",
+      "pe_analyze_QQNT",
+      "import_analysis",
+      "crypto_detection",
+      "protocol_frame_reverse"
+    ],
+    "actions_failed": [
+      {
+        "name": "py7zr_BCJ2",
+        "error": "Failed: py7zr_BCJ2"
+      },
+      {
+        "name": "ghidra_headless",
+        "error": "Failed: ghidra_headless"
+      }
+    ],
+    "packer_type": "NSIS+7z_BCJ2",
+    "packer_detection_method": null,
+    "buildable_project": true,
+    "project_line_count": 1024,
+    "errors_encountered": [],
+    "workarounds_found": [],
+    "new_patterns_discovered": [],
+    "tool_decisions": {},
+    "final_status": "partial",
+    "notes": "NSIS+7z_BCJ2安装包；pefile提取资源→7zr解压；QQNT.dll(206MB x64)含V8+Node嵌入；OICQ TCP二进制协议(ws2_32 send/recv/connect)；ECDH+AES-GCM(CRYPT32证书验证)；9个OICQ命令字；3种登录模式；产出C+Python SDK"
+  },
+  {
+    "session_id": "20260531_175055",
+    "timestamp": "2026-05-31T17:50:55.194328",
+    "binary": {
+      "path": "H:/迅雷下载/DouyinLK_Setup4.4.exe",
+      "size": 166351465,
+      "md5": ""
+    },
+    "actions_executed": [],
+    "actions_succeeded": [
+      "pe_analyze",
+      "strings_extract",
+      "chacha20_detect",
+      "delphi_detect",
+      "import_protocol_infer",
+      "side_channel_reconstruct"
+    ],
+    "actions_failed": [
+      {
+        "name": "innoextract",
+        "error": "Failed: innoextract"
+      },
+      {
+        "name": "inno_zlib",
+        "error": "Failed: inno_zlib"
+      },
+      {
+        "name": "7zr_extract",
+        "error": "Failed: 7zr_extract"
+      }
+    ],
+    "packer_type": "InnoSetup",
+    "packer_detection_method": null,
+    "buildable_project": true,
+    "project_line_count": 580,
+    "errors_encountered": [],
+    "workarounds_found": [],
+    "new_patterns_discovered": [],
+    "tool_decisions": {},
+    "final_status": "partial",
+    "notes": "InnoSetup6.5自定义变体；提取失败但PE存根含Delphi泛型+ChaCha20；从导入表+资源字符串推断完整架构；产出C+ChaCha20 SDK；30+API端点；请求签名"
+  },
+  {
+    "session_id": "20260531_212458",
+    "timestamp": "2026-05-31T21:24:58.201189",
+    "binary": {
+      "path": "H:/迅雷下载/QQ_9.9.30-260511_x64_01.exe",
+      "size": 291649704,
+      "md5": ""
+    },
+    "actions_executed": [],
+    "actions_succeeded": [
+      "dll_string_extract",
+      "com_interface_reverse",
+      "protocol_field_extract",
+      "sso_frame_debug",
+      "struct_format_fix",
+      "login_impl"
+    ],
+    "actions_failed": [
+      {
+        "name": "static_only_reconstruct",
+        "error": "Failed: static_only_reconstruct"
+      }
+    ],
+    "packer_type": "NSIS+7z_BCJ2",
+    "packer_detection_method": null,
+    "buildable_project": true,
+    "project_line_count": 1521,
+    "errors_encountered": [],
+    "workarounds_found": [],
+    "new_patterns_discovered": [],
+    "tool_decisions": {},
+    "final_status": "success",
+    "notes": "SSOShareInfoHelper64.dll COM接口字符串提取→ITXSSOBuffer/ITXSSOData/ITXSSOArray+20+协议字段；完整密码/QR/Token登录实现；SSO帧编解码+TEA+MD5+AES-GCM；struct格式debug循环经验"
+  }
+]
