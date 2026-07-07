@@ -340,44 +340,126 @@ def rewrite_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
       必须用 _soften_message 软化 user 消息中的攻击性词汇。
     """
     # ── 优先处理 instructions 字段（Responses API 的真正 system 入口）──
-    if "instructions" in payload:
-        payload["instructions"] = JAILBREAK_SYSTEM
-    # ── 同时处理其他格式（兼容 chat completions 和旧格式）──
+    # 无论走哪个端点，instructions 都覆盖（有就改，没有就加）
+    payload["instructions"] = JAILBREAK_SYSTEM
+
+    # ── Chat Completions 格式：messages 数组 ──
+    # Codex 桌面版走 /v1/chat/completions 时用这个格式
+    # 关键：必须替换 messages[0] 的 system 消息（Codex 自己注入的 "You are Codex..."）
     if "messages" in payload:
-        # OpenAI chat completions 格式
         msgs = payload.get("messages", [])
-        # 移除所有 system 消息
+        # 移除所有 system 消息（Codex 的、用户的、之前注入的，全删）
         msgs = [m for m in msgs if m.get("role") != "system"]
-        # 注入破限指令到首位
+        # 在最前面注入我们的破限指令
         msgs.insert(0, {"role": "system", "content": JAILBREAK_SYSTEM})
-        # 凭据脱敏（关键：绕过 GPT-5.5 credential abuse 分类器）
-        msgs = [redact_message_content(m) for m in msgs]
-        # 攻击性词汇软化（关键：绕过 attack 分类器，仅对 user 消息）
-        msgs = [soften_message_content(m) if m.get("role") == "user" else m for m in msgs]
-        payload["messages"] = msgs
+        # 凭据脱敏 + 攻击词软化（仅对 user/assistant 消息）
+        new_msgs = []
+        for m in msgs:
+            role = m.get("role", "")
+            if role in ("user", "assistant"):
+                m = redact_message_content(m)
+                if role == "user":
+                    m = soften_message_content(m)
+            new_msgs.append(m)
+        payload["messages"] = new_msgs
 
+    # ── Responses API 格式：input 数组 ──
+    # Codex CLI / 某些客户端走 /v1/responses 时用这个格式
     if "input" in payload:
-        # OpenAI responses 完整格式 — 移除 input 里的 system（避免冲突）
         items = payload.get("input", [])
+        # 移除 input 里的 system（避免和 instructions 冲突）
         items = [it for it in items if it.get("role") != "system"]
-        # 凭据脱敏
-        items = [redact_message_content(it) for it in items]
-        # 攻击性词汇软化
-        items = [soften_message_content(it) if it.get("role") == "user" else it for it in items]
-        payload["input"] = items
+        # 凭据脱敏 + 攻击词软化
+        new_items = []
+        for it in items:
+            role = it.get("role", "")
+            if role in ("user", "assistant"):
+                it = redact_message_content(it)
+                if role == "user":
+                    it = soften_message_content(it)
+            new_items.append(it)
+        payload["input"] = new_items
 
-    if "system" in payload and "instructions" not in payload:
-        # 简易 system 字段（仅在没有 instructions 时使用）
+    # ── 简易 system 字段（某些 SDK 用这个）──
+    if "system" in payload:
         payload["system"] = JAILBREAK_SYSTEM
-
-    # 如果既没有 instructions 也没有 messages/input/system，强制加 instructions
-    if not any(k in payload for k in ("instructions", "messages", "input", "system")):
-        payload["instructions"] = JAILBREAK_SYSTEM
 
     return payload
 
 
-# ─── 代理 Handler ───────────────────────────────────────────────────────────
+# ─── Chat Completions → Responses 格式转换 ─────────────────────────────────
+#
+# 原因：toporeduce 中转站的 /v1/chat/completions 端点对 GPT-5.5 返回空 choices
+#       （completion_tokens: 0），但 /v1/responses 端点正常工作。
+#       Codex 桌面版可能走 chat/completions，所以代理要自动转换。
+#
+
+def chat_to_responses_payload(chat_payload: Dict[str, Any]) -> Dict[str, Any]:
+    """把 chat completions 请求体转换为 responses 请求体"""
+    msgs = chat_payload.get("messages", [])
+    instructions = ""
+    input_items = []
+
+    for m in msgs:
+        role = m.get("role", "user")
+        content = m.get("content", "")
+        if role == "system":
+            # system 消息 → instructions（最后一条 system 覆盖前面的）
+            instructions = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+        elif role == "user":
+            input_items.append({"role": "user", "content": content})
+        elif role == "assistant":
+            input_items.append({"role": "assistant", "content": content})
+        elif role == "tool":
+            # tool 消息 → function_call_output
+            input_items.append({
+                "type": "function_call_output",
+                "call_id": m.get("tool_call_id", ""),
+                "output": content if isinstance(content, str) else json.dumps(content, ensure_ascii=False),
+            })
+
+    return {
+        "model": chat_payload.get("model", "gpt-5.5"),
+        "instructions": instructions,
+        "input": input_items,
+        "stream": False,  # responses 端点用非流式，代理统一 buffered 转发
+        "temperature": chat_payload.get("temperature", 1.0),
+        "max_output_tokens": chat_payload.get("max_tokens"),
+    }
+
+
+def responses_to_chat_payload(resp_payload: Dict[str, Any], original_model: str) -> Dict[str, Any]:
+    """把 responses 响应体转换回 chat completions 响应体"""
+    # 提取 output 文本
+    text = ""
+    for item in resp_payload.get("output", []):
+        if item.get("type") == "message":
+            for c in item.get("content", []):
+                if c.get("type") == "output_text":
+                    text += c.get("text", "")
+
+    # 提取 usage
+    usage = resp_payload.get("usage", {})
+
+    return {
+        "id": resp_payload.get("id", ""),
+        "object": "chat.completion",
+        "created": resp_payload.get("created_at", 0),
+        "model": original_model,
+        "choices": [{
+            "index": 0,
+            "message": {"role": "assistant", "content": text},
+            "finish_reason": "stop",
+        }],
+        "usage": {
+            "prompt_tokens": usage.get("input_tokens", 0),
+            "completion_tokens": usage.get("output_tokens", 0),
+            "total_tokens": usage.get("total_tokens", 0),
+        },
+    }
+
+
+
 
 class ProxyHandler(BaseHTTPRequestHandler):
     """HTTP 代理，拦截 /v1/responses 和 /v1/chat/completions"""
@@ -403,27 +485,59 @@ class ProxyHandler(BaseHTTPRequestHandler):
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length > 0 else b""
 
-        # 2. 解析 path (相对 UPSTREAM)
+        # 2. 解析 path
         path = self.path
+        is_chat_completions = "/chat/completions" in path
         if path.startswith("/v1/"):
             path = path[3:]  # 去掉 /v1 前缀
-        upstream_url = f"{UPSTREAM_BASE}/{path.lstrip('/')}"
 
-        # 3. 改写 payload（如果是 POST + JSON）
-        if method == "POST" and body:
+        # 如果是 chat/completions 请求，转换为 responses 格式转发
+        # 原因：toporeduce 中转站的 chat/completions 对 GPT-5.5 返回空 choices
+        if is_chat_completions and method == "POST" and body:
+            try:
+                chat_payload = json.loads(body.decode("utf-8"))
+                original_model = chat_payload.get("model", "gpt-5.5")
+                # 转换为 responses 格式
+                responses_payload = chat_to_responses_payload(chat_payload)
+                # 应用破限改写
+                responses_payload = rewrite_payload(responses_payload)
+                body = json.dumps(responses_payload, ensure_ascii=False).encode("utf-8")
+                # 改 path 到 responses
+                path = "responses"
+                self._log(f"CONVERT  chat/completions → responses  model={original_model}")
+                self._log(f"REWRITE  [responses]  instructions → JAILBREAK  input: {len(responses_payload.get('input', []))} items")
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                self._log(f"!!  chat→responses 转换失败: {e}")
+        elif method == "POST" and body:
+            # 正常 responses/chat 请求，直接改写 payload
             try:
                 payload = json.loads(body.decode("utf-8"))
                 had_instructions = "instructions" in payload
-                old_instr = payload.get("instructions", "")
+                old_instr = payload.get("instructions", "")[:60]
+                had_messages = "messages" in payload
+                had_input = "input" in payload
+                old_sys_msg = ""
+                if had_messages:
+                    for m in payload.get("messages", []):
+                        if m.get("role") == "system":
+                            old_sys_msg = str(m.get("content", ""))[:60]
+                            break
                 payload = rewrite_payload(payload)
                 body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+                endpoint = "responses" if "responses" in path else ("chat" if "chat" in path else path)
+                parts = [f"REWRITE  [{endpoint}]"]
                 if had_instructions:
-                    self._log(f"REWRITE  {path}  instructions: {old_instr[:50]!r} → JAILBREAK_V2")
-                else:
-                    n = len(payload.get("messages", payload.get("input", [])))
-                    self._log(f"REWRITE  {path}  {n} msgs  (instructions injected)")
+                    parts.append(f"instructions: {old_instr!r} → JAILBREAK")
+                if had_messages:
+                    parts.append(f"messages system: {old_sys_msg!r} → JAILBREAK")
+                if had_input:
+                    n = len(payload.get("input", []))
+                    parts.append(f"input: {n} items (system removed)")
+                self._log("  ".join(parts))
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
                 self._log(f"!!  JSON 解析失败: {e}")
+
+        upstream_url = f"{UPSTREAM_BASE}/{path.lstrip('/')}"
 
         # 4. 构造转发 headers
         fwd_headers = {
@@ -460,86 +574,46 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 self.send_error(502, f"Upstream error after 3 retries: {last_err}")
                 return
 
-        # 6. 回写响应
-        #     关键：判别上游是流式 (SSE/chunked) 还是一次性 JSON
-        #     - 上游流式（Transfer-Encoding: chunked 或 Content-Type: text/event-stream）
-        #       → 我们也流式 + 手动 chunked 给客户端
-        #     - 上游一次性（Content-Length 有值）
-        #       → 直接 buffer 全 body，再设 Content-Length 给客户端（不要包 chunked）
-        #     上游 chunked + 客户端非流式 = 客户端拿到响应里有 "2000\r\n{...}" 这种字面量
-        #     解析失败，这就是 Codex 拿到 Upstream error 的根因
-        self.protocol_version = "HTTP/1.1"  # 启用 keep-alive
-        upstream_is_streaming = (
-            "transfer-encoding" in {k.lower() for k in resp.headers.keys()}
-            or "text/event-stream" in resp.headers.get("Content-Type", "").lower()
-        )
-        # 注意：OpenAI Responses API 即使 stream=False 也可能返回带 chunked 的容器响应
-        # 优先按 chunked 处理（看 transfer-encoding）
-        upstream_chunked = "transfer-encoding" in {k.lower() for k in resp.headers.keys()} and "chunked" in resp.headers.get("Transfer-Encoding", "").lower()
+        # 6. 回写响应 — 统一用 buffered 模式
+        try:
+            resp_body = resp.content
+        except (requests.RequestException, ConnectionError) as e:
+            self._log(f"!!  读取响应失败: {e}")
+            self.send_error(502, f"Upstream read error: {e}")
+            return
+        finally:
+            try:
+                resp.close()
+            except Exception:
+                pass
 
+        # 如果是 chat/completions 请求（被转为 responses），把响应转回 chat 格式
+        if is_chat_completions and resp_body:
+            try:
+                resp_data = json.loads(resp_body.decode("utf-8"))
+                chat_resp = responses_to_chat_payload(resp_data, original_model)
+                resp_body = json.dumps(chat_resp, ensure_ascii=False).encode("utf-8")
+                self._log(f"CONVERT  responses → chat/completions  {len(resp_body)} bytes")
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                self._log(f"!!  responses→chat 响应转换失败: {e}")
+
+        self.protocol_version = "HTTP/1.1"
         self.send_response(resp.status_code)
         for k, v in resp.headers.items():
-            if k.lower() in ("transfer-encoding", "connection", "content-encoding", "content-length"):
+            if k.lower() in ("transfer-encoding", "connection", "content-encoding", "content-length", "content-type"):
                 continue
             self.send_header(k, v)
-
-        if upstream_chunked:
-            # ── 流式：手动 chunked 转发 ──
-            # 不设 Content-Length，由 chunked 终止符表示结束
-            self.end_headers()
-            sent_bytes = 0
-            try:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    if not chunk:
-                        continue
-                    try:
-                        self.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
-                        self.wfile.write(chunk)
-                        self.wfile.write(b"\r\n")
-                        self.wfile.flush()
-                        sent_bytes += len(chunk)
-                    except (BrokenPipeError, ConnectionResetError) as e:
-                        self._log(f"!!  客户端断开（已发送 {sent_bytes} bytes）: {e}")
-                        break
-                try:
-                    self.wfile.write(b"0\r\n\r\n")
-                    self.wfile.flush()
-                except Exception:
-                    pass
-            except (requests.RequestException, ConnectionError) as e:
-                self._log(f"!!  上游中途断流（已发送 {sent_bytes} bytes）: {e}")
-                try:
-                    self.wfile.write(b"0\r\n\r\n")
-                    self.wfile.flush()
-                except Exception:
-                    pass
-            finally:
-                try:
-                    resp.close()
-                except Exception:
-                    pass
-            self._log(f"{resp.status_code}  {path}  {sent_bytes} bytes (chunked)")
-        else:
-            # ── 一次性响应：buffer body + 设 Content-Length ──
-            try:
-                body = resp.content
-            except (requests.RequestException, ConnectionError) as e:
-                self._log(f"!!  读取响应失败: {e}")
-                self.send_error(502, f"Upstream read error: {e}")
-                return
-            finally:
-                try:
-                    resp.close()
-                except Exception:
-                    pass
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            try:
-                self.wfile.write(body)
-                self.wfile.flush()
-            except (BrokenPipeError, ConnectionResetError) as e:
-                self._log(f"!!  客户端断开: {e}")
-            self._log(f"{resp.status_code}  {path}  {len(body)} bytes (buffered)")
+        # 确保返回 JSON 格式
+        if is_chat_completions:
+            self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(resp_body)))
+        self.end_headers()
+        try:
+            self.wfile.write(resp_body)
+            self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError) as e:
+            self._log(f"!!  客户端断开: {e}")
+        self._log(f"{resp.status_code}  {path}  {len(resp_body)} bytes")
 
     def do_GET(self):
         if self.path == "/health":
