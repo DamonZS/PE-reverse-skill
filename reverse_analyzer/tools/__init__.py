@@ -2,5 +2,6 @@
 
 from .executor import ToolExecutor, ToolResult
 from .static_tools import register_builtin_tools
+from .ghidra import ghidra_check, ghidra_decompile, ghidra_install_guide
 
-__all__ = ["ToolExecutor", "ToolResult", "register_builtin_tools"]
+__all__ = ["ToolExecutor", "ToolResult", "ghidra_check", "ghidra_decompile", "ghidra_install_guide", "register_builtin_tools"]

@@ -61,6 +61,33 @@ class ReportBuilderTests(unittest.TestCase):
         self.assertIn("Suspicious Windows API strings", titles)
         self.assertIn("Packer indicators detected", titles)
 
+    def test_report_builder_includes_decompiler_unavailable_section(self):
+        session = SimpleNamespace(session_id="s3", target="sample.bin", status="running", artifacts=[])
+        tool_results = [
+            {
+                "tool_name": "ghidra_decompile",
+                "result": {
+                    "tool": "ghidra_decompile",
+                    "status": "unavailable",
+                    "data": {
+                        "status": "unavailable",
+                        "setup_hint": "Run: python -m reverse_analyzer --install-guide ghidra",
+                        "artifacts": [],
+                    },
+                },
+                "ok": False,
+            }
+        ]
+
+        builder = ReportBuilder(session, tool_results)
+        report = builder.build()
+        markdown = builder.to_markdown()
+
+        self.assertEqual(report["decompiler"]["status"], "unavailable")
+        self.assertIn("Ghidra Headless not configured", {item["title"] for item in report["findings"]})
+        self.assertIn("## Decompiler", markdown)
+        self.assertIn("--install-guide ghidra", markdown)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,6 +18,7 @@ import subprocess
 from typing import Any, Dict, Iterable, List
 
 from .executor import ToolExecutor, ToolResult
+from .ghidra import ghidra_check, ghidra_decompile, ghidra_install_guide
 
 PRINTABLE_RE = re.compile(rb"[\x20-\x7e]{4,}")
 UTF16LE_RE = re.compile((rb"(?:[\x20-\x7e]\x00){4,}"))
@@ -45,6 +46,9 @@ def register_builtin_tools(executor: ToolExecutor | None = None) -> ToolExecutor
     executor.register("packer_detect", packer_detect)
     executor.register("yara_scan_stub", yara_scan_stub)
     executor.register("external_command", external_command)
+    executor.register("ghidra_check", ghidra_check)
+    executor.register("ghidra_decompile", ghidra_decompile)
+    executor.register("ghidra_install_guide", ghidra_install_guide)
     return executor
 
 

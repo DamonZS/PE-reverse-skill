@@ -933,6 +933,49 @@ docker compose run --rm reverse-analyzer analyze /workspace/samples/app.exe --ou
 
 `docker-compose.yml` 预留了 `8088:8088` 端口，以及 `.reverse_analyzer`、`samples`、`reports` volume。当前主要用于 CLI 分析环境；后续可以在同一 compose 文件里接入 Web UI / Dashboard。
 
+
+
+### Ghidra Headless decompilation
+
+`analyze` can optionally run Ghidra Headless and include decompiler status in
+`report.json` and `report.md`.
+
+```powershell
+# Print the local setup guide
+python -m reverse_analyzer --install-guide ghidra
+
+# Run normal analysis plus Ghidra decompilation when Ghidra is configured
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --max-iterations 8 --decompile
+
+# Override automatic discovery for one run
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --decompile --ghidra-home C:\Tools\ghidra_<version>_PUBLIC
+```
+
+Discovery order:
+
+1. `--ghidra-home`
+2. `GHIDRA_HEADLESS`
+3. `GHIDRA_HOME\support\analyzeHeadless.bat`
+4. Common Windows paths such as `C:\Tools\ghidra_*`, `C:\Program Files\Ghidra\ghidra_*`, and `D:\Tools\ghidra_*`
+
+If Ghidra is not installed, analysis still succeeds. The report records
+`decompiler.status = "unavailable"` and includes a setup hint. Install Ghidra by
+following `python -m reverse_analyzer --install-guide ghidra`.
+
+When available, Ghidra artifacts are written under:
+
+```text
+<out>/decompiled/ghidra/
+  functions.json
+  call_graph.json
+  strings_xrefs.json
+  imports_xrefs.json
+  summary.json
+  pseudocode/*.c
+  disassembly/*.asm
+  ghidra.log
+```
+
 ### 6. 开发验证
 
 修改运行时或工具后，建议至少执行：

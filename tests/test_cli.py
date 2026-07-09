@@ -64,6 +64,38 @@ class CliTests(unittest.TestCase):
             self.assertEqual(tool_names, ["file_info", "hash", "strings_extract"])
             self.assertNotIn("tool not registered", result.stdout)
 
+    def test_install_guide_ghidra(self) -> None:
+        result = run_cli("--install-guide", "ghidra")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Ghidra Headless installation guide", result.stdout)
+        self.assertIn("GHIDRA_HEADLESS", result.stdout)
+
+    def test_analyze_decompile_gracefully_degrades_without_ghidra(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "sample.bin"
+            out_dir = root / "analysis"
+            sample.write_text("MZ hello", encoding="utf-8")
+
+            result = run_cli(
+                "analyze",
+                str(sample),
+                "--out",
+                str(out_dir),
+                "--max-iterations",
+                "1",
+                "--decompile",
+                "--ghidra-home",
+                str(root / "missing-ghidra"),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Ghidra Headless not configured", result.stderr)
+            report = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["decompiler"]["status"], "unavailable")
+            self.assertIn("--install-guide ghidra", report["decompiler"]["setup_hint"])
+            self.assertIn("Ghidra Headless not configured", (out_dir / "report.md").read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()
