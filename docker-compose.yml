@@ -1,0 +1,30 @@
+﻿services:
+  reverse-analyzer:
+    build: .
+    image: reverse-analyzer:pentagi-scaffold
+    working_dir: /workspace
+    environment:
+      REVERSE_ANALYZER_WORKSPACE: /workspace
+      REVERSE_ANALYZER_KNOWLEDGE_DIR: /workspace/.reverse_analyzer/knowledge
+      REVERSE_ANALYZER_SESSIONS_DIR: /workspace/.reverse_analyzer/sessions
+      REVERSE_ANALYZER_REPORTS_DIR: /workspace/reports
+      REVERSE_ANALYZER_DASHBOARD_PORT: "8088"
+    volumes:
+      - ./:/workspace
+      - ./samples:/workspace/samples
+      - ./reports:/workspace/reports
+      - ./.reverse_analyzer:/workspace/.reverse_analyzer
+    ports:
+      - "8088:8088"
+    command: ["--help"]
+
+  reverse-analyzer-cli:
+    image: reverse-analyzer:pentagi-scaffold
+    profiles: ["cli"]
+    working_dir: /workspace
+    environment:
+      REVERSE_ANALYZER_WORKSPACE: /workspace
+    volumes:
+      - ./:/workspace
+    entrypoint: ["python", "-m", "reverse_analyzer"]
+    command: ["list-tools"]
