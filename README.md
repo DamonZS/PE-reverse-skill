@@ -827,60 +827,137 @@ reconstructed_<name>/
 
 ---
 
-## PentAGI 架构迁移后的用法
+## PentAGI 架构迁移后的使用指南
 
-本仓库正在迁移到 PentAGI 风格的可恢复逆向分析架构：CLI 负责创建 session，AgentLoop 负责推进 Flow/Task，ToolExecutor 统一调度工具，Provider 层接入模型或本地分析能力，Knowledge 保存可复用事实，ReportBuilder 输出报告。
+本项目已加入 PentAGI 风格的可恢复逆向分析运行时：用 `ReverseSession` 记录分析会话，用 `Flow / Task / Subtask` 拆分流程，用 `AgentLoop` 按“分析 → 调工具 → 记录 → 下一步”的循环推进，用 `ToolExecutor` 统一封装逆向工具，用 `Provider` 适配规则引擎或模型能力，并用 `ReportBuilder` 输出报告。
 
-### CLI 快速开始
+### 1. 本地准备
 
-```bash
+```powershell
+cd D:\Project\pe-reverse-analyzer-main
+python -m pip install -r requirements.txt
+```
+
+当前 `requirements.txt` 包含：
+
+- `pefile`：PE 头、节区和导入表解析。
+- `capstone`：反汇编能力，缺失时对应工具会以 `unavailable` 状态返回。
+- `requests`：为后续 provider / API 集成预留。
+
+`yara-python` 等扩展能力是可选依赖；未安装时工具不会让整体流程崩溃，而是返回结构化的 `unavailable` 结果。
+
+### 2. CLI 快速开始
+
+```powershell
 # 查看命令
 python -m reverse_analyzer --help
+
+# 查看当前可用运行时组件
+python -m reverse_analyzer list-tools
+python -m reverse_analyzer list-tools --json
 
 # 初始化本地知识库
 python -m reverse_analyzer init-knowledge
 
-# 查看知识库清单
+# 查看知识库清单；不存在时自动创建
 python -m reverse_analyzer show-knowledge --init-if-missing
 
-# 列出当前 scaffold 和未来运行时工具
-python -m reverse_analyzer list-tools
-
-# 启动一次样本分析会话
-python -m reverse_analyzer analyze ./samples/app.exe --out ./reports/app --max-iterations 8
+# 分析一个样本
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --max-iterations 8
 ```
 
-`analyze` 会先初始化 `ReverseSession`，写入目标样本、输出目录、最大迭代次数等 metadata，并建立默认 `binary-analysis` Flow。随后它会以 duck typing 方式导入并调用未来运行时组件：
+`analyze` 命令会输出一段 JSON，包含 `session_id`、输出目录、AgentLoop 结果和生成的报告路径。
 
-- `AgentLoop`：候选模块包括 `reverse_analyzer.agent.loop`、`reverse_analyzer.agent_loop`、`reverse_analyzer.agents.loop`。
-- `ToolExecutor`：候选模块包括 `reverse_analyzer.tools.executor`、`reverse_analyzer.tool_executor`、`reverse_analyzer.tools`。
-- `ReportBuilder`：候选模块包括 `reverse_analyzer.reports.builder`、`reverse_analyzer.report_builder`、`reverse_analyzer.reports`。
+### 3. `analyze` 会生成什么
 
-如果这些迁移模块尚未合入，CLI 会输出清晰错误，并保留已初始化的 session id 方便后续恢复。
+假设执行：
 
-### 架构术语
+```powershell
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --max-iterations 8
+```
 
-- **Flow**：一次逆向分析的顶层流程，例如 `binary-analysis`。Flow 按顺序组织多个 Task，并可从中断处恢复。
-- **Task**：Flow 内的可恢复工作单元，例如 identify、analyze、report。Task 可继续拆成 Subtask。
-- **Tool**：由 `ToolExecutor` 调度的能力单元，例如文件识别、PE 元数据解析、反汇编、字符串提取、知识查询、报告写入。
-- **Provider**：为 AgentLoop 或 Tool 提供外部能力的适配层，可接本地工具、模型 API、规则引擎或未来 dashboard 服务。
-- **Knowledge**：默认位于 `.reverse_analyzer/knowledge/knowledge.json`，保存 provider 注记、工具经验、历史报告索引和可复用分析事实。
-- **Reports**：默认输出到 `reports/` 或 `--out` 指定目录，由 `ReportBuilder` 生成机器可读与人工可读报告。
+输出目录通常包含：
 
-### Docker / Compose scaffold
+```text
+reports/app/
+├─ report.json                  # 机器可读报告
+├─ report.md                    # 人类可读报告
+├─ trace.jsonl                  # 每一步 provider/tool/event 追踪日志
+├─ sessions/
+│  └─ <session_id>.json          # 可恢复的 ReverseSession 状态
+└─ artifacts/                   # 预留给后续工具产物
+```
 
-```bash
-# 构建 CLI 镜像
+默认规则 Provider 会按顺序尝试以下内置工具：
+
+1. `file_info`：读取路径、文件名、大小和后缀。
+2. `hash`：计算 `md5 / sha1 / sha256`。
+3. `strings_extract`：提取 ASCII / UTF-16LE 可打印字符串。
+4. `packer_detect`：基于节名、熵和可疑 API 字符串做壳迹象判断。
+5. `section_entropy_scan`：计算节区或文件块熵。
+6. `pe_header_scan`：使用 `pefile` 解析 PE 元数据和导入表。
+
+工具异常会被 `ToolExecutor` 归一化为 `ToolResult`，不会直接打断整个分析链路。
+
+### 4. 架构对应关系
+
+| PentAGI 思路 | 本项目实现 | 位置 |
+|---|---|---|
+| Flow / Task / Subtask 编排 | 可序列化的会话、流程、任务模型 | `reverse_analyzer/core/models.py` |
+| Agent tool-call loop | Provider 决策、Tool 执行、Observation 记录循环 | `reverse_analyzer/agent/loop.py` |
+| Tool Executor 抽象 | 统一注册、执行、异常归一化 | `reverse_analyzer/tools/executor.py` |
+| 静态逆向工具 | 文件信息、哈希、字符串、PE、熵、壳检测、YARA stub | `reverse_analyzer/tools/static_tools.py` |
+| Provider 抽象 | `BaseProvider`、规则 Provider、OpenAI-compatible stub | `reverse_analyzer/providers/` |
+| Knowledge / 记忆 | 本地 JSON 知识库与相似特征查询 | `reverse_analyzer/knowledge/base.py` |
+| Observability / Logs | JSONL trace 与 session 持久化 | `reverse_analyzer/runtime/` |
+| Report | Markdown / JSON 报告 | `reverse_analyzer/report/builder.py` |
+| Docker Compose | CLI 容器和后续 Dashboard 端口预留 | `Dockerfile`、`docker-compose.yml` |
+
+### 5. Docker / Compose 用法
+
+> 在 Windows 上不要输入 `Docker Desktop` 作为命令。应先从开始菜单启动 Docker Desktop，等 Docker Engine 运行后，再在 PowerShell 里执行下面的 `docker compose ...` 命令。
+
+```powershell
+# 构建镜像
 docker compose build
 
-# 在容器内查看 CLI
+# 查看 CLI 帮助
 docker compose run --rm reverse-analyzer --help
 
 # 初始化挂载工作区中的知识库
 docker compose run --rm reverse-analyzer init-knowledge
 
-# 运行一次分析（样本和报告目录通过 volume 映射到工作区）
+# 分析挂载到 /workspace 的样本
 docker compose run --rm reverse-analyzer analyze /workspace/samples/app.exe --out /workspace/reports/app --max-iterations 8
 ```
 
-`docker-compose.yml` 预留了 `8088:8088` 端口和 `.reverse_analyzer`、`samples`、`reports` volume，当前只提供本地分析服务/CLI 容器，未来可在同一接口上接入 dashboard。
+`docker-compose.yml` 预留了 `8088:8088` 端口，以及 `.reverse_analyzer`、`samples`、`reports` volume。当前主要用于 CLI 分析环境；后续可以在同一 compose 文件里接入 Web UI / Dashboard。
+
+### 6. 开发验证
+
+修改运行时或工具后，建议至少执行：
+
+```powershell
+python -m compileall reverse_analyzer tests
+python -m unittest discover -s tests -v
+python -m reverse_analyzer list-tools
+```
+
+如果要做一次完整 smoke test：
+
+```powershell
+New-Item -ItemType Directory -Force tmp | Out-Null
+Set-Content -Path tmp\sample.bin -Value "MZ hello VirtualAlloc UPX0 CreateRemoteThread"
+python -m reverse_analyzer analyze tmp\sample.bin --out tmp\analysis --max-iterations 6
+Get-Content tmp\analysis\report.md
+```
+
+`tmp/`、`.reverse_analyzer/` 和 `reports/` 已加入 `.gitignore`，默认不会提交运行时产物。
+
+### 7. 下一步扩展建议
+
+- 把 `pe_header_scan` 的导入表、节区和入口点结果转成更丰富的 finding。
+- 接入真实 `yara-python` 规则目录，并在报告中展示命中规则。
+- 为 `OpenAICompatibleProvider` 增加显式配置项，支持本地模型或 OpenAI-compatible endpoint。
+- 在 Dashboard 中读取 `sessions/*.json`、`trace.jsonl` 和 `report.json`，做可视化分析工作台。
+- 将 installer 作为独立命令加入 CLI，例如 `python -m reverse_analyzer install-tools`。
