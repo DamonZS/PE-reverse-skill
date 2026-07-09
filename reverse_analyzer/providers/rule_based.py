@@ -12,8 +12,9 @@ class RuleBasedProvider:
     """A small, deterministic planning provider.
 
     The rule set intentionally favors broad, safe reverse-analysis coverage:
-    identify the sample, inspect strings/imports, then summarize.  Tool names are
-    configurable because Worker B's executor may expose different aliases.
+    identify the sample, inspect strings/imports/PE metadata/YARA hits, then
+    summarize. Tool names are configurable because executors may expose
+    different aliases.
     """
 
     name = "rule_based"
@@ -31,9 +32,11 @@ class RuleBasedProvider:
                 "file_info",
                 "hash",
                 "strings_extract",
+                "pe_deep_scan",
                 "packer_detect",
                 "section_entropy_scan",
                 "pe_header_scan",
+                "yara_scan",
             ]
         )
         self.tool_args = {name: dict(args) for name, args in (tool_args or {}).items()}
@@ -96,10 +99,14 @@ def _path_arg_name(tool_name: str) -> str:
         "hash",
         "strings_extract",
         "pe_header_scan",
+        "pe_deep_scan",
         "section_entropy_scan",
         "capstone_disassemble_stub",
         "packer_detect",
+        "yara_scan",
         "yara_scan_stub",
+        "reconstruct_project",
+        "ghidra_decompile",
     }:
         return "path"
     return "target"

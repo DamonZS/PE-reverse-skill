@@ -32,6 +32,9 @@ class CliTests(unittest.TestCase):
     def test_list_tools_reports_scaffolded_runtime(self) -> None:
         result = run_cli("list-tools")
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("pe_deep_scan", result.stdout)
+        self.assertIn("yara_scan", result.stdout)
+        self.assertIn("reconstruct_project", result.stdout)
         self.assertIn("session-store", result.stdout)
         self.assertIn("AgentLoop", result.stdout)
         self.assertIn("ToolExecutor", result.stdout)
@@ -63,6 +66,35 @@ class CliTests(unittest.TestCase):
             tool_names = [item["tool_name"] for item in payload["result"]["tool_results"]]
             self.assertEqual(tool_names, ["file_info", "hash", "strings_extract"])
             self.assertNotIn("tool not registered", result.stdout)
+
+    def test_analyze_reconstruct_generates_stub_project(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "sample.bin"
+            out_dir = root / "analysis"
+            sample.write_text("MZ hello VirtualAlloc UPX0 CreateRemoteThread", encoding="utf-8")
+
+            result = run_cli(
+                "analyze",
+                str(sample),
+                "--out",
+                str(out_dir),
+                "--max-iterations",
+                "2",
+                "--reconstruct",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            tool_names = [item["tool_name"] for item in payload["result"]["tool_results"]]
+            self.assertIn("reconstruct_project", tool_names)
+            report = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["reconstruction"]["status"], "ok")
+            project_dir = Path(report["reconstruction"]["project_dir"])
+            self.assertTrue(project_dir.is_dir())
+            self.assertTrue((project_dir / "CMakeLists.txt").is_file())
+            self.assertTrue((project_dir / "src" / "functions.c").is_file())
+            self.assertIn("## Reconstruction", (out_dir / "report.md").read_text(encoding="utf-8"))
 
     def test_install_guide_ghidra(self) -> None:
         result = run_cli("--install-guide", "ghidra")

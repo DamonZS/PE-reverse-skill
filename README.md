@@ -1004,3 +1004,50 @@ Get-Content tmp\analysis\report.md
 - 为 `OpenAICompatibleProvider` 增加显式配置项，支持本地模型或 OpenAI-compatible endpoint。
 - 在 Dashboard 中读取 `sessions/*.json`、`trace.jsonl` 和 `report.json`，做可视化分析工作台。
 - 将 installer 作为独立命令加入 CLI，例如 `python -m reverse_analyzer install-tools`。
+
+### Reverse analyzer updates (2026-07-09)
+
+The current `reverse_analyzer` runtime now integrates the remaining static
+reverse-analysis pieces directly into the CLI flow:
+
+- `pe_deep_scan`
+  - imports / exports / resources / TLS callbacks
+  - overlay / Rich header
+  - section anomalies / IAT anomalies
+  - shell score + verdict
+- `yara_scan`
+  - bundled rules under `rules/yara/`
+  - automatic recursive loading of `.yar` / `.yara`
+  - matched rule metadata and string evidence in `report.json` / `report.md`
+- `reconstruct_project`
+  - optional compilable stub project output with `--reconstruct`
+
+#### New CLI examples
+
+```powershell
+# Standard analysis with PE deep scan + bundled YARA rules
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --max-iterations 8
+
+# Use a custom YARA rules directory
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --yara-rules .\custom-rules
+
+# Generate a reconstruction scaffold
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --reconstruct
+
+# Combine reconstruction and Ghidra decompilation
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --decompile --reconstruct
+```
+
+#### Additional output
+
+`report.json` / `report.md` now include:
+
+- `pe_analysis`
+- `yara`
+- `decompiler`
+- `reconstruction`
+- normalized `findings` with:
+  - `severity`
+  - `confidence`
+  - `evidence`
+  - `recommendation`
