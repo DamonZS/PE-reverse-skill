@@ -13,13 +13,14 @@ try:
     from .config import AnalyzerConfig, ensure_runtime_dirs, load_config, write_default_knowledge
     from .providers import RuleBasedProvider
     from .runtime import SessionStore, TraceLogger
-    from .tools import register_builtin_tools
+    from .tools import ghidra_install_guide, register_builtin_tools
 except ImportError:  # Allows direct script execution while package-level migration is incomplete.
     from config import AnalyzerConfig, ensure_runtime_dirs, load_config, write_default_knowledge
     RuleBasedProvider = None  # type: ignore[assignment]
     SessionStore = None  # type: ignore[assignment]
     TraceLogger = None  # type: ignore[assignment]
     register_builtin_tools = None  # type: ignore[assignment]
+    ghidra_install_guide = None  # type: ignore[assignment]
 
 
 _BUILTIN_TOOLS = [
@@ -182,6 +183,32 @@ def analyze_command(args: argparse.Namespace) -> int:
     except TypeError:
         result = _call_first(agent_loop, ("run", "execute", "analyze"))
     tool_results = getattr(result, "tool_results", None) or getattr(agent_loop, "tool_results", [])
+    if args.decompile:
+        ghidra_result = tool_executor.execute(
+            "ghidra_decompile",
+            path=str(sample),
+            out_dir=str(out_dir),
+            ghidra_home=args.ghidra_home,
+            timeout=args.decompiler_timeout,
+        )
+        ghidra_observation = {
+            "tool_name": "ghidra_decompile",
+            "tool_args": {
+                "path": str(sample),
+                "out_dir": str(out_dir),
+                "ghidra_home": args.ghidra_home,
+                "timeout": args.decompiler_timeout,
+            },
+            "result": ghidra_result.to_dict() if hasattr(ghidra_result, "to_dict") else ghidra_result,
+            "error": getattr(ghidra_result, "error", None),
+            "iteration": len(tool_results) + 1,
+            "ok": getattr(ghidra_result, "status", "ok") == "ok",
+        }
+        tool_results.append(ghidra_observation)
+        if hasattr(result, "tool_results"):
+            result.tool_results = tool_results
+        if getattr(ghidra_result, "status", "") == "unavailable":
+            print("Ghidra Headless not configured. Run: python -m reverse_analyzer --install-guide ghidra", file=sys.stderr)
     if getattr(result, "stopped_reason", "") == "final_answer":
         session.set_status("succeeded")
     else:
@@ -263,12 +290,16 @@ def build_parser() -> argparse.ArgumentParser:
         prog="reverse_analyzer",
         description="PentAGI-style reverse analysis CLI scaffold.",
     )
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser.add_argument("--install-guide", metavar="TOOL", help="Print setup instructions for an optional tool, e.g. ghidra.")
+    subparsers = parser.add_subparsers(dest="command", required=False)
 
     analyze = subparsers.add_parser("analyze", help="Run an analysis session for a sample.")
     analyze.add_argument("sample", help="Path to the binary/sample to analyze.")
     analyze.add_argument("--out", required=True, help="Output directory for session artifacts and reports.")
     analyze.add_argument("--max-iterations", type=int, default=8, help="Maximum AgentLoop iterations.")
+    analyze.add_argument("--decompile", action="store_true", help="Run Ghidra Headless decompilation when configured.")
+    analyze.add_argument("--ghidra-home", default=None, help="Path to Ghidra root directory; overrides GHIDRA_HOME.")
+    analyze.add_argument("--decompiler-timeout", type=int, default=900, help="Ghidra Headless timeout in seconds.")
     analyze.set_defaults(func=analyze_command)
 
     init_knowledge = subparsers.add_parser("init-knowledge", help="Create the local knowledge scaffold.")
@@ -290,6 +321,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if getattr(args, "install_guide", None):
+        if args.install_guide.lower() != "ghidra":
+            parser.error("--install-guide currently supports only: ghidra")
+        if ghidra_install_guide is None:
+            print("Ghidra install guide is unavailable because tools could not be imported.", file=sys.stderr)
+            return 3
+        print(ghidra_install_guide()["guide"])
+        return 0
+    if not hasattr(args, "func"):
+        parser.print_help()
+        return 0
     return int(args.func(args))
 
 

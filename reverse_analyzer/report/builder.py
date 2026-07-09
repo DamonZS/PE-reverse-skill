@@ -21,12 +21,14 @@ class ReportBuilder:
         findings = _findings(self.knowledge, tool_trace)
         recommendations = _recommendations(findings, tool_trace)
         artifacts = _artifacts(self.session, self.knowledge, tool_trace)
+        decompiler = _decompiler(tool_trace)
         return {
             "sample": sample,
             "tool_trace": tool_trace,
             "findings": findings,
             "recommendations": recommendations,
             "artifacts": artifacts,
+            "decompiler": decompiler,
         }
 
     def to_json(self, *, indent: int = 2) -> str:
@@ -47,6 +49,17 @@ class ReportBuilder:
                     lines.append(f"   - Error: {item['error']}")
         else:
             lines.append("No tool calls recorded.")
+        decompiler = report.get("decompiler") or {}
+        if decompiler:
+            lines.extend(["", "## Decompiler", ""])
+            status = decompiler.get("status") or "unknown"
+            lines.append(f"- **Status:** {status}")
+            if decompiler.get("setup_hint"):
+                lines.append(f"- **Setup Hint:** {decompiler['setup_hint']}")
+            if decompiler.get("output_dir"):
+                lines.append(f"- **Output:** {decompiler['output_dir']}")
+            if decompiler.get("function_count") is not None:
+                lines.append(f"- **Functions:** {decompiler['function_count']}")
         lines.extend(["", "## Findings", ""])
         if report["findings"]:
             for item in report["findings"]:
@@ -154,6 +167,26 @@ def _artifacts(session: Any, knowledge: Any, tool_trace: Sequence[Mapping[str, A
     return artifacts
 
 
+
+def _decompiler(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    for trace in tool_trace:
+        tool_name = str(trace.get("tool_name") or trace.get("tool") or "")
+        if tool_name != "ghidra_decompile":
+            continue
+        payload = _tool_payload(trace)
+        if isinstance(payload, Mapping):
+            return {
+                "status": payload.get("status") or ("ok" if trace.get("ok") else "failed"),
+                "setup_hint": payload.get("setup_hint"),
+                "install_guide": payload.get("install_guide"),
+                "output_dir": payload.get("output_dir"),
+                "project_dir": payload.get("project_dir"),
+                "function_count": payload.get("function_count"),
+                "artifacts": payload.get("artifacts") or [],
+            }
+        return {"status": "unknown"}
+    return {}
+
 def _tool_payload(trace: Mapping[str, Any]) -> Any:
     payload = trace.get("result") or trace.get("output") or {}
     if hasattr(payload, "to_dict"):
@@ -195,6 +228,33 @@ def _heuristic_findings(trace: Mapping[str, Any], payload: Mapping[str, Any]) ->
                     "title": "Suspicious Windows API strings",
                     "severity": "medium",
                     "detail": ", ".join(suspicious),
+                }
+            )
+    if tool_name == "ghidra_decompile":
+        status = str(payload.get("status") or "").lower()
+        if status == "unavailable":
+            findings.append(
+                {
+                    "title": "Ghidra Headless not configured",
+                    "severity": "info",
+                    "detail": payload.get("setup_hint") or "Run the Ghidra install guide before decompilation.",
+                    "recommendation": payload.get("setup_hint"),
+                }
+            )
+        elif status == "failed":
+            findings.append(
+                {
+                    "title": "Ghidra Headless decompilation failed",
+                    "severity": "medium",
+                    "detail": "See ghidra.log for details.",
+                }
+            )
+        elif status == "ok":
+            findings.append(
+                {
+                    "title": "Ghidra Headless decompilation completed",
+                    "severity": "info",
+                    "detail": f"functions={payload.get('function_count', 0)}",
                 }
             )
     return findings
