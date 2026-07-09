@@ -60,6 +60,10 @@ class ReportBuilderTests(unittest.TestCase):
         titles = {item["title"] for item in report["findings"]}
         self.assertIn("Suspicious Windows API strings", titles)
         self.assertIn("Packer indicators detected", titles)
+        for item in report["findings"]:
+            self.assertIn("confidence", item)
+            self.assertIn("evidence", item)
+            self.assertIn("recommendation", item)
 
     def test_report_builder_includes_decompiler_unavailable_section(self):
         session = SimpleNamespace(session_id="s3", target="sample.bin", status="running", artifacts=[])
@@ -87,6 +91,79 @@ class ReportBuilderTests(unittest.TestCase):
         self.assertIn("Ghidra Headless not configured", {item["title"] for item in report["findings"]})
         self.assertIn("## Decompiler", markdown)
         self.assertIn("--install-guide ghidra", markdown)
+
+    def test_report_builder_outputs_pe_yara_and_reconstruction_sections(self):
+        session = SimpleNamespace(session_id="s4", target="sample.exe", status="succeeded", artifacts=[])
+        tool_results = [
+            {
+                "tool_name": "pe_deep_scan",
+                "result": {
+                    "tool": "pe_deep_scan",
+                    "status": "ok",
+                    "data": {
+                        "entrypoint": {"section": "UPX0"},
+                        "imports": [{"dll": "KERNEL32.dll", "functions": [{"name": "LoadLibraryA"}]}],
+                        "exports": {"count": 0, "symbols": []},
+                        "resources": {"count": 1, "types": ["ICON"], "entries": []},
+                        "tls_callbacks": {"count": 1, "callbacks": [4198400]},
+                        "overlay": {"present": True, "size": 32},
+                        "rich_header": {"present": True, "entry_count": 2},
+                        "section_anomalies": [{"section": "UPX0", "reasons": ["suspicious_name", "high_entropy"]}],
+                        "iat_anomalies": [{"dll": "KERNEL32.dll", "type": "null_iat_address"}],
+                        "shell_score": 80,
+                        "shell_verdict": "likely_packed",
+                        "shell_indicators": [{"reason": "suspicious_name"}],
+                    },
+                },
+            },
+            {
+                "tool_name": "yara_scan",
+                "result": {
+                    "tool": "yara_scan",
+                    "status": "ok",
+                    "data": {
+                        "rules_path": "rules/yara",
+                        "match_count": 1,
+                        "matches": [
+                            {
+                                "rule": "SuspiciousWindowsApiCombo",
+                                "namespace": "default.suspicious_apis",
+                                "tags": ["suspicious"],
+                                "meta": {"severity": "medium", "description": "High-risk API combo"},
+                                "strings": {"count": 1, "items": [{"identifier": "$a1", "preview": "CreateRemoteThread"}]},
+                            }
+                        ],
+                    },
+                },
+            },
+            {
+                "tool_name": "reconstruct_project",
+                "result": {
+                    "tool": "reconstruct_project",
+                    "status": "ok",
+                    "data": {
+                        "status": "ok",
+                        "project_dir": "out/reconstructed_sample",
+                        "function_count": 2,
+                        "import_count": 1,
+                        "stub_only": True,
+                        "artifacts": [{"name": "src/functions.c", "path": "out/reconstructed_sample/src/functions.c"}],
+                    },
+                },
+            },
+        ]
+
+        builder = ReportBuilder(session, tool_results)
+        report = builder.build()
+        markdown = builder.to_markdown()
+
+        self.assertEqual(report["pe_analysis"]["shell_score"], 80)
+        self.assertEqual(report["yara"]["match_count"], 1)
+        self.assertEqual(report["reconstruction"]["status"], "ok")
+        self.assertIn("## PE Deep Analysis", markdown)
+        self.assertIn("## YARA", markdown)
+        self.assertIn("## Reconstruction", markdown)
+        self.assertIn("YARA match: SuspiciousWindowsApiCombo", {item["title"] for item in report["findings"]})
 
 
 if __name__ == "__main__":

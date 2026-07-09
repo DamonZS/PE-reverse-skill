@@ -21,6 +21,19 @@ class RuleBasedProviderTests(unittest.TestCase):
         self.assertEqual(message.tool_name, "file_info")
         self.assertEqual(message.tool_args, {"path": "sample.exe"})
 
+    def test_rule_based_provider_reaches_deep_pe_and_yara_steps(self):
+        provider = RuleBasedProvider()
+        tool_results = [
+            {"tool_name": "file_info"},
+            {"tool_name": "hash"},
+            {"tool_name": "strings_extract"},
+        ]
+
+        message = provider.analyze({"target": "sample.exe", "tool_results": tool_results})
+
+        self.assertEqual(message.tool_name, "pe_deep_scan")
+        self.assertEqual(message.tool_args, {"path": "sample.exe"})
+
     def test_rule_based_provider_summarizes_after_observations(self):
         provider = RuleBasedProvider(plan=["identify"], finish_after_results=1)
 

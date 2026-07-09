@@ -33,6 +33,10 @@ class ToolExecutorTests(TestCase):
             sample.write_bytes(b"MZ\x00\x00hello-world\x00noise\x00LoadLibraryA\x00")
             executor = register_builtin_tools()
 
+            self.assertIn("pe_deep_scan", executor.tools)
+            self.assertIn("yara_scan", executor.tools)
+            self.assertIn("reconstruct_project", executor.tools)
+
             info = executor.execute("file_info", path=sample)
             self.assertEqual(info.status, "ok")
             self.assertEqual(info.data["size"], sample.stat().st_size)
@@ -58,7 +62,7 @@ class ToolExecutorTests(TestCase):
             self.assertIn("pefile", pe.error)
 
             with patch.dict(sys.modules, {"yara": None}):
-                yara = executor.execute("yara_scan_stub", path=sample)
+                yara = executor.execute("yara_scan", path=sample)
             self.assertEqual(yara.status, "unavailable")
             self.assertIn("yara", yara.error.lower())
 

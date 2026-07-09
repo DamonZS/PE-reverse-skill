@@ -19,6 +19,9 @@ from typing import Any, Dict, Iterable, List
 
 from .executor import ToolExecutor, ToolResult
 from .ghidra import ghidra_check, ghidra_decompile, ghidra_install_guide
+from .pe_deep import pe_deep_scan
+from .reconstruct import reconstruct_project
+from .yara_tools import yara_scan
 
 PRINTABLE_RE = re.compile(rb"[\x20-\x7e]{4,}")
 UTF16LE_RE = re.compile((rb"(?:[\x20-\x7e]\x00){4,}"))
@@ -41,10 +44,13 @@ def register_builtin_tools(executor: ToolExecutor | None = None) -> ToolExecutor
     executor.register("hash", hash_file)
     executor.register("strings_extract", strings_extract)
     executor.register("pe_header_scan", pe_header_scan)
+    executor.register("pe_deep_scan", pe_deep_scan)
     executor.register("section_entropy_scan", section_entropy_scan)
     executor.register("capstone_disassemble_stub", capstone_disassemble_stub)
     executor.register("packer_detect", packer_detect)
+    executor.register("yara_scan", yara_scan)
     executor.register("yara_scan_stub", yara_scan_stub)
+    executor.register("reconstruct_project", reconstruct_project)
     executor.register("external_command", external_command)
     executor.register("ghidra_check", ghidra_check)
     executor.register("ghidra_decompile", ghidra_decompile)
@@ -188,22 +194,9 @@ def packer_detect(path: str | os.PathLike[str]) -> Dict[str, Any]:
 
 
 def yara_scan_stub(path: str | os.PathLike[str], rules_path: str | os.PathLike[str] | None = None) -> ToolResult | Dict[str, Any]:
-    p = _require_file(path)
-    try:
-        import yara  # type: ignore[import-not-found]
-    except Exception as exc:  # noqa: BLE001
-        return _unavailable("yara_scan_stub", "yara-python", exc, data={"path": str(p), "matches": []})
+    """Backward-compatible alias for the real YARA scanner."""
 
-    if rules_path is None:
-        return ToolResult(
-            tool="yara_scan_stub",
-            status="unavailable",
-            error="rules_path is required when yara-python is installed",
-            data={"path": str(p), "matches": []},
-        )
-    rules = yara.compile(filepath=str(rules_path))
-    matches = rules.match(str(p))
-    return {"path": str(p), "matches": [str(m) for m in matches]}
+    return yara_scan(path=path, rules_path=rules_path)
 
 
 def external_command(

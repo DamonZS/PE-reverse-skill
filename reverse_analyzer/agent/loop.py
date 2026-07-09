@@ -18,7 +18,13 @@ class ToolObservation:
 
     @property
     def ok(self) -> bool:
-        return self.error is None
+        if self.error is not None:
+            return False
+        if hasattr(self.result, "status"):
+            return str(getattr(self.result, "status", "ok")).lower() == "ok"
+        if isinstance(self.result, Mapping) and "status" in self.result:
+            return str(self.result.get("status") or "ok").lower() == "ok"
+        return True
 
     def to_dict(self) -> Dict[str, Any]:
         return {
