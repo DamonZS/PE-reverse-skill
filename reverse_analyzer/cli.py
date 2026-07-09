@@ -183,6 +183,7 @@ def analyze_command(args: argparse.Namespace) -> int:
     except TypeError:
         result = _call_first(agent_loop, ("run", "execute", "analyze"))
     tool_results = getattr(result, "tool_results", None) or getattr(agent_loop, "tool_results", [])
+    ghidra_artifacts: list[str] = []
     if args.decompile:
         ghidra_result = tool_executor.execute(
             "ghidra_decompile",
@@ -207,6 +208,14 @@ def analyze_command(args: argparse.Namespace) -> int:
         tool_results.append(ghidra_observation)
         if hasattr(result, "tool_results"):
             result.tool_results = tool_results
+        ghidra_payload = ghidra_result.to_dict() if hasattr(ghidra_result, "to_dict") else ghidra_result
+        if isinstance(ghidra_payload, dict):
+            data = ghidra_payload.get("data") if "data" in ghidra_payload else ghidra_payload
+            if isinstance(data, dict):
+                for item in data.get("artifacts") or []:
+                    if isinstance(item, dict) and item.get("path"):
+                        session.artifacts.append(dict(item))
+                        ghidra_artifacts.append(str(item["path"]))
         if getattr(ghidra_result, "status", "") == "unavailable":
             print("Ghidra Headless not configured. Run: python -m reverse_analyzer --install-guide ghidra", file=sys.stderr)
     if getattr(result, "stopped_reason", "") == "final_answer":
@@ -238,7 +247,7 @@ def analyze_command(args: argparse.Namespace) -> int:
                 "session_id": session.session_id,
                 "out_dir": str(out_dir),
                 "result": result.to_dict() if hasattr(result, "to_dict") else result,
-                "artifacts": [str(report_json), str(report_md)],
+                "artifacts": [str(report_json), str(report_md), *ghidra_artifacts],
             },
             default=str,
             ensure_ascii=False,
@@ -275,6 +284,24 @@ def list_tools_command(args: argparse.Namespace) -> int:
         except RuntimeError:
             status = "not-yet-implemented"
         tools.append({"name": symbol, "status": status, "modules": list(modules)})
+    ghidra_entry = {
+        "name": "ghidra",
+        "description": "Optional Ghidra Headless decompiler backend with install guide support.",
+        "commands": ["--install-guide ghidra", "analyze --decompile", "analyze --ghidra-home <path>"],
+    }
+    try:
+        from reverse_analyzer.tools import ghidra_check as _ghidra_check
+
+        check = _ghidra_check()
+        ghidra_entry["status"] = check.get("status", "unknown")
+        if check.get("headless_path"):
+            ghidra_entry["headless_path"] = check["headless_path"]
+        if check.get("setup_hint"):
+            ghidra_entry["setup_hint"] = check["setup_hint"]
+    except Exception as exc:
+        ghidra_entry["status"] = "unavailable"
+        ghidra_entry["error"] = str(exc)
+    tools.append(ghidra_entry)
     if args.json:
         print(json.dumps(tools, indent=2))
     else:
@@ -282,6 +309,10 @@ def list_tools_command(args: argparse.Namespace) -> int:
             print(f"{tool['name']}: {tool['status']}")
             if "description" in tool:
                 print(f"  {tool['description']}")
+            if tool.get("headless_path"):
+                print(f"  headless: {tool['headless_path']}")
+            if tool.get("setup_hint"):
+                print(f"  setup: {tool['setup_hint']}")
     return 0
 
 
