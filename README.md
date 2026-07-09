@@ -824,3 +824,63 @@ reconstructed_<name>/
 - 不要将逆向得到的代码用于盗版分发
 - Web 安全审计需确认目标所有权后方可执行
 - Codex-5.5 / GPT-5.5 破甲能力仅供安全研究和授权逆向工程使用
+
+---
+
+## PentAGI 架构迁移后的用法
+
+本仓库正在迁移到 PentAGI 风格的可恢复逆向分析架构：CLI 负责创建 session，AgentLoop 负责推进 Flow/Task，ToolExecutor 统一调度工具，Provider 层接入模型或本地分析能力，Knowledge 保存可复用事实，ReportBuilder 输出报告。
+
+### CLI 快速开始
+
+```bash
+# 查看命令
+python -m reverse_analyzer --help
+
+# 初始化本地知识库
+python -m reverse_analyzer init-knowledge
+
+# 查看知识库清单
+python -m reverse_analyzer show-knowledge --init-if-missing
+
+# 列出当前 scaffold 和未来运行时工具
+python -m reverse_analyzer list-tools
+
+# 启动一次样本分析会话
+python -m reverse_analyzer analyze ./samples/app.exe --out ./reports/app --max-iterations 8
+```
+
+`analyze` 会先初始化 `ReverseSession`，写入目标样本、输出目录、最大迭代次数等 metadata，并建立默认 `binary-analysis` Flow。随后它会以 duck typing 方式导入并调用未来运行时组件：
+
+- `AgentLoop`：候选模块包括 `reverse_analyzer.agent.loop`、`reverse_analyzer.agent_loop`、`reverse_analyzer.agents.loop`。
+- `ToolExecutor`：候选模块包括 `reverse_analyzer.tools.executor`、`reverse_analyzer.tool_executor`、`reverse_analyzer.tools`。
+- `ReportBuilder`：候选模块包括 `reverse_analyzer.reports.builder`、`reverse_analyzer.report_builder`、`reverse_analyzer.reports`。
+
+如果这些迁移模块尚未合入，CLI 会输出清晰错误，并保留已初始化的 session id 方便后续恢复。
+
+### 架构术语
+
+- **Flow**：一次逆向分析的顶层流程，例如 `binary-analysis`。Flow 按顺序组织多个 Task，并可从中断处恢复。
+- **Task**：Flow 内的可恢复工作单元，例如 identify、analyze、report。Task 可继续拆成 Subtask。
+- **Tool**：由 `ToolExecutor` 调度的能力单元，例如文件识别、PE 元数据解析、反汇编、字符串提取、知识查询、报告写入。
+- **Provider**：为 AgentLoop 或 Tool 提供外部能力的适配层，可接本地工具、模型 API、规则引擎或未来 dashboard 服务。
+- **Knowledge**：默认位于 `.reverse_analyzer/knowledge/knowledge.json`，保存 provider 注记、工具经验、历史报告索引和可复用分析事实。
+- **Reports**：默认输出到 `reports/` 或 `--out` 指定目录，由 `ReportBuilder` 生成机器可读与人工可读报告。
+
+### Docker / Compose scaffold
+
+```bash
+# 构建 CLI 镜像
+docker compose build
+
+# 在容器内查看 CLI
+docker compose run --rm reverse-analyzer --help
+
+# 初始化挂载工作区中的知识库
+docker compose run --rm reverse-analyzer init-knowledge
+
+# 运行一次分析（样本和报告目录通过 volume 映射到工作区）
+docker compose run --rm reverse-analyzer analyze /workspace/samples/app.exe --out /workspace/reports/app --max-iterations 8
+```
+
+`docker-compose.yml` 预留了 `8088:8088` 端口和 `.reverse_analyzer`、`samples`、`reports` volume，当前只提供本地分析服务/CLI 容器，未来可在同一接口上接入 dashboard。
