@@ -18,7 +18,22 @@ import subprocess
 from typing import Any, Dict, Iterable, List
 
 from .executor import ToolExecutor, ToolResult
+from .frida import frida_check, frida_hook_profiles, frida_install_guide, frida_trace
+from .procmon import procmon_check, procmon_install_guide, procmon_trace
 from .ghidra import ghidra_check, ghidra_decompile, ghidra_install_guide
+from .gui import (
+    gui_fingerprint,
+    gui_resource_extract,
+    gui_runtime_probe,
+    gui_strategy_select,
+    gui_visual_parse,
+    gui_visual_regression,
+    reconstruct_gui_project,
+)
+from .gui_evidence import build_gui_evidence_graph
+from .behavior_graph import build_behavior_evidence_graph
+from .gui_state import build_gui_state_machine
+from .gui_xaml import extract_xaml_ui_evidence
 from .pe_deep import pe_deep_scan
 from .reconstruct import reconstruct_project
 from .yara_tools import yara_scan
@@ -52,9 +67,27 @@ def register_builtin_tools(executor: ToolExecutor | None = None) -> ToolExecutor
     executor.register("yara_scan_stub", yara_scan_stub)
     executor.register("reconstruct_project", reconstruct_project)
     executor.register("external_command", external_command)
+    executor.register("frida_check", frida_check)
+    executor.register("frida_trace", frida_trace)
+    executor.register("frida_hook_profiles", frida_hook_profiles)
+    executor.register("frida_install_guide", frida_install_guide)
+    executor.register("procmon_check", procmon_check)
+    executor.register("procmon_trace", procmon_trace)
+    executor.register("procmon_install_guide", procmon_install_guide)
     executor.register("ghidra_check", ghidra_check)
     executor.register("ghidra_decompile", ghidra_decompile)
     executor.register("ghidra_install_guide", ghidra_install_guide)
+    executor.register("gui_fingerprint", gui_fingerprint)
+    executor.register("gui_resource_extract", gui_resource_extract)
+    executor.register("gui_runtime_probe", gui_runtime_probe)
+    executor.register("gui_strategy_select", gui_strategy_select)
+    executor.register("gui_visual_parse", gui_visual_parse)
+    executor.register("gui_visual_regression", gui_visual_regression)
+    executor.register("gui_evidence_graph", build_gui_evidence_graph)
+    executor.register("gui_behavior_graph", build_behavior_evidence_graph)
+    executor.register("gui_state_machine", build_gui_state_machine)
+    executor.register("gui_xaml_extract", extract_xaml_ui_evidence)
+    executor.register("reconstruct_gui_project", reconstruct_gui_project)
     return executor
 
 

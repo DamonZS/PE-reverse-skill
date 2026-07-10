@@ -976,6 +976,259 @@ When available, Ghidra artifacts are written under:
   ghidra.log
 ```
 
+### Frida dynamic runtime tracing
+
+`analyze --dynamic` now adds a real dynamic-reversing pass instead of relying
+only on static imports and strings. The built-in hook plan covers loader APIs,
+memory/protection APIs, process creation, file/registry activity, WinHTTP /
+WinINet, raw Winsock traffic, and common anti-debug checks.
+
+```powershell
+# Print setup instructions
+python -m reverse_analyzer --install-guide frida
+
+# Static analysis + Frida instrumentation
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --dynamic --dynamic-duration 15
+
+# Pass arguments to a spawned target
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --dynamic --dynamic-arg "--help"
+
+# Attach to an already running PID
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --dynamic --attach-pid 1234
+
+# Use a target-specific hook plan
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --dynamic --dynamic-hook-file .\hooks.json
+```
+
+
+Built-in Frida hook profiles:
+
+| Profile | Use case |
+| --- | --- |
+| `auto` | Choose a profile from static signals such as packer score, imports, and strings. |\n| `behavior` | Broad default coverage across loader, memory, process, file, registry, and network APIs. |
+| `quick` | Small high-signal smoke-test set for lower overhead. |
+| `unpacking` | Loader, memory, anti-debug, and injection hooks for unpacking/runtime API resolution. |
+| `network` | Dynamic resolver + network hooks for protocol/API reconstruction. |
+| `persistence` | Loader, file, registry, and process hooks for installation/persistence behavior. |
+Custom hook plans are JSON lists, or an object with a `hooks` list:
+
+```json
+{
+  "hooks": [
+    {
+      "module": "kernel32.dll",
+      "name": "CreateFileW",
+      "category": "file",
+      "capture_return": true,
+      "args": [
+        {"index": 0, "name": "path", "type": "wide"},
+        {"index": 4, "name": "creation_disposition", "type": "u32"}
+      ]
+    }
+  ]
+}
+```
+
+Dynamic artifacts are written under:
+
+```text
+<out>/dynamic/frida/
+  agent.js       # generated instrumentation script
+  events.jsonl   # raw call / return / hook lifecycle events
+  trace.json     # calls, returns, installed/missing hooks, module snapshot
+  summary.json   # compact counts for reports
+```
+
+
+### Procmon OS behavior capture
+
+Frida is precise for API-level instrumentation, but protected samples may block
+or distort injected instrumentation. `--dynamic-backend procmon` adds a second
+backend based on Microsoft Sysinternals Process Monitor: it records OS-level
+file, registry, process/thread, image-load, TCP, and UDP events into a PML trace
+and optionally converts the trace to CSV for report summaries.
+
+```powershell
+# Print setup instructions
+python -m reverse_analyzer --install-guide procmon
+
+# Procmon-only behavioral capture
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --dynamic --dynamic-backend procmon --dynamic-duration 15
+
+# Run both Frida and Procmon in the same analysis session
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --dynamic --dynamic-backend all
+
+# Use a Procmon executable that is not on PATH
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --dynamic --dynamic-backend procmon --procmon-path C:\Tools\Procmon64.exe
+```
+
+Procmon artifacts are written under:
+
+```text
+<out>/dynamic/procmon/
+  trace.pml      # native Procmon backing file
+  events.csv     # converted event table when /OpenLog /SaveAs succeeds
+  summary.json   # operation/category/path counts for reports
+  manifest.json  # capture metadata
+```
+
+### Dynamic evidence → reconstruction planning
+
+When `--dynamic` is combined with `--reconstruct`, Frida and Procmon results are
+normalized into `dynamic_evidence` and written into the generated project:
+
+```text
+<out>/reconstructed_<sample>/analysis/dynamic_evidence.json
+```
+
+The reconstruction engine uses this evidence to:
+
+- create module files even when static decompilation has no recovered functions yet;
+- boost module priorities from observed behavior such as `connect`, `WinHttpSendRequest`,
+  `CreateRemoteThread`, `Process Create`, or registry/file activity;
+- add `dynamic_correlation` subtasks to `analysis/reconstruction_plan.json` so the next
+  reconstruction pass starts from behavior proven at runtime.
+
+Example:
+
+```powershell
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --dynamic --dynamic-backend all --reconstruct
+```
+
+### Dynamic behavior knowledge memory
+
+Dynamic behavior is now persisted into the local knowledge base alongside static
+features. After an analysis run, `KnowledgeBase` sample features include:
+
+- dynamic backend status and backend list;
+- event and return-event counts;
+- category counts such as `network`, `process`, `file`, and `registry`;
+- top Frida API names, Procmon operation names, and high-frequency paths;
+- reconstruction dynamic-evidence count and prioritized modules.
+
+Observations also include `dynamic_behavior` and `dynamic_summary` records. This
+lets later sessions compare samples by runtime behavior, not only by static PE
+metadata or strings.
+
+### Dynamic profile outcome statistics
+
+Each completed analysis can update `dynamic_profiles.json` in the knowledge
+directory. The file accumulates per-profile outcomes such as:
+
+- runs / successes / failures / unavailable counts;
+- total and average dynamic event counts;
+- return-event counts;
+- planned hook counts;
+- category counts and recent samples.
+
+`KnowledgeBase.recommend_dynamic_profile()` uses these historical outcomes to
+return the currently best-performing profile. This gives the platform a feedback
+loop for future auto-profile tuning instead of treating every dynamic run as an
+isolated event.
+
+When `analyze --dynamic --dynamic-profile auto` has no strong static signal for
+unpacking, network, or persistence behavior, the CLI now falls back to this
+historical recommendation before using the conservative `quick` profile.
+
+### GUI 技术栈识别与最优还原路径
+
+`analyze --gui` 会启动 GUI 还原 pipeline：先识别 GUI 技术栈，再提取资源、
+融合可用的运行时/视觉证据，并选择按原技术栈优先的重构策略。当前内置识别器覆盖
+Windows PE（WPF、WinForms、Qt、Electron、MFC、Win32 Dialog、Delphi/VCL、
+PyInstaller/PySide、自绘 GUI）、Android APK（XML、Compose、Flutter、React Native、
+Unity、WebView）与 iOS IPA（UIKit、SwiftUI、Flutter、React Native、Unity）。
+
+```powershell
+# 静态 fingerprint + 资源目录 + 策略选择
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --gui
+
+# 附加运行时 UI 树、截图视觉解析与 GUI 项目骨架生成
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --gui --gui-runtime --gui-visual --gui-screenshot-dir .\screenshots --reconstruct-gui
+
+# 对已启动的 Windows 程序采集 Win32 顶层窗口与子控件树
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --gui --gui-runtime --attach-pid 1234
+
+# 对 Android APK 从连接的模拟器/设备采集 uiautomator hierarchy
+python -m reverse_analyzer analyze .\samples\app.apk --out .\reports\app --gui --gui-runtime --adb-path C:\Android\platform-tools\adb.exe --android-serial emulator-5554
+
+# 无法保留原技术栈时，显式指定生成目标；默认值为 auto
+python -m reverse_analyzer analyze .\samples\app.exe --out .\reports\app --gui --reconstruct-gui --gui-target pyside6
+```
+
+输出会保存在：
+
+```text
+<out>/gui/
+  fingerprint.json
+  xaml_evidence.json
+  evidence_graph.json
+  strategy.json
+  resources/manifest.json
+  resources/extracted/
+  runtime_tree.json
+  visual_parse.json
+  regression.json
+
+<out>/reconstructed_gui/
+  README.md
+  analysis/gui_fingerprint.json
+  analysis/gui_strategy.json
+  analysis/xaml_evidence.json
+  analysis/evidence_graph.json
+  analysis/ui_tree.json
+  analysis/visual_parse.json
+  assets/
+  src/
+```
+
+对于可提取的 WPF XAML，pipeline 会解析控件、布局属性和事件处理器，并将其与运行时
+控件树、视觉控件和反编译函数合并到 `evidence_graph.json`。当策略输出为 WPF 且图中
+存在控件节点时，`--reconstruct-gui` 会生成实际的 `Button`、`TextBox`、`CheckBox`、
+`ComboBox`、`ListView` 等控件；带完整坐标的节点放入 `Canvas`，其余节点落入
+`StackPanel`，同时生成可编译的 C# 事件处理器 stub。
+
+`report.json` 新增 `gui_analysis`，`report.md` 新增 **GUI Analysis**、
+**GUI Reconstruction Strategy** 与 **GUI Visual Regression** 章节；GUI Analysis 会显示
+XAML 静态节点数、Evidence Graph 节点/边数及事件处理器关联数。没有可用
+UIAutomation、OCR、VLM、Android/iOS 工具链时，相应阶段记录为 `unavailable`，不会
+阻断静态 fingerprint、资源提取或工程骨架生成。
+
+### GUI 行为证据与交互轨迹
+
+启用统一的 Behavior Evidence Graph、GUI State Machine 与交互轨迹融合：
+
+```powershell
+python -m reverse_analyzer analyze sample.exe --out out --gui --reconstruct-gui --gui-interaction-trace interaction_trace.json
+```
+
+`--gui-interaction-trace` 用于将外部提供的被动交互轨迹归一化并融合为证据；它不会
+自动启动样本，也不会自动执行样本 UI 点击。
+
+相关产物包括：
+
+```text
+out/analysis_graph.json                              # 统一 Behavior Evidence Graph
+out/gui/state_machine.json                           # GUI 状态机
+out/gui/interaction_trace.json                       # 归一化后的交互轨迹
+out/reconstructed_gui/analysis/behavior_graph.json   # 重构项目使用的行为图
+out/reconstructed_gui/analysis/state_machine.json    # 重构项目使用的状态机
+```
+
+Behavior Evidence Graph 以可解释证据链联结 `function`、`API`、`dynamic event`、
+`UI control`、`handler`、`resource`、`state` 与 `action` 节点，保留来源、关联关系和
+证据强度，便于从 UI 操作追溯到处理器、函数调用、API 或动态事件，并进一步关联资源
+与状态变化。GUI State Machine 则描述可观测的 `state` 节点，以及由用户操作、控件
+事件或运行时证据触发的 `transition`，用于解释界面流程和支持 GUI 重构。
+
+GUI 策略结果会累计到知识目录中的 `gui_strategies.json`，包括 runs、success/failure
+计数、平均视觉相似度、控件匹配率、文本匹配率和最近样本。可通过：
+
+```python
+KnowledgeBase(...).recommend_gui_strategy(framework="wpf")
+```
+
+为同一技术栈选择历史上表现更好的还原策略；该推荐也会写入 session summary。
+
 ### 6. 开发验证
 
 修改运行时或工具后，建议至少执行：

@@ -80,7 +80,57 @@ def called_functions(function, monitor):
     return calls
 
 
-def collect_strings(program):
+def ref_type_name(ref):
+    try:
+        return str(ref.getReferenceType())
+    except Exception:
+        return "unknown"
+
+
+def function_for_address(function_manager, address):
+    try:
+        return function_manager.getFunctionContaining(address)
+    except Exception:
+        return None
+
+
+def xrefs_to_address(program, function_manager, target_address):
+    xrefs = []
+    functions = []
+    function_seen = set()
+    try:
+        ref_manager = program.getReferenceManager()
+        refs = ref_manager.getReferencesTo(target_address)
+        while refs.hasNext():
+            ref = refs.next()
+            from_address = ref.getFromAddress()
+            function = function_for_address(function_manager, from_address)
+            function_entry = addr(function.getEntryPoint()) if function else None
+            function_label = function_name(function) if function else None
+            xref = {
+                "from_address": addr(from_address),
+                "ref_type": ref_type_name(ref),
+            }
+            try:
+                xref["operand_index"] = int(ref.getOperandIndex())
+            except Exception:
+                pass
+            if function_label:
+                xref["function_name"] = function_label
+            if function_entry:
+                xref["function_entry"] = function_entry
+            xrefs.append(xref)
+            if function_label or function_entry:
+                key = "%s|%s" % (function_label or "", function_entry or "")
+                if key not in function_seen:
+                    function_seen.add(key)
+                    functions.append({"name": function_label or "unknown", "entry": function_entry or "unknown"})
+    except Exception:
+        pass
+    return xrefs, functions
+
+
+def collect_strings(program, function_manager):
     results = []
     listing = program.getListing()
     try:
@@ -90,7 +140,16 @@ def collect_strings(program):
             try:
                 if data.hasStringValue():
                     value = str(data.getValue())
-                    results.append({"address": addr(data.getAddress()), "value": value[:500]})
+                    xrefs, functions = xrefs_to_address(program, function_manager, data.getAddress())
+                    results.append(
+                        {
+                            "address": addr(data.getAddress()),
+                            "value": value[:500],
+                            "xref_count": len(xrefs),
+                            "functions": functions,
+                            "xrefs": xrefs,
+                        }
+                    )
             except Exception:
                 pass
     except Exception:
@@ -98,14 +157,31 @@ def collect_strings(program):
     return results
 
 
-def collect_imports(program):
+def collect_imports(program, function_manager):
     imports = []
     try:
         external_manager = program.getExternalManager()
         locations = external_manager.getExternalLocations()
         while locations.hasNext():
             loc = locations.next()
-            imports.append({"label": str(loc.getLabel()), "library": str(loc.getLibraryName())})
+            try:
+                target_address = loc.getAddress()
+            except Exception:
+                target_address = None
+            xrefs = []
+            functions = []
+            if target_address is not None:
+                xrefs, functions = xrefs_to_address(program, function_manager, target_address)
+            imports.append(
+                {
+                    "label": str(loc.getLabel()),
+                    "library": str(loc.getLibraryName()),
+                    "address": addr(target_address) if target_address is not None else "unknown",
+                    "xref_count": len(xrefs),
+                    "functions": functions,
+                    "xrefs": xrefs,
+                }
+            )
     except Exception:
         pass
     return imports
@@ -146,8 +222,8 @@ def main():
         write_text(os.path.join(out_dir, "pseudocode", "fn_%s.c" % safe), decompile_function(ifc, function, monitor))
         write_text(os.path.join(out_dir, "disassembly", "fn_%s.asm" % safe), disassemble_function(currentProgram, function))
 
-    strings = collect_strings(currentProgram)
-    imports = collect_imports(currentProgram)
+    strings = collect_strings(currentProgram, function_manager)
+    imports = collect_imports(currentProgram, function_manager)
     write_json(os.path.join(out_dir, "functions.json"), functions)
     write_json(os.path.join(out_dir, "call_graph.json"), {"nodes": functions, "edges": call_edges})
     write_json(os.path.join(out_dir, "strings_xrefs.json"), strings)

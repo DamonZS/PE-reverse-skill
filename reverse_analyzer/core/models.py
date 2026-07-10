@@ -164,6 +164,8 @@ class Task:
             self.set_status(Status.FAILED)
         elif "running" in statuses:
             self.set_status(Status.RUNNING)
+        elif "pending" in statuses:
+            self.set_status(Status.RUNNING if len(statuses) > 1 else Status.PENDING)
         elif statuses <= TERMINAL_STATUSES:
             if statuses == {"skipped"}:
                 self.set_status(Status.SKIPPED)
@@ -240,6 +242,8 @@ class Flow:
             self.set_status(Status.FAILED)
         elif "running" in statuses:
             self.set_status(Status.RUNNING)
+        elif "pending" in statuses:
+            self.set_status(Status.RUNNING if len(statuses) > 1 else Status.PENDING)
         elif statuses <= TERMINAL_STATUSES:
             if statuses == {"skipped"}:
                 self.set_status(Status.SKIPPED)
@@ -309,6 +313,8 @@ class ReverseSession:
             self.set_status(Status.FAILED)
         elif "running" in statuses:
             self.set_status(Status.RUNNING)
+        elif "pending" in statuses:
+            self.set_status(Status.RUNNING if len(statuses) > 1 else Status.PENDING)
         elif statuses <= TERMINAL_STATUSES:
             if statuses == {"skipped"}:
                 self.set_status(Status.SKIPPED)

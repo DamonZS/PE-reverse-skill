@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 from reverse_analyzer.core.models import utc_now
 
 
-TRACE_FIELDS = ("timestamp", "session_id", "task", "subtask", "tool", "status", "message", "data")
+TRACE_FIELDS = ("timestamp", "session_id", "flow", "task", "subtask", "tool", "status", "message", "data")
 
 
 class TraceLogger:
@@ -25,6 +25,7 @@ class TraceLogger:
         self,
         *,
         session_id: str,
+        flow: Optional[str] = None,
         task: Optional[str] = None,
         subtask: Optional[str] = None,
         tool: Optional[str] = None,
@@ -35,6 +36,7 @@ class TraceLogger:
         record = {
             "timestamp": utc_now(),
             "session_id": session_id,
+            "flow": flow,
             "task": task,
             "subtask": subtask,
             "tool": tool,

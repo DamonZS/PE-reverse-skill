@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any, Dict, Optional
 
@@ -30,14 +31,19 @@ class ReportBuilder:
         tool_trace = [_normalize_tool_result(item) for item in self.tool_results]
         pe_analysis = _pe_analysis(tool_trace)
         yara = _yara(tool_trace)
+        dynamic_analysis = _dynamic_analysis(tool_trace)
+        gui_analysis = _gui_analysis(tool_trace)
+        behavior_graph = _behavior_graph(tool_trace)
         decompiler = _decompiler(tool_trace)
-        reconstruction = _reconstruction(tool_trace)
+        reconstruction = _reconstruction(self.session, tool_trace)
         findings = _findings(self.knowledge, tool_trace)
         recommendations = _recommendations(
             findings,
             tool_trace,
             pe_analysis=pe_analysis,
             yara=yara,
+            dynamic_analysis=dynamic_analysis,
+            gui_analysis=gui_analysis,
             decompiler=decompiler,
             reconstruction=reconstruction,
         )
@@ -47,6 +53,9 @@ class ReportBuilder:
             "tool_trace": tool_trace,
             "pe_analysis": pe_analysis,
             "yara": yara,
+            "dynamic_analysis": dynamic_analysis,
+            "gui_analysis": gui_analysis,
+            "behavior_graph": behavior_graph,
             "decompiler": decompiler,
             "reconstruction": reconstruction,
             "findings": findings,
@@ -112,6 +121,187 @@ class ReportBuilder:
                 if preview:
                     lines.append(f"  - Evidence: {preview}")
 
+        dynamic_analysis = report.get("dynamic_analysis") or {}
+        if dynamic_analysis:
+            lines.extend(["", "## Dynamic Analysis", ""])
+            lines.append(f"- **Status:** {dynamic_analysis.get('status') or 'unknown'}")
+            if dynamic_analysis.get("backend"):
+                lines.append(f"- **Backend:** {dynamic_analysis['backend']}")
+            if dynamic_analysis.get("backends"):
+                lines.append(f"- **Backends:** {', '.join(str(item) for item in dynamic_analysis['backends'])}")
+            if dynamic_analysis.get("setup_hint"):
+                lines.append(f"- **Setup Hint:** {dynamic_analysis['setup_hint']}")
+            if dynamic_analysis.get("output_dir"):
+                lines.append(f"- **Output:** {dynamic_analysis['output_dir']}")
+            if dynamic_analysis.get("mode"):
+                lines.append(f"- **Mode:** {dynamic_analysis['mode']}")
+            if dynamic_analysis.get("duration_seconds") is not None:
+                lines.append(f"- **Duration (s):** {dynamic_analysis['duration_seconds']}")
+            if dynamic_analysis.get("hook_profile"):
+                lines.append(f"- **Hook Profile:** {dynamic_analysis['hook_profile']}")
+            if dynamic_analysis.get("planned_hook_count") is not None:
+                lines.append(f"- **Planned Hooks:** {dynamic_analysis['planned_hook_count']}")
+            if dynamic_analysis.get("event_count") is not None:
+                lines.append(f"- **Events:** {dynamic_analysis['event_count']}")
+            if dynamic_analysis.get("return_event_count") is not None:
+                lines.append(f"- **Return Events:** {dynamic_analysis['return_event_count']}")
+            if dynamic_analysis.get("installed_hook_count") is not None:
+                lines.append(f"- **Installed Hooks:** {dynamic_analysis['installed_hook_count']}")
+            if dynamic_analysis.get("missing_hook_count") is not None:
+                lines.append(f"- **Missing Hooks:** {dynamic_analysis['missing_hook_count']}")
+            process = dynamic_analysis.get("process") or {}
+            if isinstance(process, Mapping):
+                if process.get("id") or process.get("spawned_pid") or process.get("attached_pid"):
+                    lines.append(
+                        f"- **Process:** pid={process.get('id') or process.get('spawned_pid') or process.get('attached_pid')} "
+                        f"arch={process.get('arch') or 'unknown'}"
+                    )
+                modules = process.get("modules")
+                if isinstance(modules, list):
+                    lines.append(f"- **Loaded Modules Snapshot:** {len(modules)} entries captured")
+            if dynamic_analysis.get("api_counts"):
+                lines.append("- **Top APIs:**")
+                for name, count in list((dynamic_analysis.get("api_counts") or {}).items())[:8]:
+                    lines.append(f"  - {name}: {count}")
+            if dynamic_analysis.get("category_counts"):
+                lines.append("- **Categories:**")
+                for name, count in list((dynamic_analysis.get("category_counts") or {}).items())[:8]:
+                    lines.append(f"  - {name}: {count}")
+            if dynamic_analysis.get("operation_counts"):
+                lines.append("- **Top OS Operations:**")
+                for name, count in list((dynamic_analysis.get("operation_counts") or {}).items())[:8]:
+                    lines.append(f"  - {name}: {count}")
+            if dynamic_analysis.get("top_paths"):
+                lines.append("- **Top Paths:**")
+                for item in (dynamic_analysis.get("top_paths") or [])[:5]:
+                    if isinstance(item, Mapping):
+                        lines.append(f"  - {item.get('path')}: {item.get('count')}")
+            if dynamic_analysis.get("sample_events"):
+                lines.append("- **Sample Events:**")
+                for event in (dynamic_analysis.get("sample_events") or [])[:5]:
+                    if not isinstance(event, Mapping):
+                        continue
+                    params = event.get("params") or {}
+                    preview = ", ".join(f"{key}={value}" for key, value in list(params.items())[:3]) if isinstance(params, Mapping) else ""
+                    name = event.get("name") or event.get("operation")
+                    if not preview and event.get("path"):
+                        preview = str(event.get("path"))
+                    lines.append(f"  - {name} [{event.get('category')}] {preview}".rstrip())
+
+        behavior_graph = report.get("behavior_graph") or {}
+        if isinstance(behavior_graph, Mapping) and behavior_graph:
+            graph_nodes = behavior_graph.get("nodes") or []
+            graph_edges = behavior_graph.get("edges") or []
+            summary = behavior_graph.get("summary") if isinstance(behavior_graph.get("summary"), Mapping) else {}
+            lines.extend(["", "## Behavior Evidence Graph", ""])
+            lines.append(f"- **Status**: {behavior_graph.get('status') or 'unknown'}")
+            lines.append(f"- **Nodes**: {summary.get('node_count', len(graph_nodes))}")
+            lines.append(f"- **Edges**: {summary.get('edge_count', len(graph_edges))}")
+            if summary.get("linked_handler_count") is not None:
+                lines.append(f"- **Linked Handlers:** {summary.get('linked_handler_count')}")
+            if summary.get("dynamic_event_count") is not None:
+                lines.append(f"- **Dynamic Events:** {summary.get('dynamic_event_count')}")
+
+        gui_analysis = report.get("gui_analysis") or {}
+        if gui_analysis:
+            lines.extend(["", "## GUI Analysis", ""])
+            lines.append(f"- **Status:** {gui_analysis.get('status') or 'unknown'}")
+            if gui_analysis.get("platform"):
+                lines.append(f"- **Platform:** {gui_analysis['platform']}")
+            if gui_analysis.get("framework"):
+                lines.append(f"- **Framework:** {gui_analysis['framework']}")
+            if gui_analysis.get("confidence") is not None:
+                lines.append(f"- **Fingerprint Confidence:** {gui_analysis['confidence']}")
+            if gui_analysis.get("evidence"):
+                lines.append("- **Evidence:**")
+                for item in (gui_analysis.get("evidence") or [])[:8]:
+                    lines.append(f"  - {item}")
+            resources = gui_analysis.get("resources") or {}
+            if isinstance(resources, Mapping):
+                resource_bits = [
+                    f"{key}={resources.get(key, 0)}"
+                    for key in ("icons", "images", "dialogs", "menus", "strings", "layouts", "web_assets", "asar")
+                    if resources.get(key)
+                ]
+                if resource_bits:
+                    lines.append(f"- **Resources:** {', '.join(resource_bits)}")
+            xaml_evidence = gui_analysis.get("xaml_evidence") or {}
+            evidence_graph = gui_analysis.get("evidence_graph") or {}
+            if isinstance(xaml_evidence, Mapping) or isinstance(evidence_graph, Mapping):
+                xaml_nodes = xaml_evidence.get("nodes") or [] if isinstance(xaml_evidence, Mapping) else []
+                graph_nodes = evidence_graph.get("nodes") or [] if isinstance(evidence_graph, Mapping) else []
+                graph_edges = evidence_graph.get("edges") or [] if isinstance(evidence_graph, Mapping) else []
+                handler_links = sum(
+                    len(node.get("handler_evidence") or [])
+                    for node in graph_nodes
+                    if isinstance(node, Mapping)
+                )
+                xaml_node_count = xaml_evidence.get("node_count") if isinstance(xaml_evidence, Mapping) else None
+                lines.append(f"- **XAML Static Nodes:** {_safe_count(xaml_node_count) if xaml_node_count is not None else len(xaml_nodes)}")
+                lines.append(f"- **Evidence Graph Nodes:** {len(graph_nodes)}")
+                lines.append(f"- **Evidence Graph Edges:** {len(graph_edges)}")
+                lines.append(f"- **Event Handler Links:** {handler_links}")
+            runtime_tree = gui_analysis.get("runtime_tree") or {}
+            if isinstance(runtime_tree, Mapping):
+                lines.append(
+                    "- **Runtime Tree:** "
+                    f"status={runtime_tree.get('status') or 'unknown'} "
+                    f"windows={runtime_tree.get('window_count', 0)} controls={runtime_tree.get('control_count', 0)}"
+                )
+            visual = gui_analysis.get("visual") or {}
+            if isinstance(visual, Mapping):
+                lines.append(
+                    "- **Visual Evidence:** "
+                    f"status={visual.get('status') or 'unknown'} "
+                    f"screenshots={visual.get('screenshot_count', 0)} "
+                    f"text={visual.get('ocr_text_count', 0)} widgets={visual.get('detected_widget_count', 0)}"
+                )
+
+            state_machine = gui_analysis.get("state_machine") or {}
+            if isinstance(state_machine, Mapping) and state_machine:
+                states = state_machine.get("states") or []
+                transitions = state_machine.get("transitions") or []
+                actions = state_machine.get("actions") or []
+                summary = state_machine.get("summary") if isinstance(state_machine.get("summary"), Mapping) else {}
+                lines.extend(["", "## GUI State Machine", ""])
+                lines.append(f"- **Status**: {state_machine.get('status') or 'unknown'}")
+                lines.append(f"- **States**: {summary.get('state_count', len(states))}")
+                lines.append(f"- **Transitions**: {summary.get('transition_count', len(transitions))}")
+                lines.append(f"- **Actions**: {summary.get('action_count', len(actions))}")
+                if state_machine.get("initial_state"):
+                    lines.append(f"- **Initial State:** {state_machine.get('initial_state')}")
+
+            strategy = gui_analysis.get("strategy") or {}
+            if isinstance(strategy, Mapping):
+                lines.extend(["", "## GUI Reconstruction Strategy", ""])
+                lines.append(f"- **Name:** {strategy.get('name') or strategy.get('strategy') or 'unknown'}")
+                if strategy.get("output_stack"):
+                    lines.append(f"- **Output Stack:** {strategy['output_stack']}")
+                if strategy.get("confidence") is not None:
+                    lines.append(f"- **Strategy Confidence:** {strategy['confidence']}")
+                if strategy.get("reason"):
+                    lines.append(f"- **Reason:** {strategy['reason']}")
+                if strategy.get("steps"):
+                    lines.append(f"- **Steps:** {', '.join(str(item) for item in strategy['steps'])}")
+            gui_reconstruction = gui_analysis.get("reconstruction") or {}
+            if isinstance(gui_reconstruction, Mapping) and gui_reconstruction:
+                lines.append(f"- **GUI Reconstruction:** {gui_reconstruction.get('status') or 'unknown'}")
+                if gui_reconstruction.get("project_dir"):
+                    lines.append(f"  - Project Dir: {gui_reconstruction['project_dir']}")
+
+            regression = gui_analysis.get("regression") or {}
+            if isinstance(regression, Mapping):
+                lines.extend(["", "## GUI Visual Regression", ""])
+                lines.append(f"- **Status:** {regression.get('status') or 'unknown'}")
+                if regression.get("pair_count") is not None:
+                    lines.append(f"- **Screenshot Pairs:** {regression.get('pair_count')}")
+                if regression.get("visual_similarity") is not None:
+                    lines.append(f"- **Visual Similarity:** {regression.get('visual_similarity')}")
+                if regression.get("text_match_rate") is not None:
+                    lines.append(f"- **Text Match Rate:** {regression.get('text_match_rate')}")
+                if regression.get("control_match_rate") is not None:
+                    lines.append(f"- **Control Match Rate:** {regression.get('control_match_rate')}")
+
         decompiler = report.get("decompiler") or {}
         if decompiler:
             lines.extend(["", "## Decompiler", ""])
@@ -122,6 +312,18 @@ class ReportBuilder:
                 lines.append(f"- **Output:** {decompiler['output_dir']}")
             if decompiler.get("function_count") is not None:
                 lines.append(f"- **Functions:** {decompiler['function_count']}")
+            if decompiler.get("call_graph_edge_count") is not None:
+                lines.append(f"- **Call Graph Edges:** {decompiler['call_graph_edge_count']}")
+            if decompiler.get("string_count") is not None:
+                lines.append(f"- **Strings:** {decompiler['string_count']}")
+            if decompiler.get("import_count") is not None:
+                lines.append(f"- **Import References:** {decompiler['import_count']}")
+            if decompiler.get("language"):
+                lines.append(f"- **Language:** {decompiler['language']}")
+            if decompiler.get("compiler"):
+                lines.append(f"- **Compiler:** {decompiler['compiler']}")
+            if decompiler.get("image_base"):
+                lines.append(f"- **Image Base:** {decompiler['image_base']}")
 
         reconstruction = report.get("reconstruction") or {}
         if reconstruction:
@@ -133,8 +335,52 @@ class ReportBuilder:
                 lines.append(f"- **Function Stubs:** {reconstruction['function_count']}")
             if reconstruction.get("import_count") is not None:
                 lines.append(f"- **Imported APIs:** {reconstruction['import_count']}")
+            if reconstruction.get("module_count") is not None:
+                lines.append(f"- **Capability Modules:** {reconstruction['module_count']}")
             if reconstruction.get("stub_only") is not None:
                 lines.append(f"- **Stub Only:** {_bool_word(reconstruction['stub_only'])}")
+            if reconstruction.get("module_files"):
+                lines.append(f"- **Module Files:** {', '.join(reconstruction['module_files'])}")
+            if reconstruction.get("task_count") is not None:
+                lines.append(f"- **Plan Tasks:** {reconstruction['task_count']}")
+            if reconstruction.get("next_task"):
+                lines.append(f"- **Next Task:** {reconstruction['next_task']}")
+            if reconstruction.get("flow_status"):
+                lines.append(f"- **Flow Status:** {reconstruction['flow_status']}")
+            if reconstruction.get("completed_task_count") is not None:
+                lines.append(
+                    f"- **Task Progress:** {reconstruction.get('completed_task_count', 0)}/{reconstruction.get('task_count', 0)}"
+                )
+            if reconstruction.get("completed_subtask_count") is not None:
+                lines.append(
+                    f"- **Subtask Progress:** {reconstruction.get('completed_subtask_count', 0)}/{reconstruction.get('subtask_count', 0)}"
+                )
+            if reconstruction.get("next_subtask"):
+                lines.append(f"- **Next Subtask:** {reconstruction['next_subtask']}")
+            if reconstruction.get("prioritized_modules"):
+                lines.append("- **Module Priority:**")
+                for item in reconstruction.get("prioritized_modules") or []:
+                    if not isinstance(item, Mapping):
+                        continue
+                    lines.append(
+                        f"  - {item.get('module')}: score={item.get('priority_score')} functions={item.get('function_count')} top={', '.join(item.get('top_functions') or []) or 'n/a'}"
+                    )
+            if reconstruction.get("high_value_functions"):
+                lines.append("- **High-Value Functions:**")
+                for item in (reconstruction.get("high_value_functions") or [])[:5]:
+                    if not isinstance(item, Mapping):
+                        continue
+                    lines.append(
+                        f"  - {item.get('name')} [{item.get('module')}] score={item.get('priority_score')}"
+                    )
+            if reconstruction.get("reconstruction_plan"):
+                lines.append("- **Reconstruction Plan:**")
+                for task in (reconstruction.get("reconstruction_plan") or {}).get("tasks", [])[:4]:
+                    if not isinstance(task, Mapping):
+                        continue
+                    lines.append(
+                        f"  - {task.get('name')}: {len(task.get('subtasks') or [])} subtasks"
+                    )
 
         lines.extend(["", "## Findings", ""])
         if report["findings"]:
@@ -236,6 +482,8 @@ def _recommendations(
     *,
     pe_analysis: Mapping[str, Any],
     yara: Mapping[str, Any],
+    dynamic_analysis: Mapping[str, Any],
+    gui_analysis: Mapping[str, Any],
     decompiler: Mapping[str, Any],
     reconstruction: Mapping[str, Any],
 ) -> list[str]:
@@ -254,10 +502,33 @@ def _recommendations(
         recommendations.append("Install yara-python to enable rule-based scanning, or provide a compatible environment for YARA.")
     elif yara.get("match_count", 0):
         recommendations.append("Review YARA matches and correlate them with imports, strings, and PE anomalies before assigning a family label.")
+    if dynamic_analysis.get("status") == "unavailable":
+        recommendations.append("Configure Frida with `python -m reverse_analyzer --install-guide frida` to add dynamic API tracing coverage.")
+    elif dynamic_analysis.get("event_count", 0):
+        recommendations.append("Correlate dynamic API traces with static imports and decompiler output to validate which capabilities execute at runtime.")
+    if int(dynamic_analysis.get("missing_hook_count") or 0) > 0:
+        recommendations.append("Review missing Frida hooks and extend the dynamic hook set for target-specific DLLs or custom exports.")
+    if gui_analysis:
+        framework = gui_analysis.get("framework") or "unknown"
+        strategy = gui_analysis.get("strategy") or {}
+        strategy_name = strategy.get("name") if isinstance(strategy, Mapping) else None
+        recommendations.append(
+            f"Use GUI strategy `{strategy_name or 'manual_assisted_visual_reconstruction'}` for `{framework}` and validate fidelity with screenshots."
+        )
     if decompiler.get("status") == "unavailable":
         recommendations.append("Configure Ghidra Headless with `python -m reverse_analyzer --install-guide ghidra` for deeper pseudocode output.")
     if reconstruction.get("status") == "ok":
         recommendations.append("Review the generated reconstruction scaffold and replace placeholder stubs with validated manual analysis.")
+    prioritized_modules = reconstruction.get("prioritized_modules") or []
+    if prioritized_modules and isinstance(prioritized_modules[0], Mapping):
+        top_module = prioritized_modules[0]
+        recommendations.append(
+            f"Start manual reconstruction with the `{top_module.get('module')}` module; it currently has the highest inferred priority score."
+        )
+    if reconstruction.get("next_task"):
+        recommendations.append(
+            f"Resume the reconstruction plan at task `{reconstruction.get('next_task')}` to keep progress resumable."
+        )
     if findings:
         recommendations.append("Preserve generated artifacts and correlate findings against trusted threat-intelligence sources.")
     else:
@@ -342,6 +613,230 @@ def _yara(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     return {}
 
 
+def _dynamic_analysis(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    dynamic_items: list[Dict[str, Any]] = []
+    for trace in tool_trace:
+        tool_name = str(trace.get("tool_name") or trace.get("tool") or "")
+        if tool_name not in {"frida_trace", "procmon_trace"}:
+            continue
+        payload = _tool_payload(trace)
+        raw = _raw_result(trace)
+        if not isinstance(payload, Mapping):
+            dynamic_items.append({"status": _tool_status(trace), "backend": tool_name.replace("_trace", "")})
+            continue
+        backend = payload.get("backend") or tool_name.replace("_trace", "")
+        item = {
+            "status": payload.get("status") or _tool_status(trace),
+            "backend": backend,
+            "setup_hint": payload.get("setup_hint"),
+            "install_guide": payload.get("install_guide"),
+            "docs_url": payload.get("docs_url"),
+            "output_dir": payload.get("output_dir"),
+            "mode": payload.get("mode"),
+            "duration_seconds": payload.get("duration_seconds"),
+            "hook_profile": payload.get("hook_profile"),
+            "planned_hook_count": payload.get("planned_hook_count"),
+            "event_count": payload.get("event_count", len(payload.get("events") or [])),
+            "return_event_count": payload.get("return_event_count", len(payload.get("return_events") or [])),
+            "installed_hook_count": payload.get("installed_hook_count", len(payload.get("installed_hooks") or [])),
+            "missing_hook_count": payload.get("missing_hook_count", len(payload.get("missing_hooks") or [])),
+            "api_counts": payload.get("api_counts") or {},
+            "operation_counts": payload.get("operation_counts") or {},
+            "category_counts": payload.get("category_counts") or {},
+            "sample_events": list(payload.get("events") or payload.get("sample_events") or [])[:10],
+            "sample_return_events": list(payload.get("return_events") or [])[:10],
+            "top_paths": list(payload.get("top_paths") or [])[:10],
+            "process": payload.get("process") or {},
+            "artifacts": payload.get("artifacts") or [],
+            "error": raw.get("error") if isinstance(raw, Mapping) else trace.get("error"),
+        }
+        dynamic_items.append(item)
+
+    if not dynamic_items:
+        return {}
+    if len(dynamic_items) == 1:
+        return dynamic_items[0]
+
+    status_values = {str(item.get("status") or "") for item in dynamic_items}
+    combined = {
+        "status": "failed" if "failed" in status_values else ("unavailable" if status_values == {"unavailable"} else "ok"),
+        "backend": "all",
+        "backends": [item.get("backend") for item in dynamic_items],
+        "event_count": sum(int(item.get("event_count") or 0) for item in dynamic_items),
+        "return_event_count": sum(int(item.get("return_event_count") or 0) for item in dynamic_items),
+        "hook_profile": ",".join(str(item.get("hook_profile")) for item in dynamic_items if item.get("hook_profile")) or None,
+        "planned_hook_count": sum(int(item.get("planned_hook_count") or 0) for item in dynamic_items),
+        "installed_hook_count": sum(int(item.get("installed_hook_count") or 0) for item in dynamic_items),
+        "missing_hook_count": sum(int(item.get("missing_hook_count") or 0) for item in dynamic_items),
+        "api_counts": _sum_count_maps(item.get("api_counts") for item in dynamic_items),
+        "operation_counts": _sum_count_maps(item.get("operation_counts") for item in dynamic_items),
+        "category_counts": _sum_count_maps(item.get("category_counts") for item in dynamic_items),
+        "sample_events": [event for item in dynamic_items for event in (item.get("sample_events") or [])][:10],
+        "sample_return_events": [event for item in dynamic_items for event in (item.get("sample_return_events") or [])][:10],
+        "top_paths": [path for item in dynamic_items for path in (item.get("top_paths") or [])][:10],
+        "artifacts": [artifact for item in dynamic_items for artifact in (item.get("artifacts") or [])],
+        "children": dynamic_items,
+    }
+    return combined
+
+
+def _gui_analysis(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Merge GUI pipeline observations into the stable report schema.
+
+    GUI tools deliberately run independently so that unavailable runtime, OCR,
+    or regression dependencies do not discard static fingerprint evidence.
+    This normalizer keeps those stage statuses while exposing a compact schema
+    that the knowledge base and reconstruction generators can consume.
+    """
+
+    stage_names = {
+        "gui_fingerprint",
+        "gui_resource_extract",
+        "gui_xaml_extract",
+        "gui_runtime_probe",
+        "gui_visual_parse",
+        "gui_evidence_graph",
+        "gui_interaction_trace",
+        "gui_state_machine",
+        "gui_strategy_select",
+        "reconstruct_gui_project",
+        "gui_visual_regression",
+    }
+    stages: Dict[str, tuple[Dict[str, Any], str]] = {}
+    artifacts: list[Dict[str, Any]] = []
+    for trace in tool_trace:
+        tool_name = str(trace.get("tool_name") or trace.get("tool") or "")
+        if tool_name not in stage_names:
+            continue
+        payload = _tool_payload(trace)
+        normalized = dict(payload) if isinstance(payload, Mapping) else {}
+        status = str(normalized.get("status") or _tool_status(trace) or "unknown").lower()
+        normalized.setdefault("status", status)
+        stages[tool_name] = (normalized, status)
+        for artifact in normalized.get("artifacts") or []:
+            if isinstance(artifact, Mapping):
+                artifacts.append(dict(artifact))
+
+    if not stages:
+        return {}
+
+    def stage(name: str) -> tuple[Dict[str, Any], str]:
+        # Runtime probing is optional. If it was not requested, represent that
+        # explicitly as unavailable rather than conflating it with an unknown
+        # result from an executed probe.
+        default_status = "unavailable" if name == "gui_runtime_probe" else "unknown"
+        return stages.get(name, ({}, default_status))
+
+    fingerprint, fingerprint_status = stage("gui_fingerprint")
+    resources_payload, resource_status = stage("gui_resource_extract")
+    xaml_payload, xaml_status = stage("gui_xaml_extract")
+    runtime_payload, runtime_status = stage("gui_runtime_probe")
+    visual_payload, visual_status = stage("gui_visual_parse")
+    evidence_graph, evidence_graph_status = stage("gui_evidence_graph")
+    interaction_trace, interaction_trace_status = stage("gui_interaction_trace")
+    state_machine, state_machine_status = stage("gui_state_machine")
+    strategy, strategy_status = stage("gui_strategy_select")
+    reconstruction, reconstruction_status = stage("reconstruct_gui_project")
+    regression, regression_status = stage("gui_visual_regression")
+
+    core_statuses = [status for status in (fingerprint_status, strategy_status) if status != "unknown"]
+    if "failed" in core_statuses:
+        status = "failed"
+    elif "ok" in core_statuses:
+        status = "ok"
+    elif core_statuses and all(item == "unavailable" for item in core_statuses):
+        status = "unavailable"
+    else:
+        status = next((item for item in core_statuses if item), "unknown")
+
+    counts = resources_payload.get("counts") if isinstance(resources_payload.get("counts"), Mapping) else {}
+    resources = {
+        key: _safe_count(counts.get(key))
+        for key in ("icons", "images", "dialogs", "menus", "strings", "layouts", "web_assets", "asar", "other")
+    }
+    runtime_tree = {
+        "status": runtime_status,
+        "window_count": _safe_count(runtime_payload.get("window_count")),
+        "control_count": _safe_count(runtime_payload.get("control_count")),
+        "windows": runtime_payload.get("windows") or [],
+        "setup_hint": runtime_payload.get("setup_hint"),
+    }
+    visual = {
+        "status": visual_status,
+        "screenshot_count": _safe_count(visual_payload.get("screenshot_count")),
+        "ocr_text_count": _safe_count(visual_payload.get("ocr_text_count")),
+        "detected_widget_count": _safe_count(visual_payload.get("detected_widget_count")),
+        "text_regions": visual_payload.get("text_regions") or [],
+        "widgets": visual_payload.get("widgets") or [],
+        "vlm_provider": visual_payload.get("vlm_provider"),
+    }
+    regression_data = dict(regression)
+    regression_data["status"] = regression_status
+    reconstruction_data = dict(reconstruction)
+    if reconstruction_data:
+        reconstruction_data["status"] = reconstruction_status
+    evidence_graph_data = dict(evidence_graph)
+    evidence_graph_data["status"] = evidence_graph_status
+    xaml_data = dict(xaml_payload)
+    xaml_data["status"] = xaml_status
+    interaction_trace_data = dict(interaction_trace)
+    interaction_trace_data["status"] = interaction_trace_status
+    state_machine_data = dict(state_machine)
+    state_machine_data["status"] = state_machine_status
+
+    return {
+        "status": status,
+        "platform": fingerprint.get("platform") or strategy.get("platform"),
+        "framework": fingerprint.get("framework") or strategy.get("framework"),
+        "confidence": fingerprint.get("confidence") if fingerprint.get("confidence") is not None else strategy.get("confidence"),
+        "evidence": fingerprint.get("evidence") or [],
+        "candidates": fingerprint.get("candidates") or [],
+        "strategy": strategy,
+        "resources": resources,
+        "resource_manifest": {
+            "status": resource_status,
+            "resource_dir": resources_payload.get("resource_dir"),
+            "extracted_dir": resources_payload.get("extracted_dir"),
+            "extracted_count": _safe_count(resources_payload.get("extracted_count")),
+            "extracted_files": resources_payload.get("extracted_files") or [],
+            "entries": resources_payload.get("entries") or [],
+            "pe_resources": resources_payload.get("pe_resources") or {},
+        },
+        "xaml_evidence": xaml_data,
+        "evidence_graph": evidence_graph_data,
+        "interaction_trace": interaction_trace_data,
+        "state_machine": state_machine_data,
+        "runtime_tree": runtime_tree,
+        "visual": visual,
+        "reconstruction": reconstruction_data,
+        "regression": regression_data,
+        "artifacts": _dedupe_artifacts(artifacts),
+    }
+
+
+def _behavior_graph(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Expose the normalized cross-domain evidence graph when its stage ran."""
+
+    for trace in reversed(tool_trace):
+        tool_name = str(trace.get("tool_name") or trace.get("tool") or "")
+        if tool_name != "gui_behavior_graph":
+            continue
+        payload = _tool_payload(trace)
+        if not isinstance(payload, Mapping):
+            return {}
+        result = dict(payload)
+        result.setdefault("status", _tool_status(trace))
+        return result
+    return {}
+
+
+def _safe_count(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _decompiler(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     for trace in tool_trace:
         tool_name = str(trace.get("tool_name") or trace.get("tool") or "")
@@ -349,37 +844,132 @@ def _decompiler(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
             continue
         payload = _tool_payload(trace)
         if isinstance(payload, Mapping):
+            summary = payload.get("summary") or {}
+            call_graph = payload.get("call_graph") or {}
+            strings_xrefs = payload.get("strings_xrefs") or []
+            imports_xrefs = payload.get("imports_xrefs") or []
             return {
                 "status": payload.get("status") or _tool_status(trace),
                 "setup_hint": payload.get("setup_hint"),
                 "install_guide": payload.get("install_guide"),
                 "output_dir": payload.get("output_dir"),
                 "project_dir": payload.get("project_dir"),
-                "function_count": payload.get("function_count"),
+                "function_count": payload.get("function_count") or (summary.get("function_count") if isinstance(summary, Mapping) else None),
+                "call_graph_edge_count": len((call_graph.get("edges") or [])) if isinstance(call_graph, Mapping) else 0,
+                "string_count": summary.get("string_count") if isinstance(summary, Mapping) and summary.get("string_count") is not None else len(strings_xrefs),
+                "import_count": summary.get("import_count") if isinstance(summary, Mapping) and summary.get("import_count") is not None else len(imports_xrefs),
+                "language": summary.get("language") if isinstance(summary, Mapping) else None,
+                "compiler": summary.get("compiler") if isinstance(summary, Mapping) else None,
+                "image_base": summary.get("image_base") if isinstance(summary, Mapping) else None,
                 "artifacts": payload.get("artifacts") or [],
             }
         return {"status": _tool_status(trace)}
     return {}
 
 
-def _reconstruction(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+def _sum_count_maps(values: Sequence[Any]) -> Dict[str, int]:
+    merged: Dict[str, int] = {}
+    for value in values:
+        if not isinstance(value, Mapping):
+            continue
+        for key, count in value.items():
+            try:
+                numeric = int(count)
+            except (TypeError, ValueError):
+                continue
+            merged[str(key)] = merged.get(str(key), 0) + numeric
+    return dict(sorted(merged.items(), key=lambda item: item[1], reverse=True))
+
+
+def _reconstruction(session: Any, tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    session_progress = _reconstruction_session_progress(session)
     for trace in tool_trace:
         tool_name = str(trace.get("tool_name") or trace.get("tool") or "")
         if tool_name != "reconstruct_project":
             continue
         payload = _tool_payload(trace)
         if not isinstance(payload, Mapping):
-            return {"status": _tool_status(trace)}
-        return {
+            result = {"status": _tool_status(trace)}
+            result.update(session_progress)
+            return result
+        result = {
             "status": payload.get("status") or _tool_status(trace),
             "project_dir": payload.get("project_dir"),
             "generated_files": payload.get("generated_files") or [],
             "function_count": payload.get("function_count"),
             "import_count": payload.get("import_count"),
+            "module_count": payload.get("module_count"),
+            "module_files": payload.get("module_files") or [],
+            "prioritized_modules": payload.get("prioritized_modules") or [],
+            "high_value_functions": payload.get("high_value_functions") or [],
+            "dynamic_evidence_count": payload.get("dynamic_evidence_count"),
+            "reconstruction_plan": payload.get("reconstruction_plan") or {},
+            "task_count": payload.get("task_count"),
+            "next_task": payload.get("next_task"),
             "stub_only": payload.get("stub_only"),
             "artifacts": payload.get("artifacts") or [],
         }
-    return {}
+        for key in ("flow_name", "flow_status", "completed_task_count", "pending_task_count", "subtask_count", "completed_subtask_count", "next_subtask", "session_tasks"):
+            if session_progress.get(key) is not None:
+                result[key] = session_progress.get(key)
+        if result.get("next_task") is None and session_progress.get("next_task") is not None:
+            result["next_task"] = session_progress.get("next_task")
+        return result
+    return session_progress
+
+
+def _reconstruction_session_progress(session: Any) -> Dict[str, Any]:
+    flow = _session_reconstruction_flow(session)
+    if flow is None:
+        return {}
+    tasks = _flow_list(flow, "tasks")
+    task_count = len(tasks)
+    completed_task_count = sum(1 for task in tasks if _status_value(_get(task, "status")) == "succeeded")
+    subtask_count = sum(len(_task_subtasks(task)) for task in tasks)
+    completed_subtask_count = sum(
+        1 for task in tasks for subtask in _task_subtasks(task) if _status_value(_get(subtask, "status")) == "succeeded"
+    )
+    next_task = None
+    next_subtask = None
+    for task in tasks:
+        task_status = _status_value(_get(task, "status"))
+        if task_status in {"pending", "running"}:
+            next_task = _get(task, "name")
+            for subtask in _task_subtasks(task):
+                subtask_status = _status_value(_get(subtask, "status"))
+                if subtask_status in {"pending", "running"}:
+                    next_subtask = _get(subtask, "name")
+                    break
+            break
+    return {
+        "flow_name": _get(flow, "name"),
+        "flow_status": _status_value(_get(flow, "status")),
+        "task_count": task_count,
+        "completed_task_count": completed_task_count,
+        "pending_task_count": max(0, task_count - completed_task_count),
+        "subtask_count": subtask_count,
+        "completed_subtask_count": completed_subtask_count,
+        "next_task": next_task,
+        "next_subtask": next_subtask,
+        "session_tasks": [
+            {
+                "name": _get(task, "name"),
+                "status": _status_value(_get(task, "status")),
+                "subtasks": [
+                    {"name": _get(subtask, "name"), "status": _status_value(_get(subtask, "status"))}
+                    for subtask in _task_subtasks(task)
+                ],
+            }
+            for task in tasks
+        ],
+    }
+
+
+def _session_reconstruction_flow(session: Any) -> Any:
+    for flow in _session_list(session, "flows"):
+        if _get(flow, "name") == "source-reconstruction":
+            return flow
+    return None
 
 
 def _raw_result(trace: Mapping[str, Any]) -> Any:
@@ -555,6 +1145,9 @@ def _heuristic_findings(trace: Mapping[str, Any], payload: Mapping[str, Any]) ->
                     )
                 )
 
+    if tool_name in {"frida_trace", "procmon_trace"}:
+        findings.extend(_dynamic_trace_findings(payload, status=status, source=tool_name))
+
     if tool_name == "ghidra_decompile":
         status_value = str(payload.get("status") or status).lower()
         if status_value == "unavailable":
@@ -593,6 +1186,7 @@ def _heuristic_findings(trace: Mapping[str, Any], payload: Mapping[str, Any]) ->
                     recommendation="Review pseudocode, call graph, and cross-references to prioritize manual reconstruction work.",
                 )
             )
+            findings.extend(_ghidra_content_findings(payload, source=tool_name))
 
     if tool_name == "reconstruct_project" and status == "ok":
         findings.append(
@@ -612,6 +1206,475 @@ def _heuristic_findings(trace: Mapping[str, Any], payload: Mapping[str, Any]) ->
         )
 
     return findings
+
+
+def _dynamic_trace_findings(payload: Mapping[str, Any], *, status: str, source: str) -> list[Dict[str, Any]]:
+    findings: list[Dict[str, Any]] = []
+    status_value = str(payload.get("status") or status).lower()
+    backend_label = str(payload.get("backend") or source.replace("_trace", "")).capitalize()
+    if status_value == "unavailable":
+        findings.append(
+            _finding(
+                f"{backend_label} dynamic tracing not configured",
+                severity="info",
+                confidence=0.95,
+                source=source,
+                detail=payload.get("setup_hint") or f"Install {backend_label} before enabling this dynamic backend.",
+                evidence={"docs_url": payload.get("docs_url"), "error": payload.get("error")},
+                recommendation=payload.get("setup_hint") or f"Run: python -m reverse_analyzer --install-guide {backend_label.lower()}",
+            )
+        )
+        return findings
+
+    if status_value == "failed":
+        findings.append(
+            _finding(
+                "Frida dynamic tracing failed",
+                severity="medium",
+                confidence=0.75,
+                source=source,
+                detail=str(payload.get("error") or "Dynamic trace could not complete."),
+                evidence={"artifacts": payload.get("artifacts") or [], "output_dir": payload.get("output_dir")},
+                recommendation="Verify the sample can be spawned or attached locally, then rerun dynamic tracing with a longer duration if needed.",
+            )
+        )
+        return findings
+
+    event_count = int(payload.get("event_count") or len(payload.get("events") or []))
+    if event_count:
+        findings.append(
+            _finding(
+                "Dynamic API trace collected",
+                severity="info",
+                confidence=0.9,
+                source=source,
+                detail=f"events={event_count} mode={payload.get('mode')}",
+                evidence={"api_counts": payload.get("api_counts") or {}, "category_counts": payload.get("category_counts") or {}},
+                recommendation="Pivot from the highest-frequency dynamic APIs into the corresponding static imports, decompiler output, and reconstruction tasks.",
+            )
+        )
+
+    api_counts = payload.get("api_counts") if isinstance(payload.get("api_counts"), Mapping) else {}
+    categories = payload.get("category_counts") if isinstance(payload.get("category_counts"), Mapping) else {}
+    events = payload.get("events") if isinstance(payload.get("events"), list) else []
+
+    injection_names = {
+        "WriteProcessMemory",
+        "NtWriteVirtualMemory",
+        "CreateRemoteThread",
+        "NtCreateThreadEx",
+        "VirtualAlloc",
+        "VirtualAllocEx",
+        "VirtualProtect",
+        "VirtualProtectEx",
+    }
+    injection_hits = [name for name in api_counts if name in injection_names]
+    if injection_hits:
+        findings.append(
+            _finding(
+                "Dynamic process injection or memory manipulation observed",
+                severity="high" if any(name in api_counts for name in ("WriteProcessMemory", "CreateRemoteThread")) else "medium",
+                confidence=0.88,
+                source=source,
+                detail=", ".join(injection_hits),
+                evidence={"api_counts": {name: api_counts.get(name) for name in injection_hits}, "sample_events": _filter_events(events, injection_hits)},
+                recommendation="Inspect the traced allocation, protection, and remote-thread APIs to confirm whether the sample stages code in memory or injects into another process.",
+            )
+        )
+
+    anti_debug_hits = [name for name in api_counts if name in {"IsDebuggerPresent", "CheckRemoteDebuggerPresent", "NtQueryInformationProcess"}]
+    if anti_debug_hits or int(categories.get("anti_debug") or 0) > 0:
+        findings.append(
+            _finding(
+                "Dynamic anti-debugging checks observed",
+                severity="medium",
+                confidence=0.82,
+                source=source,
+                detail=", ".join(anti_debug_hits) if anti_debug_hits else "anti_debug category activity",
+                evidence={"api_counts": {name: api_counts.get(name) for name in anti_debug_hits}, "sample_events": _filter_events(events, anti_debug_hits)},
+                recommendation="Correlate anti-debug checks with branch decisions in decompiler output and rerun dynamic analysis with debugger-neutral instrumentation if behavior diverges.",
+            )
+        )
+
+    network_hits = [
+        name
+        for name in api_counts
+        if name
+        in {
+            "WinHttpOpen",
+            "WinHttpConnect",
+            "WinHttpOpenRequest",
+            "WinHttpSendRequest",
+            "InternetConnectA",
+            "InternetConnectW",
+            "URLDownloadToFileA",
+            "URLDownloadToFileW",
+            "connect",
+            "WSAConnect",
+            "send",
+            "recv",
+            "getaddrinfo",
+        }
+    ]
+    if network_hits or int(categories.get("network") or 0) > 0:
+        findings.append(
+            _finding(
+                "Dynamic network activity observed",
+                severity="medium",
+                confidence=0.82,
+                source=source,
+                detail=", ".join(network_hits) if network_hits else "network category activity",
+                evidence={"api_counts": {name: api_counts.get(name) for name in network_hits}, "sample_events": _filter_events(events, network_hits[:3] or ["WinHttpSendRequest", "URLDownloadToFileA", "URLDownloadToFileW"])},
+                recommendation="Review traced URL, host, and request-path parameters to determine whether the sample beacons, stages a payload, or exfiltrates data.",
+            )
+        )
+
+    exec_hits = [name for name in api_counts if name in {"CreateProcessA", "CreateProcessW", "ShellExecuteA", "ShellExecuteW", "WinExec"}]
+    if exec_hits or int(categories.get("exec") or 0) > 0 or int(categories.get("process") or 0) > 0:
+        findings.append(
+            _finding(
+                "Dynamic child-process or command execution observed",
+                severity="medium",
+                confidence=0.8,
+                source=source,
+                detail=", ".join(exec_hits) if exec_hits else "process/exec category activity",
+                evidence={"api_counts": {name: api_counts.get(name) for name in exec_hits}, "category_counts": {"process": categories.get("process", 0), "exec": categories.get("exec", 0)}, "sample_events": _filter_events(events, exec_hits[:3] or ["Process Create", "Thread Create", "Load Image", "CreateProcessW", "ShellExecuteW", "WinExec"])},
+                recommendation="Inspect command-line parameters and follow-on process creation to identify secondary stages or LOLBin usage.",
+            )
+        )
+
+    file_or_registry = int(categories.get("file") or 0) + int(categories.get("registry") or 0)
+    if file_or_registry:
+        findings.append(
+            _finding(
+                "Dynamic file or registry access observed",
+                severity="low",
+                confidence=0.72,
+                source=source,
+                detail=f"file={int(categories.get('file') or 0)} registry={int(categories.get('registry') or 0)}",
+                evidence={"category_counts": {"file": categories.get("file", 0), "registry": categories.get("registry", 0)}, "sample_events": _filter_events(events, ["CreateFileA", "CreateFileW", "RegCreateKeyExA", "RegCreateKeyExW", "RegSetValueExA", "RegSetValueExW"])},
+                recommendation="Correlate touched paths and registry keys with persistence, staging, or configuration behavior.",
+            )
+        )
+
+    return findings
+
+
+def _ghidra_content_findings(payload: Mapping[str, Any], *, source: str) -> list[Dict[str, Any]]:
+    findings: list[Dict[str, Any]] = []
+    import_names = _ghidra_import_names(payload)
+    string_values = _ghidra_string_values(payload)
+    functions = payload.get("functions") if isinstance(payload.get("functions"), list) else []
+    call_graph = payload.get("call_graph") if isinstance(payload.get("call_graph"), Mapping) else {}
+
+    dynamic_apis = _match_symbol_names(
+        import_names,
+        ("LoadLibraryA", "LoadLibraryW", "LoadLibraryExA", "LoadLibraryExW", "GetProcAddress", "LdrLoadDll", "LdrGetProcedureAddress"),
+    )
+    if dynamic_apis:
+        findings.append(
+            _finding(
+                "Dynamic API resolution indicators",
+                severity="medium",
+                confidence=0.82 if {"LoadLibraryA", "GetProcAddress"} <= set(dynamic_apis) or {"LoadLibraryW", "GetProcAddress"} <= set(dynamic_apis) else 0.74,
+                source=source,
+                detail=", ".join(dynamic_apis),
+                evidence={"apis": dynamic_apis, "functions": _ghidra_import_context(payload, dynamic_apis)},
+                recommendation="Trace the recovered pseudocode around LoadLibrary*/GetProcAddress to identify which APIs are resolved at runtime.",
+            )
+        )
+
+    injection_apis = _match_symbol_names(
+        import_names,
+        (
+            "VirtualAlloc",
+            "VirtualAllocEx",
+            "VirtualProtect",
+            "VirtualProtectEx",
+            "WriteProcessMemory",
+            "CreateRemoteThread",
+            "NtWriteVirtualMemory",
+            "NtCreateThreadEx",
+            "QueueUserAPC",
+            "SetThreadContext",
+            "MapViewOfFile",
+            "ResumeThread",
+        ),
+    )
+    if injection_apis:
+        severity = "high" if len(injection_apis) >= 3 or any(name in injection_apis for name in ("WriteProcessMemory", "CreateRemoteThread", "NtCreateThreadEx")) else "medium"
+        confidence = 0.88 if severity == "high" else 0.74
+        findings.append(
+            _finding(
+                "Process injection or in-memory execution indicators",
+                severity=severity,
+                confidence=confidence,
+                source=source,
+                detail=", ".join(injection_apis),
+                evidence={"apis": injection_apis, "functions": _ghidra_import_context(payload, injection_apis)},
+                recommendation="Review the involved call sites to confirm whether the sample allocates executable memory or injects into another process.",
+            )
+        )
+
+    network_apis = _match_symbol_names(
+        import_names,
+        (
+            "WinHttpOpen",
+            "WinHttpConnect",
+            "WinHttpSendRequest",
+            "WinHttpReceiveResponse",
+            "InternetOpenA",
+            "InternetOpenW",
+            "InternetConnectA",
+            "InternetConnectW",
+            "HttpOpenRequestA",
+            "HttpOpenRequestW",
+            "HttpSendRequestA",
+            "HttpSendRequestW",
+            "URLDownloadToFileA",
+            "URLDownloadToFileW",
+            "WSAStartup",
+            "connect",
+            "socket",
+            "send",
+            "recv",
+        ),
+    )
+    url_hits = _ghidra_url_hits(string_values)
+    string_markers = _ghidra_string_hits(string_values, ("User-Agent", ".onion", "/api/", "Cookie:", "Authorization:"))
+    if network_apis or url_hits or string_markers:
+        severity = "high" if url_hits and any(api in network_apis for api in ("URLDownloadToFileA", "URLDownloadToFileW", "WinHttpSendRequest", "HttpSendRequestA", "HttpSendRequestW")) else "medium"
+        findings.append(
+            _finding(
+                "Network communication indicators",
+                severity=severity,
+                confidence=0.84 if url_hits else 0.72,
+                source=source,
+                detail=f"apis={len(network_apis)} urls={len(url_hits)} markers={len(string_markers)}",
+                evidence={
+                    "apis": network_apis,
+                    "urls": url_hits,
+                    "markers": string_markers,
+                    "functions": _ghidra_import_context(payload, network_apis),
+                    "string_locations": _ghidra_string_context(payload, url_hits + string_markers),
+                },
+                recommendation="Correlate recovered network APIs with URL or header strings to identify possible C2, staging, or beacon traffic.",
+            )
+        )
+
+    execution_apis = _match_symbol_names(
+        import_names,
+        (
+            "CreateProcessA",
+            "CreateProcessW",
+            "WinExec",
+            "ShellExecuteA",
+            "ShellExecuteW",
+            "system",
+            "URLDownloadToFileA",
+            "URLDownloadToFileW",
+        ),
+    )
+    execution_strings = _ghidra_string_hits(string_values, ("cmd.exe", "powershell", "rundll32", "regsvr32", "mshta", "wscript", "cscript"))
+    if execution_apis or execution_strings:
+        severity = "high" if any(api in execution_apis for api in ("CreateProcessA", "CreateProcessW", "WinExec", "ShellExecuteA", "ShellExecuteW")) and execution_strings else "medium"
+        findings.append(
+            _finding(
+                "Command execution or staging indicators",
+                severity=severity,
+                confidence=0.86 if severity == "high" else 0.73,
+                source=source,
+                detail=", ".join((execution_apis + execution_strings)[:8]),
+                evidence={
+                    "apis": execution_apis,
+                    "strings": execution_strings,
+                    "functions": _ghidra_import_context(payload, execution_apis),
+                    "string_locations": _ghidra_string_context(payload, execution_strings),
+                },
+                recommendation="Inspect whether the sample launches child processes, shell commands, or follow-on download stages from these code paths.",
+            )
+        )
+
+    body_sizes = [int(item.get("body_size") or 0) for item in functions if isinstance(item, Mapping)]
+    max_body_size = max(body_sizes) if body_sizes else 0
+    edge_count = len(call_graph.get("edges") or []) if isinstance(call_graph, Mapping) else 0
+    if max_body_size >= 1024 or (functions and edge_count >= max(8, len(functions) * 2)):
+        findings.append(
+            _finding(
+                "Large recovered function or dense call graph",
+                severity="info",
+                confidence=0.58,
+                source=source,
+                detail=f"max_body_size={max_body_size} call_graph_edges={edge_count}",
+                evidence={
+                    "max_body_size": max_body_size,
+                    "function_count": len(functions),
+                    "call_graph_edges": edge_count,
+                },
+                recommendation="Prioritize the largest functions and most-connected call graph regions for manual decompilation review.",
+            )
+        )
+
+    return findings
+
+
+def _ghidra_import_names(payload: Mapping[str, Any]) -> list[str]:
+    names: list[str] = []
+    for item in payload.get("imports_xrefs") or []:
+        if isinstance(item, Mapping):
+            value = item.get("label") or item.get("name") or item.get("symbol")
+            if value is not None:
+                names.append(str(value))
+    for item in payload.get("functions") or []:
+        if not isinstance(item, Mapping):
+            continue
+        for call in item.get("calls") or []:
+            if isinstance(call, Mapping):
+                value = call.get("name") or call.get("symbol") or call.get("label")
+            else:
+                value = call
+            if value is not None:
+                names.append(str(value))
+    return _dedupe_strings(names)
+
+
+def _filter_events(events: Sequence[Any], names: Sequence[str]) -> list[Dict[str, Any]]:
+    wanted = {str(name) for name in names}
+    selected: list[Dict[str, Any]] = []
+    for event in events:
+        if not isinstance(event, Mapping):
+            continue
+        event_name = str(event.get("name") or event.get("operation") or "")
+        if wanted and event_name not in wanted:
+            continue
+        selected.append(
+            {
+                "name": event.get("name"),
+                "operation": event.get("operation"),
+                "category": event.get("category"),
+                "params": event.get("params") if isinstance(event.get("params"), Mapping) else {},
+                "path": event.get("path"),
+                "result": event.get("result"),
+            }
+        )
+        if len(selected) >= 5:
+            break
+    return selected
+
+
+def _ghidra_string_values(payload: Mapping[str, Any]) -> list[str]:
+    values: list[str] = []
+    for item in payload.get("strings_xrefs") or []:
+        if isinstance(item, Mapping):
+            value = item.get("value") or item.get("string")
+            if value is not None:
+                values.append(str(value))
+    return _dedupe_strings(values)
+
+
+def _ghidra_import_context(payload: Mapping[str, Any], names: Sequence[str]) -> Dict[str, list[str]]:
+    wanted = {name.lower() for name in names}
+    context: Dict[str, list[str]] = {}
+    for item in payload.get("imports_xrefs") or []:
+        if not isinstance(item, Mapping):
+            continue
+        label = _normalize_symbol_name(item.get("label") or item.get("name") or item.get("symbol"))
+        if label.lower() not in wanted:
+            continue
+        functions: list[str] = []
+        for function in item.get("functions") or []:
+            if not isinstance(function, Mapping):
+                continue
+            name_value = function.get("name")
+            if name_value is not None:
+                functions.append(str(name_value))
+        if not functions:
+            for xref in item.get("xrefs") or []:
+                if not isinstance(xref, Mapping):
+                    continue
+                name_value = xref.get("function_name")
+                if name_value is not None:
+                    functions.append(str(name_value))
+        context[label] = _dedupe_strings(functions)
+    return context
+
+
+def _ghidra_string_context(payload: Mapping[str, Any], needles: Sequence[str]) -> list[Dict[str, Any]]:
+    contexts: list[Dict[str, Any]] = []
+    seen: set[str] = set()
+    lowered = [str(needle).lower() for needle in needles if str(needle).strip()]
+    if not lowered:
+        return contexts
+    for item in payload.get("strings_xrefs") or []:
+        if not isinstance(item, Mapping):
+            continue
+        value = str(item.get("value") or item.get("string") or "")
+        lower_value = value.lower()
+        if not any(needle in lower_value for needle in lowered):
+            continue
+        key = str(item.get("address") or value[:64]).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        contexts.append(
+            {
+                "address": item.get("address"),
+                "value": value[:160],
+                "functions": [
+                    str(function.get("name"))
+                    for function in item.get("functions") or []
+                    if isinstance(function, Mapping) and function.get("name") is not None
+                ],
+                "xref_count": item.get("xref_count"),
+            }
+        )
+    return contexts[:5]
+
+
+def _match_symbol_names(candidates: Sequence[str], targets: Sequence[str]) -> list[str]:
+    wanted = {target.lower(): target for target in targets}
+    matches: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        normalized = _normalize_symbol_name(candidate)
+        key = normalized.lower()
+        if key in wanted and wanted[key] not in seen:
+            seen.add(wanted[key])
+            matches.append(wanted[key])
+    return matches
+
+
+def _normalize_symbol_name(value: Any) -> str:
+    text = str(value or "").strip()
+    for separator in ("!", "::"):
+        if separator in text:
+            text = text.split(separator)[-1]
+    return text.strip()
+
+
+def _ghidra_url_hits(values: Sequence[str]) -> list[str]:
+    hits: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        for match in re.findall(r"https?://[^\s\"']+", value, flags=re.IGNORECASE):
+            if match.lower() in seen:
+                continue
+            seen.add(match.lower())
+            hits.append(match)
+    return hits[:5]
+
+
+def _ghidra_string_hits(values: Sequence[str], needles: Sequence[str]) -> list[str]:
+    hits: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        lower = value.lower()
+        for needle in needles:
+            key = str(needle).lower()
+            if key in lower and key not in seen:
+                seen.add(key)
+                hits.append(str(needle))
+    return hits
 
 
 def _finding(
@@ -753,6 +1816,26 @@ def _session_list(session: Any, name: str) -> list[Any]:
     else:
         value = getattr(session, name, []) or []
     return list(value) if isinstance(value, Sequence) and not isinstance(value, (str, bytes)) else []
+
+
+def _flow_list(flow: Any, name: str) -> list[Any]:
+    if flow is None:
+        return []
+    if isinstance(flow, Mapping):
+        value = flow.get(name) or []
+    else:
+        value = getattr(flow, name, []) or []
+    return list(value) if isinstance(value, Sequence) and not isinstance(value, (str, bytes)) else []
+
+
+def _task_subtasks(task: Any) -> list[Any]:
+    return _flow_list(task, "subtasks")
+
+
+def _get(value: Any, key: str, default: Any = None) -> Any:
+    if isinstance(value, Mapping):
+        return value.get(key, default)
+    return getattr(value, key, default)
 
 
 def _extract_items(source: Any, key: str) -> list[Any]:

@@ -106,6 +106,7 @@ def _path_arg_name(tool_name: str) -> str:
         "yara_scan",
         "yara_scan_stub",
         "reconstruct_project",
+        "frida_trace",
         "ghidra_decompile",
     }:
         return "path"

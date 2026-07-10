@@ -185,6 +185,8 @@ def ghidra_decompile(
     artifacts = _collect_artifacts(ghidra_out)
     functions = _read_json(ghidra_out / "functions.json", default=[])
     call_graph = _read_json(ghidra_out / "call_graph.json", default={"nodes": [], "edges": []})
+    strings_xrefs = _read_json(ghidra_out / "strings_xrefs.json", default=[])
+    imports_xrefs = _read_json(ghidra_out / "imports_xrefs.json", default=[])
     summary = _read_json(ghidra_out / "summary.json", default={})
 
     status = "ok" if completed.returncode == 0 else "failed"
@@ -200,6 +202,11 @@ def ghidra_decompile(
         "functions": functions,
         "function_count": len(functions) if isinstance(functions, list) else 0,
         "call_graph": call_graph,
+        "call_graph_edge_count": len((call_graph or {}).get("edges") or []) if isinstance(call_graph, dict) else 0,
+        "strings_xrefs": strings_xrefs,
+        "string_count": len(strings_xrefs) if isinstance(strings_xrefs, list) else 0,
+        "imports_xrefs": imports_xrefs,
+        "import_xref_count": len(imports_xrefs) if isinstance(imports_xrefs, list) else 0,
         "summary": summary,
     }
     if completed.returncode != 0:
