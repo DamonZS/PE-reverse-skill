@@ -65,6 +65,14 @@ class GhidraToolTests(unittest.TestCase):
                     '[{"name":"entry","entry":"00401000"}]', encoding="utf-8"
                 )
                 (ghidra_out / "call_graph.json").write_text('{"nodes":[],"edges":[]}', encoding="utf-8")
+                (ghidra_out / "strings_xrefs.json").write_text(
+                    '[{"address":"00405000","value":"https://example.test","xref_count":1,"functions":[{"name":"entry","entry":"00401000"}],"xrefs":[{"from_address":"00401010","function_name":"entry","function_entry":"00401000","ref_type":"DATA"}]}]',
+                    encoding="utf-8"
+                )
+                (ghidra_out / "imports_xrefs.json").write_text(
+                    '[{"library":"KERNEL32.dll","label":"GetProcAddress","address":"EXTERNAL:0001","xref_count":1,"functions":[{"name":"entry","entry":"00401000"}],"xrefs":[{"from_address":"00401020","function_name":"entry","function_entry":"00401000","ref_type":"UNCONDITIONAL_CALL"}]}]',
+                    encoding="utf-8"
+                )
                 (ghidra_out / "summary.json").write_text('{"function_count":1}', encoding="utf-8")
                 (ghidra_out / "pseudocode" / "fn_00401000.c").write_text("void entry() {}", encoding="utf-8")
                 return CompletedProcess(command, 0, stdout="ok", stderr="")
@@ -74,7 +82,13 @@ class GhidraToolTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["function_count"], 1)
+        self.assertEqual(result["strings_xrefs"][0]["value"], "https://example.test")
+        self.assertEqual(result["strings_xrefs"][0]["functions"][0]["name"], "entry")
+        self.assertEqual(result["imports_xrefs"][0]["label"], "GetProcAddress")
+        self.assertEqual(result["imports_xrefs"][0]["xrefs"][0]["function_name"], "entry")
         self.assertTrue(any(item["name"] == "functions.json" for item in result["artifacts"]))
+        self.assertTrue(any(item["name"] == "strings_xrefs.json" for item in result["artifacts"]))
+        self.assertTrue(any(item["name"] == "imports_xrefs.json" for item in result["artifacts"]))
         self.assertTrue(any(item["kind"] == "pseudocode" for item in result["artifacts"]))
         command = run.call_args.args[0]
         self.assertEqual(command[0], str(headless))
