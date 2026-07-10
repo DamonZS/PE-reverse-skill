@@ -5,23 +5,29 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
 try:
     from .config import AnalyzerConfig, ensure_runtime_dirs, load_config, write_default_knowledge
+    from .dashboard import build_dashboard, serve_dashboard
     from .knowledge import KnowledgeBase
     from .providers import RuleBasedProvider
-    from .runtime import SessionStore, TraceLogger
+    from .runtime import ExperimentStore, SessionStore, TraceLogger
     from .tools import frida_install_guide, ghidra_install_guide, procmon_install_guide, register_builtin_tools
 except ImportError:  # Allows direct script execution while package-level migration is incomplete.
     from config import AnalyzerConfig, ensure_runtime_dirs, load_config, write_default_knowledge
 
     KnowledgeBase = None  # type: ignore[assignment]
     RuleBasedProvider = None  # type: ignore[assignment]
+    ExperimentStore = None  # type: ignore[assignment]
     SessionStore = None  # type: ignore[assignment]
     TraceLogger = None  # type: ignore[assignment]
+    build_dashboard = None  # type: ignore[assignment]
+    serve_dashboard = None  # type: ignore[assignment]
     frida_install_guide = None  # type: ignore[assignment]
     ghidra_install_guide = None  # type: ignore[assignment]
     procmon_install_guide = None  # type: ignore[assignment]
@@ -153,6 +159,16 @@ _BUILTIN_TOOLS = [
         "name": "knowledge-base",
         "status": "planned-or-runtime",
         "description": "Stores reusable analysis facts, provider notes, and report index data.",
+    },
+    {
+        "name": "experiment-store",
+        "status": "available",
+        "description": "Persists reproducible analysis plans, state transitions, local-run outcomes, and artifact links.",
+    },
+    {
+        "name": "dashboard",
+        "status": "available",
+        "description": "Builds an offline reverse-lab command deck from experiments, sessions, knowledge outcomes, and reconstructed-source artifacts.",
     },
 ]
 
@@ -570,9 +586,23 @@ def analyze_command(args: argparse.Namespace) -> int:
             out_dir,
         )
     )
+    semantic_result, semantic_artifacts = _run_semantic_ir(
+        tool_executor,
+        tool_results,
+        result,
+        session,
+        session_store,
+        out_dir,
+    )
+    extra_artifacts.extend(semantic_artifacts)
+    semantic_ir = _result_payload(semantic_result)
+    if not isinstance(semantic_ir, Mapping):
+        semantic_ir = {}
 
     if args.reconstruct:
         analysis = _build_reconstruction_analysis(tool_results)
+        if semantic_ir:
+            analysis["semantic_ir"] = dict(semantic_ir)
         reconstruct_result = tool_executor.execute(
             "reconstruct_project",
             path=str(sample),
@@ -594,6 +624,24 @@ def analyze_command(args: argparse.Namespace) -> int:
         )
         extra_artifacts.extend(_record_artifacts(session, session_store, reconstruct_result))
         _register_reconstruction_runtime(session, session_store, reconstruct_result)
+        reconstruction_payload = _result_payload(reconstruct_result)
+        project_dir = reconstruction_payload.get("project_dir") if isinstance(reconstruction_payload, Mapping) else None
+        if project_dir:
+            verification_result = tool_executor.execute(
+                "reconstruction_verify",
+                project_dir=str(project_dir),
+                semantic_ir=semantic_ir,
+            )
+            _append_observation(
+                tool_results,
+                result,
+                session,
+                session_store,
+                "reconstruction_verify",
+                {"project_dir": str(project_dir), "semantic_ir": semantic_ir},
+                verification_result,
+            )
+            extra_artifacts.extend(_record_artifacts(session, session_store, verification_result))
 
     if session_store is not None:
         session_store.save(session)
@@ -759,6 +807,265 @@ def list_tools_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _experiment_context(args: argparse.Namespace) -> tuple[AnalyzerConfig, Any] | None:
+    if ExperimentStore is None:
+        print("Experiment control plane is unavailable because runtime modules could not be imported.", file=sys.stderr)
+        return None
+    config = load_config(args.workspace)
+    return config, ExperimentStore(config.workspace)
+
+
+_LOCAL_RUNNER_LOCATION_ENV = (
+    "REVERSE_ANALYZER_KNOWLEDGE_DIR",
+    "REVERSE_ANALYZER_SESSIONS_DIR",
+    "REVERSE_ANALYZER_REPORTS_DIR",
+)
+
+
+def _local_runner_environment(workspace: str | Path) -> Dict[str, str]:
+    """Isolate a local child analysis from parent workspace location overrides."""
+
+    environment = dict(os.environ)
+    for variable in _LOCAL_RUNNER_LOCATION_ENV:
+        environment.pop(variable, None)
+    environment["REVERSE_ANALYZER_WORKSPACE"] = str(workspace)
+    return environment
+
+
+def _experiment_options(args: argparse.Namespace) -> Dict[str, Any]:
+    options: Dict[str, Any] = {}
+    if args.dynamic:
+        options.update(
+            {
+                "dynamic": True,
+                "dynamic_backend": args.dynamic_backend,
+                "dynamic_profile": args.dynamic_profile,
+                "dynamic_duration": args.dynamic_duration,
+            }
+        )
+    gui_enabled = bool(args.gui or args.gui_runtime or args.gui_visual or args.reconstruct_gui or args.gui_interaction_trace)
+    if gui_enabled:
+        options.update(
+            {
+                "gui": True,
+                "gui_runtime": bool(args.gui_runtime),
+                "gui_visual": bool(args.gui_visual),
+                "reconstruct_gui": bool(args.reconstruct_gui),
+                "gui_target": args.gui_target,
+                "gui_interaction_trace": args.gui_interaction_trace,
+            }
+        )
+    if args.reconstruct:
+        options["reconstruct"] = True
+    return {key: value for key, value in options.items() if value is not None and value is not False}
+
+
+def _print_json_payload(payload: Mapping[str, Any]) -> None:
+    print(json.dumps(dict(payload), ensure_ascii=False, indent=2, default=str))
+
+
+def experiment_create_command(args: argparse.Namespace) -> int:
+    context = _experiment_context(args)
+    if context is None:
+        return 3
+    _, store = context
+    metadata = {"label": args.label} if args.label else {}
+    experiment = store.create(args.sample, options=_experiment_options(args), metadata=metadata)
+    _print_json_payload(
+        {
+            "experiment": experiment,
+            "analysis_command": store.build_analysis_command(experiment["id"]),
+        }
+    )
+    return 0
+
+
+def experiment_list_command(args: argparse.Namespace) -> int:
+    context = _experiment_context(args)
+    if context is None:
+        return 3
+    _, store = context
+    try:
+        experiments = store.list(limit=args.limit)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"Experiment list failed: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        _print_json_payload({"experiments": experiments, "count": len(experiments)})
+    else:
+        for experiment in experiments:
+            print(f"{experiment.get('id')}  {experiment.get('status')}  {experiment.get('sample')}")
+    return 0
+
+
+def experiment_show_command(args: argparse.Namespace) -> int:
+    context = _experiment_context(args)
+    if context is None:
+        return 3
+    _, store = context
+    try:
+        experiment = store.get(args.experiment_id)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"Experiment not available: {args.experiment_id}: {exc}", file=sys.stderr)
+        return 2
+    _print_json_payload({"experiment": experiment, "analysis_command": store.build_analysis_command(args.experiment_id)})
+    return 0
+
+
+def _plan_experiment(store: Any, experiment_id: str) -> Dict[str, Any]:
+    experiment = store.get(experiment_id)
+    if experiment.get("status") == "queued":
+        experiment = store.set_status(experiment_id, "planned", detail="analysis_command_planned")
+    return experiment
+
+
+def experiment_plan_command(args: argparse.Namespace) -> int:
+    context = _experiment_context(args)
+    if context is None:
+        return 3
+    _, store = context
+    try:
+        experiment = _plan_experiment(store, args.experiment_id)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"Experiment plan failed: {args.experiment_id}: {exc}", file=sys.stderr)
+        return 2
+    _print_json_payload({"experiment": experiment, "analysis_command": store.build_analysis_command(args.experiment_id)})
+    return 0
+
+
+def experiment_run_command(args: argparse.Namespace) -> int:
+    """Run an explicit local adapter or emit a deterministic no-execution plan."""
+
+    context = _experiment_context(args)
+    if context is None:
+        return 3
+    config, store = context
+    if not args.dry_run and args.timeout <= 0:
+        print("Experiment timeout must be positive for --execute-local.", file=sys.stderr)
+        return 2
+    try:
+        experiment = _plan_experiment(store, args.experiment_id)
+        command = store.build_analysis_command(args.experiment_id)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"Experiment run failed: {args.experiment_id}: {exc}", file=sys.stderr)
+        return 2
+
+    if args.dry_run:
+        _print_json_payload({"experiment": experiment, "analysis_command": command, "executed": False})
+        return 0
+
+    if experiment.get("status") != "planned":
+        print(f"Experiment must be planned before local execution: {args.experiment_id}", file=sys.stderr)
+        return 2
+
+    store.set_status(args.experiment_id, "running", detail="local_runner_started")
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=str(Path(__file__).resolve().parents[1]),
+            env=_local_runner_environment(config.workspace),
+            capture_output=True,
+            text=True,
+            timeout=args.timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        result = store.record_result(
+            args.experiment_id,
+            status="failed",
+            summary={"runner": "local", "timeout_seconds": args.timeout},
+            error=f"local runner timed out: {exc}",
+        )
+        _print_json_payload({"experiment": result, "analysis_command": command, "executed": True, "timeout": True})
+        return 124
+    except (OSError, ValueError) as exc:
+        result = store.record_result(
+            args.experiment_id,
+            status="failed",
+            summary={"runner": "local"},
+            error=f"local runner unavailable: {exc}",
+        )
+        _print_json_payload({"experiment": result, "analysis_command": command, "executed": True})
+        return 2
+
+    try:
+        analysis_result = json.loads(completed.stdout) if completed.stdout.strip() else {}
+    except json.JSONDecodeError:
+        analysis_result = {}
+    artifacts = analysis_result.get("artifacts") if isinstance(analysis_result, Mapping) else []
+    summary = {
+        "runner": "local",
+        "returncode": completed.returncode,
+        "session_id": analysis_result.get("session_id") if isinstance(analysis_result, Mapping) else None,
+        "out_dir": analysis_result.get("out_dir") if isinstance(analysis_result, Mapping) else None,
+    }
+    status = "completed" if completed.returncode == 0 else "failed"
+    error = completed.stderr.strip()[:2000] if completed.returncode else None
+    result = store.record_result(
+        args.experiment_id,
+        status=status,
+        artifacts=artifacts if isinstance(artifacts, list) else [],
+        summary=summary,
+        error=error,
+    )
+    _print_json_payload(
+        {
+            "experiment": result,
+            "analysis_command": command,
+            "executed": True,
+            "returncode": completed.returncode,
+        }
+    )
+    return int(completed.returncode)
+
+
+def dashboard_command(args: argparse.Namespace) -> int:
+    if build_dashboard is None or serve_dashboard is None:
+        print("Dashboard runtime is unavailable because dashboard modules could not be imported.", file=sys.stderr)
+        return 3
+    config = load_config(args.workspace)
+    destination = Path(args.out) if args.out else config.workspace / "dashboard"
+    data = build_dashboard(config.workspace, out_dir=destination, knowledge_dir=config.knowledge_dir)
+    payload: Dict[str, Any] = {
+        "dashboard_dir": str(destination),
+        "index": str(destination / "index.html"),
+        "data": str(destination / "data.json"),
+        "summary": data.get("summary") or {},
+        "source_reconstruction": ((data.get("source_reconstruction") or {}).get("summary") or {}),
+    }
+    if not args.serve:
+        _print_json_payload(payload)
+        return 0
+
+    port = args.port if args.port is not None else config.dashboard_port
+    server = serve_dashboard(destination, host=args.host, port=port)
+    host, actual_port = server.server_address[:2]
+    payload["url"] = f"http://{host}:{actual_port}/"
+    _print_json_payload(payload)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        server.shutdown()
+        server.server_close()
+    return 0
+
+
+def _add_experiment_analysis_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--dynamic", action="store_true", help="Include optional dynamic tracing in the planned analysis command.")
+    parser.add_argument("--dynamic-backend", choices=("frida", "procmon", "all"), default="frida")
+    parser.add_argument("--dynamic-profile", choices=("auto", "behavior", "quick", "unpacking", "network", "persistence"), default="auto")
+    parser.add_argument("--dynamic-duration", type=float, default=10.0)
+    parser.add_argument("--gui", action="store_true", help="Include GUI fingerprinting and strategy selection.")
+    parser.add_argument("--gui-runtime", action="store_true", help="Include optional runtime UI probing.")
+    parser.add_argument("--gui-visual", action="store_true", help="Include GUI visual parsing.")
+    parser.add_argument("--reconstruct", action="store_true", help="Include native reconstruction output.")
+    parser.add_argument("--reconstruct-gui", action="store_true", help="Include GUI reconstruction output.")
+    parser.add_argument("--gui-target", default="auto")
+    parser.add_argument("--gui-interaction-trace", default=None)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="reverse_analyzer",
@@ -794,6 +1101,49 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--adb-path", default=None, help="Optional adb executable used by --gui-runtime for Android APK accessibility dumps.")
     analyze.add_argument("--android-serial", default=None, help="Optional adb device serial used by --gui-runtime for Android APK probing.")
     analyze.set_defaults(func=analyze_command)
+
+    experiment = subparsers.add_parser("experiment", help="Create, plan, and explicitly dispatch reproducible analysis experiments.")
+    experiment_commands = experiment.add_subparsers(dest="experiment_command", required=True)
+
+    experiment_create = experiment_commands.add_parser("create", help="Create a queued experiment without executing a sample.")
+    experiment_create.add_argument("sample", help="Sample path recorded by the experiment.")
+    experiment_create.add_argument("--workspace", default=None, help="Workspace root; defaults to current directory.")
+    experiment_create.add_argument("--label", default=None, help="Optional human-readable experiment label.")
+    _add_experiment_analysis_options(experiment_create)
+    experiment_create.set_defaults(func=experiment_create_command)
+
+    experiment_list = experiment_commands.add_parser("list", help="List persisted experiments.")
+    experiment_list.add_argument("--workspace", default=None, help="Workspace root; defaults to current directory.")
+    experiment_list.add_argument("--limit", type=int, default=None, help="Maximum records to return.")
+    experiment_list.add_argument("--json", action="store_true", help="Emit JSON instead of text rows.")
+    experiment_list.set_defaults(func=experiment_list_command)
+
+    experiment_show = experiment_commands.add_parser("show", help="Show one experiment and its deterministic analysis command.")
+    experiment_show.add_argument("experiment_id")
+    experiment_show.add_argument("--workspace", default=None, help="Workspace root; defaults to current directory.")
+    experiment_show.set_defaults(func=experiment_show_command)
+
+    experiment_plan = experiment_commands.add_parser("plan", help="Mark a queued experiment planned and print its analysis command.")
+    experiment_plan.add_argument("experiment_id")
+    experiment_plan.add_argument("--workspace", default=None, help="Workspace root; defaults to current directory.")
+    experiment_plan.set_defaults(func=experiment_plan_command)
+
+    experiment_run = experiment_commands.add_parser("run", help="Emit a dry-run or explicitly dispatch the local analysis adapter.")
+    experiment_run.add_argument("experiment_id")
+    experiment_run.add_argument("--workspace", default=None, help="Workspace root; defaults to current directory.")
+    experiment_run.add_argument("--timeout", type=float, default=900.0, help="Local runner timeout in seconds.")
+    run_mode = experiment_run.add_mutually_exclusive_group(required=True)
+    run_mode.add_argument("--dry-run", action="store_true", help="Plan only; never execute a sample.")
+    run_mode.add_argument("--execute-local", action="store_true", help="Explicitly invoke the current host's analysis CLI; use an isolated workspace when dynamic tracing is enabled.")
+    experiment_run.set_defaults(func=experiment_run_command)
+
+    dashboard = subparsers.add_parser("dashboard", help="Build the offline reverse-engineering command deck, including reconstructed-source artifacts.")
+    dashboard.add_argument("--workspace", default=None, help="Workspace root; defaults to current directory.")
+    dashboard.add_argument("--out", default=None, help="Dashboard output directory; defaults to <workspace>/dashboard.")
+    dashboard.add_argument("--serve", action="store_true", help="Serve the generated dashboard on the loopback host until interrupted.")
+    dashboard.add_argument("--host", default="127.0.0.1", help="Dashboard server host when --serve is used.")
+    dashboard.add_argument("--port", type=int, default=None, help="Dashboard server port; defaults to configuration or 8088.")
+    dashboard.set_defaults(func=dashboard_command)
 
     init_knowledge = subparsers.add_parser("init-knowledge", help="Create the local knowledge scaffold.")
     init_knowledge.add_argument("--workspace", default=None, help="Workspace root; defaults to current directory.")
@@ -1075,6 +1425,43 @@ def _run_behavior_graph(
         behavior_result,
     )
     return _record_artifacts(session, session_store, behavior_result)
+
+
+def _run_semantic_ir(
+    tool_executor: Any,
+    tool_results: list[Any],
+    result: Any,
+    session: Any,
+    session_store: Any,
+    out_dir: Path,
+) -> tuple[Any, list[str]]:
+    """Build one deterministic IR from collected evidence without executing a sample."""
+
+    behavior_graph = _latest_tool_payload(tool_results, "gui_behavior_graph")
+    semantic_result = tool_executor.execute(
+        "semantic_ir_build",
+        behavior_graph=behavior_graph,
+        decompiler=_gui_decompiler_payload(tool_results),
+        dynamic_analysis=_behavior_dynamic_payload(tool_results),
+        gui_analysis=_behavior_gui_analysis(tool_results),
+        out_dir=str(out_dir),
+    )
+    _append_observation(
+        tool_results,
+        result,
+        session,
+        session_store,
+        "semantic_ir_build",
+        {
+            "behavior_graph": behavior_graph,
+            "decompiler": _gui_decompiler_payload(tool_results),
+            "dynamic_analysis": _behavior_dynamic_payload(tool_results),
+            "gui_analysis": _behavior_gui_analysis(tool_results),
+            "out_dir": str(out_dir),
+        },
+        semantic_result,
+    )
+    return semantic_result, _record_artifacts(session, session_store, semantic_result)
 
 
 def _run_gui_pipeline(
@@ -1679,6 +2066,8 @@ def _persist_knowledge(
                 "gui_strategy_records": gui_strategy_records,
                 "recommended_gui_strategy": recommended_gui_strategy,
                 "behavior_graph": _behavior_graph_summary(report_data),
+                "semantic_ir": _semantic_ir_summary(report_data),
+                "reconstruction_verification": _reconstruction_verification_summary(report_data),
             }
         )
     except Exception as exc:
@@ -1767,6 +2156,42 @@ def _behavior_graph_summary(report_data: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _semantic_ir_summary(report_data: Mapping[str, Any]) -> Dict[str, Any]:
+    """Return compact semantic-IR metrics suitable for knowledge/session history."""
+
+    semantic_ir = report_data.get("semantic_ir")
+    if not isinstance(semantic_ir, Mapping) or not semantic_ir:
+        return {}
+    summary = semantic_ir.get("summary") if isinstance(semantic_ir.get("summary"), Mapping) else {}
+    capabilities = semantic_ir.get("capabilities") if isinstance(semantic_ir.get("capabilities"), list) else []
+    return {
+        "status": semantic_ir.get("status"),
+        "schema_version": semantic_ir.get("schema_version"),
+        "entity_count": _safe_int(summary.get("entity_count"), default=len(semantic_ir.get("entities") or [])),
+        "relation_count": _safe_int(summary.get("relation_count"), default=len(semantic_ir.get("relations") or [])),
+        "capability_count": _safe_int(summary.get("capability_count"), default=len(capabilities)),
+        "capabilities": [
+            item.get("name") or item.get("category")
+            for item in capabilities[:12]
+            if isinstance(item, Mapping) and (item.get("name") or item.get("category"))
+        ],
+    }
+
+
+def _reconstruction_verification_summary(report_data: Mapping[str, Any]) -> Dict[str, Any]:
+    verification = report_data.get("reconstruction_verification")
+    if not isinstance(verification, Mapping) or not verification:
+        return {}
+    coverage = verification.get("coverage") if isinstance(verification.get("coverage"), Mapping) else {}
+    return {
+        "status": verification.get("status"),
+        "schema_version": verification.get("schema_version"),
+        "score": verification.get("score"),
+        "semantic_coverage": coverage.get("semantic_coverage"),
+        "module_coverage": coverage.get("module_coverage"),
+    }
+
+
 def _knowledge_features(sample: Path, report_data: Mapping[str, Any]) -> Dict[str, Any]:
     pe = report_data.get("pe_analysis") or {}
     yara = report_data.get("yara") or {}
@@ -1785,6 +2210,19 @@ def _knowledge_features(sample: Path, report_data: Mapping[str, Any]) -> Dict[st
     gui_state_machine = gui.get("state_machine") if isinstance(gui.get("state_machine"), Mapping) else {}
     behavior_graph = report_data.get("behavior_graph") if isinstance(report_data.get("behavior_graph"), Mapping) else {}
     behavior_summary = behavior_graph.get("summary") if isinstance(behavior_graph.get("summary"), Mapping) else {}
+    semantic_ir = report_data.get("semantic_ir") if isinstance(report_data.get("semantic_ir"), Mapping) else {}
+    semantic_summary = semantic_ir.get("summary") if isinstance(semantic_ir.get("summary"), Mapping) else {}
+    semantic_capabilities = semantic_ir.get("capabilities") if isinstance(semantic_ir.get("capabilities"), list) else []
+    reconstruction_verification = (
+        report_data.get("reconstruction_verification")
+        if isinstance(report_data.get("reconstruction_verification"), Mapping)
+        else {}
+    )
+    verification_coverage = (
+        reconstruction_verification.get("coverage")
+        if isinstance(reconstruction_verification.get("coverage"), Mapping)
+        else {}
+    )
     evidence_nodes = gui_evidence_graph.get("nodes") if isinstance(gui_evidence_graph.get("nodes"), list) else []
     evidence_edges = gui_evidence_graph.get("edges") if isinstance(gui_evidence_graph.get("edges"), list) else []
     event_handler_link_count = sum(
@@ -1852,6 +2290,18 @@ def _knowledge_features(sample: Path, report_data: Mapping[str, Any]) -> Dict[st
             "transition_count": _safe_int(behavior_summary.get("transition_count"), default=0),
             "type_counts": behavior_summary.get("type_counts") or {},
         },
+        "semantic": {
+            "status": semantic_ir.get("status"),
+            "schema_version": semantic_ir.get("schema_version"),
+            "entity_count": _safe_int(semantic_summary.get("entity_count"), default=len(semantic_ir.get("entities") or [])),
+            "relation_count": _safe_int(semantic_summary.get("relation_count"), default=len(semantic_ir.get("relations") or [])),
+            "capability_count": _safe_int(semantic_summary.get("capability_count"), default=len(semantic_capabilities)),
+            "capabilities": [
+                item.get("name") or item.get("category")
+                for item in semantic_capabilities[:12]
+                if isinstance(item, Mapping) and (item.get("name") or item.get("category"))
+            ],
+        },
         "decompiler": {
             "status": decompiler.get("status"),
             "function_count": decompiler.get("function_count"),
@@ -1866,6 +2316,9 @@ def _knowledge_features(sample: Path, report_data: Mapping[str, Any]) -> Dict[st
                 for item in reconstruction.get("prioritized_modules") or []
                 if isinstance(item, Mapping) and item.get("module")
             ],
+            "verification_score": reconstruction_verification.get("score"),
+            "semantic_coverage": verification_coverage.get("semantic_coverage"),
+            "module_coverage": verification_coverage.get("module_coverage"),
         },
     }
 
@@ -1935,6 +2388,24 @@ def _knowledge_observations(tool_results: Sequence[Mapping[str, Any]], report_da
                     "state_count": _safe_int(behavior_summary.get("state_count"), default=0),
                     "transition_count": _safe_int(behavior_summary.get("transition_count"), default=0),
                 },
+            }
+        )
+    semantic_ir = report_data.get("semantic_ir") or {}
+    if isinstance(semantic_ir, Mapping) and semantic_ir:
+        observations.append(
+            {
+                "kind": "semantic_ir",
+                "status": semantic_ir.get("status"),
+                "data": _semantic_ir_summary(report_data),
+            }
+        )
+    reconstruction_verification = report_data.get("reconstruction_verification") or {}
+    if isinstance(reconstruction_verification, Mapping) and reconstruction_verification:
+        observations.append(
+            {
+                "kind": "reconstruction_verification",
+                "status": reconstruction_verification.get("status"),
+                "data": _reconstruction_verification_summary(report_data),
             }
         )
     gui = report_data.get("gui_analysis") or {}
