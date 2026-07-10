@@ -32,6 +32,8 @@ from .gui import (
 )
 from .gui_evidence import build_gui_evidence_graph
 from .behavior_graph import build_behavior_evidence_graph
+from .semantic_ir import build_semantic_ir
+from .reconstruction_verify import verify_reconstruction
 from .gui_state import build_gui_state_machine
 from .gui_xaml import extract_xaml_ui_evidence
 from .pe_deep import pe_deep_scan
@@ -85,6 +87,8 @@ def register_builtin_tools(executor: ToolExecutor | None = None) -> ToolExecutor
     executor.register("gui_visual_regression", gui_visual_regression)
     executor.register("gui_evidence_graph", build_gui_evidence_graph)
     executor.register("gui_behavior_graph", build_behavior_evidence_graph)
+    executor.register("semantic_ir_build", build_semantic_ir)
+    executor.register("reconstruction_verify", verify_reconstruction)
     executor.register("gui_state_machine", build_gui_state_machine)
     executor.register("gui_xaml_extract", extract_xaml_ui_evidence)
     executor.register("reconstruct_gui_project", reconstruct_gui_project)

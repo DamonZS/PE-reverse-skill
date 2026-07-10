@@ -211,6 +211,44 @@ class ReconstructProjectTests(unittest.TestCase):
             self.assertIn("reconstruct_network", task_names)
             network_task = next(task for task in reconstruction_plan["tasks"] if task["name"] == "reconstruct_network")
             self.assertTrue(any(subtask["metadata"].get("kind") == "dynamic_correlation" for subtask in network_task["subtasks"]))
+
+    def test_semantic_ir_is_preserved_for_later_reconstruction_validation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "semantic.exe"
+            sample.write_bytes(b"MZ")
+            semantic_ir = {
+                "schema_version": 1,
+                "entities": [
+                    {"id": "function:entry", "kind": "function", "name": "entry"},
+                    {"id": "api:connect", "kind": "api", "name": "connect"},
+                ],
+                "relations": [
+                    {"id": "edge:entry-connect", "type": "calls", "source": "function:entry", "target": "api:connect"}
+                ],
+                "capabilities": [
+                    {"id": "capability:network", "name": "network", "category": "network", "entity_ids": ["api:connect"]}
+                ],
+                "summary": {"entity_count": 2, "relation_count": 1, "capability_count": 1},
+            }
+
+            result = reconstruct_project(
+                sample,
+                root / "out",
+                analysis={
+                    "functions": [{"name": "entry", "calls": ["connect"]}],
+                    "semantic_ir": semantic_ir,
+                },
+            )
+            project_dir = Path(result["project_dir"])
+            persisted = json.loads((project_dir / "analysis" / "semantic_ir.json").read_text(encoding="utf-8"))
+            summary = json.loads((project_dir / "analysis" / "summary.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(persisted, semantic_ir)
+            self.assertEqual(result["semantic_ir"]["entity_count"], 2)
+            self.assertEqual(summary["semantic_ir"]["capability_count"], 1)
+            self.assertTrue(any(item["name"] == "analysis/semantic_ir.json" for item in result["artifacts"]))
+            self.assertIn("Semantic IR", (project_dir / "README.md").read_text(encoding="utf-8"))
     def test_returns_artifacts_list_for_generated_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

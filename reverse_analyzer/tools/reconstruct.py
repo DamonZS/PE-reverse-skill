@@ -45,8 +45,12 @@ def reconstruct_project(
     strings_xrefs = _normalize_string_xrefs(analysis.get("strings_xrefs"))
     imports_xrefs = _normalize_import_xrefs(analysis.get("imports_xrefs"))
     dynamic_evidence = _normalize_dynamic_evidence(analysis.get("dynamic_evidence"))
+    semantic_ir = _normalize_semantic_ir(analysis.get("semantic_ir"))
+    semantic_ir_summary = _semantic_ir_summary(semantic_ir)
     module_map = _build_module_map(functions, call_graph, strings_xrefs, imports_xrefs, dynamic_evidence)
     reconstruction_plan = _build_reconstruction_plan(module_map)
+    if semantic_ir_summary:
+        reconstruction_plan["semantic_ir"] = semantic_ir_summary
     summary_payload = _build_summary(
         sample,
         functions,
@@ -58,6 +62,7 @@ def reconstruct_project(
         dynamic_evidence=dynamic_evidence,
         module_map=module_map,
         reconstruction_plan=reconstruction_plan,
+        semantic_ir=semantic_ir_summary,
     )
 
     file_map = {
@@ -74,6 +79,8 @@ def reconstruct_project(
         "analysis/summary.json": analysis_dir / "summary.json",
         "README.md": project_dir / "README.md",
     }
+    if semantic_ir:
+        file_map["analysis/semantic_ir.json"] = analysis_dir / "semantic_ir.json"
     module_files = _module_files(src_dir, module_map)
     file_map.update(module_files)
 
@@ -89,6 +96,8 @@ def reconstruct_project(
     file_map["analysis/module_map.json"].write_text(json.dumps(module_map, indent=2), encoding="utf-8")
     file_map["analysis/reconstruction_plan.json"].write_text(json.dumps(reconstruction_plan, indent=2), encoding="utf-8")
     file_map["analysis/summary.json"].write_text(json.dumps(summary_payload, indent=2), encoding="utf-8")
+    if semantic_ir:
+        file_map["analysis/semantic_ir.json"].write_text(json.dumps(semantic_ir, indent=2), encoding="utf-8")
     file_map["README.md"].write_text(_render_readme(sample.name, functions, imports, summary_payload), encoding="utf-8")
 
     for name, path_obj in module_files.items():
@@ -115,6 +124,7 @@ def reconstruct_project(
         "reconstruction_plan": reconstruction_plan,
         "task_count": len(reconstruction_plan.get("tasks") or []),
         "next_task": ((reconstruction_plan.get("tasks") or [{}])[0].get("name") if reconstruction_plan.get("tasks") else None),
+        "semantic_ir": semantic_ir_summary,
         "stub_only": True,
     }
 
@@ -399,6 +409,36 @@ def _normalize_dynamic_evidence(raw: Any) -> List[Dict[str, Any]]:
     return normalized
 
 
+def _normalize_semantic_ir(raw: Any) -> Dict[str, Any]:
+    """Preserve only JSON-compatible semantic IR supplied by the orchestrator."""
+
+    if not isinstance(raw, dict):
+        return {}
+    try:
+        return json.loads(json.dumps(raw, ensure_ascii=False, default=str))
+    except (TypeError, ValueError):
+        return {}
+
+
+def _semantic_ir_summary(semantic_ir: Dict[str, Any]) -> Dict[str, Any]:
+    if not semantic_ir:
+        return {}
+    supplied = semantic_ir.get("summary") if isinstance(semantic_ir.get("summary"), dict) else {}
+    return {
+        "schema_version": semantic_ir.get("schema_version"),
+        "entity_count": _safe_count(supplied.get("entity_count"), len(semantic_ir.get("entities") or [])),
+        "relation_count": _safe_count(supplied.get("relation_count"), len(semantic_ir.get("relations") or [])),
+        "capability_count": _safe_count(supplied.get("capability_count"), len(semantic_ir.get("capabilities") or [])),
+    }
+
+
+def _safe_count(value: Any, fallback: int = 0) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return fallback
+
+
 def _build_summary(
     sample: Path,
     functions: List[Dict[str, Any]],
@@ -411,6 +451,7 @@ def _build_summary(
     dynamic_evidence: List[Dict[str, Any]],
     module_map: Dict[str, Any],
     reconstruction_plan: Dict[str, Any],
+    semantic_ir: Dict[str, Any],
 ) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "sample": sample.name,
@@ -453,6 +494,8 @@ def _build_summary(
             "next_task": ((reconstruction_plan.get("tasks") or [{}])[0].get("name") if reconstruction_plan.get("tasks") else None),
         },
     }
+    if semantic_ir:
+        payload["semantic_ir"] = semantic_ir
     ghidra_summary: Dict[str, Any] = {}
     if isinstance(summary, dict):
         payload["analysis_summary"] = summary
@@ -681,6 +724,18 @@ def _render_readme(
                 lines.append(
                     f"  - {item.get('backend')} {item.get('kind')} `{item.get('name')}` count={item.get('count')} detail={item.get('detail') or 'n/a'}"
                 )
+    semantic_ir = summary_payload.get("semantic_ir") or {}
+    if semantic_ir:
+        lines.extend(
+            [
+                "",
+                "## Semantic IR",
+                f"- Entities: {semantic_ir.get('entity_count', 0)}",
+                f"- Relations: {semantic_ir.get('relation_count', 0)}",
+                f"- Capabilities: {semantic_ir.get('capability_count', 0)}",
+                "- Semantic IR artifact: `analysis/semantic_ir.json`",
+            ]
+        )
     reconstruction_plan = summary_payload.get("reconstruction_plan") or {}
     if reconstruction_plan.get("task_count"):
         lines.extend(

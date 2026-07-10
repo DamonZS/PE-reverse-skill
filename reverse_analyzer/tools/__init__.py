@@ -15,6 +15,8 @@ from .gui import (
 )
 from .gui_evidence import build_gui_evidence_graph
 from .behavior_graph import build_behavior_evidence_graph
+from .semantic_ir import build_semantic_ir
+from .reconstruction_verify import verify_reconstruction
 from .gui_state import build_gui_state_machine
 from .gui_xaml import extract_xaml_ui_evidence, parse_xaml_file
 from .pe_deep import pe_deep_scan
@@ -45,6 +47,8 @@ __all__ = [
     "gui_visual_regression",
     "build_gui_evidence_graph",
     "build_behavior_evidence_graph",
+    "build_semantic_ir",
+    "verify_reconstruction",
     "build_gui_state_machine",
     "extract_xaml_ui_evidence",
     "parse_xaml_file",
