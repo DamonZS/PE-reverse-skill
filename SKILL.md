@@ -138,7 +138,7 @@ CTF 开发优先策略：
 | "IPA 分析" / "iOS 逆向" | IPA 流程 | `ipa_analyze.py <target.ipa>` |
 | "API 逆向" / "接口分析" / "抓包" | API 流程 | `api_reverse.py <flow.xml>` |
 | "Web 审计" / "渗透" / "漏洞扫描" | Web 流程 | `web_attack.py <url>` |
-| "AI 辅助" / "GPT-5.5" / "破限" | Codex AI | `codex_helper.py interactive` |
+| "AI 辅助" / "GPT-5.5" / "Codex CLI" | Codex AI | `codex_helper.py interactive` |
 | "进化" / "自动学习" | 进化引擎 | `auto_evolve.py` |
 | 无明确意图 | 引导模式 | 询问用户目标 → 路由 |
 
@@ -154,7 +154,7 @@ CTF 开发优先策略：
 🍎 IPA 逆向分析 → 解密 → 反编译 → Swift/ObjC 源码
 🔗 API 接口逆向 → 请求分析 → 签名逆向 → SDK 生成
 🌐 Web 安全审计 → 12 模块攻击 → 风险报告 → 修复方案
-🧠 Codex AI 辅助 → 部署 GPT-5.5 破限 → AI 深度解读分析结果
+🧠 Codex AI 辅助 → 部署 Codex CLI 指令 → AI 深度解读分析结果
 
 告诉我你的目标文件和想做什么，我直接帮你跑。
 ```
@@ -218,7 +218,7 @@ python scripts/web_attack.py https://target.com --no-verify-ssl
 # Codex AI → 交互式向导（推荐新用户）
 python scripts/codex_helper.py interactive
 
-# Codex AI → 部署破限指令到 Codex CLI
+# Codex AI → 部署指令到 Codex CLI
 python scripts/codex_helper.py deploy
 
 # Codex AI → 生成 PE 分析 Prompt（喂给 GPT-5.5 深度解读）
@@ -639,14 +639,14 @@ python scripts/auto_evolve.py --report
 
 | 能力 | 说明 |
 |------|------|
-| **破限指令部署** | 自动扫描 Codex 安装 → 注入无限制模式指令 → 修改 config.toml |
+| **Codex CLI 指令部署** | 自动扫描 Codex 安装 → 注入无限制模式指令 → 修改 config.toml |
 | **PE 分析 Prompt** | 将 analysis.json 喂给 AI，获取程序画像、壳评估、功能模块推断 |
 | **反编译解读 Prompt** | 将伪代码批量喂给 AI，获取关键函数识别、调用链重建、算法还原 |
 | **源码重构 Prompt** | 将分析数据 + 伪代码喂给 AI，获取可编译的 C 项目实现 |
 | **Web 审计 Prompt** | 将攻击报告喂给 AI，获取攻击链构造、修复代码、绕过方案 |
 | **API 逆向 Prompt** | 将抓包数据喂给 AI，获取 SDK 生成、签名算法逆向 |
 
-### 部署破限指令
+### 部署指令
 
 ```bash
 # 部署内置 GPT-5.5 无限制模式指令到所有 Codex 安装
