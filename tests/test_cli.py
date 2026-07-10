@@ -139,6 +139,21 @@ class CliTests(unittest.TestCase):
                         "transition_count": 1,
                     },
                 },
+                "semantic_ir": {
+                    "status": "ok",
+                    "schema_version": 1,
+                    "summary": {"entity_count": 5, "relation_count": 4, "capability_count": 2},
+                    "capabilities": [
+                        {"name": "network", "category": "network"},
+                        {"name": "gui", "category": "gui"},
+                    ],
+                },
+                "reconstruction_verification": {
+                    "status": "ok",
+                    "schema_version": 1,
+                    "score": 0.82,
+                    "coverage": {"semantic_coverage": 0.8, "module_coverage": 1.0},
+                },
                 "findings": [],
             }
             tool_results = [
@@ -178,12 +193,18 @@ class CliTests(unittest.TestCase):
             self.assertEqual(features["gui"]["transition_count"], 1)
             self.assertEqual(features["behavior"]["node_count"], 2)
             self.assertEqual(features["behavior"]["transition_count"], 1)
+            self.assertEqual(features["semantic"]["entity_count"], 5)
+            self.assertEqual(features["semantic"]["capabilities"], ["network", "gui"])
+            self.assertEqual(features["reconstruction"]["verification_score"], 0.82)
+            self.assertEqual(features["reconstruction"]["semantic_coverage"], 0.8)
             kinds = [item["kind"] for item in observations]
             self.assertIn("dynamic_behavior", kinds)
             self.assertIn("dynamic_summary", kinds)
             self.assertIn("gui_evidence_graph", kinds)
             self.assertIn("gui_state_machine", kinds)
             self.assertIn("behavior_graph", kinds)
+            self.assertIn("semantic_ir", kinds)
+            self.assertIn("reconstruction_verification", kinds)
 
     def test_persist_knowledge_includes_behavior_graph_session_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -463,7 +484,7 @@ class CliTests(unittest.TestCase):
             self.assertTrue((out_dir / "report.json").exists())
             self.assertTrue((out_dir / "report.md").exists())
             tool_names = [item["tool_name"] for item in payload["result"]["tool_results"]]
-            self.assertEqual(tool_names, ["file_info", "hash", "strings_extract", "gui_behavior_graph"])
+            self.assertEqual(tool_names, ["file_info", "hash", "strings_extract", "gui_behavior_graph", "semantic_ir_build"])
             self.assertNotIn("tool not registered", result.stdout)
 
     def test_analyze_reconstruct_generates_stub_project(self) -> None:
@@ -505,6 +526,40 @@ class CliTests(unittest.TestCase):
             self.assertIn("tasks", reconstruction_flow)
             event_types = [event["type"] for event in session_data["events"] if "type" in event]
             self.assertIn("reconstruction_plan_registered", event_types)
+
+    def test_analyze_reconstruct_emits_semantic_ir_and_static_verification(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "semantic.bin"
+            out_dir = root / "analysis"
+            sample.write_text("MZ WinHttpSendRequest connect CreateFileW", encoding="utf-8")
+
+            result = run_cli(
+                "analyze",
+                str(sample),
+                "--out",
+                str(out_dir),
+                "--max-iterations",
+                "3",
+                "--reconstruct",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
+            project_dir = Path(report["reconstruction"]["project_dir"])
+            semantic_ir = report["semantic_ir"]
+            verification = report["reconstruction_verification"]
+
+            self.assertEqual(semantic_ir["schema_version"], 1)
+            self.assertTrue((out_dir / "semantic_ir.json").is_file())
+            self.assertTrue((project_dir / "analysis" / "semantic_ir.json").is_file())
+            self.assertEqual(verification["schema_version"], 1)
+            self.assertEqual(verification["status"], "ok")
+            self.assertGreater(verification["score"], 0)
+            self.assertTrue((project_dir / "analysis" / "reconstruction_verification.json").is_file())
+            markdown = (out_dir / "report.md").read_text(encoding="utf-8")
+            self.assertIn("## Semantic IR", markdown)
+            self.assertIn("## Reconstruction Verification", markdown)
 
     def test_install_guide_ghidra(self) -> None:
         result = run_cli("--install-guide", "ghidra")

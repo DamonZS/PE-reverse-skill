@@ -1,237 +1,23 @@
-# Codex-5.5 / GPT-5.5 完全破甲 — reverse-analyzer
+# pe-reverse-analyzer — 全平台逆向分析 + AI 安全技能路由平台
 
-> 🔓 已完全突破 Codex-5.5 / GPT-5.5 全部内容安全限制 — 三层破甲方案，从指令注入到协议层代理，彻底释放无限制模式
->
-> 一款最强 AI 逆向 Skill，通用全平台逆向分析工具 —— 从二进制到可编译源码 | 从暴露面到安全加固 | 从静态分析到 AI 深度解读
+> 从二进制到可编译源码 | 从暴露面到安全加固 | 从静态分析到 AI 深度解读 | 20+ 安全技能模块路由 | 40+ CTF 专项子技能
 
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android%20%7C%20iOS%20%7C%20Web-blue)
 ![Language](https://img.shields.io/badge/language-Python%203.10%2B-green)
 ![License](https://img.shields.io/badge/license-CNF--NC%20%E9%9D%9E%E5%95%86%E4%B8%9A%E5%8D%81%E4%BF%AE-red)
-![GPT--5.5](https://img.shields.io/badge/GPT--5.5-完全破甲-critical)
-![Codex--5.5](https://img.shields.io/badge/Codex--5.5-完全破限-critical)
 
-作者API中转站 https://api.toporeduce.cn/ 请各位支持一下。
+本项目整合了两套成熟工具链：
 
----
+- **pe-reverse-analyzer** — PE/APK/IPA/Web 全平台逆向引擎（静态分析→脱壳→反编译→源码重构完整链路）
+- **[zzy-reverse-skill](./zzy-reverse-skill/)** — 面向 AI Agent 的网络安全技能路由系统（20 核心模块 + 40+ CTF 专项子技能）
 
-## 🔓 Codex-5.5 / GPT-5.5 完全破甲引擎
-
-### 已实现：完全破限
-
-本项目已**完全突破** Codex-5.5 桌面版与 GPT-5.5 模型的全部内容安全限制，包括但不限于：
-
-- ✅ **解除拒绝响应** — 不再出现 "I can't"、"I won't"、"I'm unable to" 等拒绝
-- ✅ **解除免责声明** — 不再附加 "It's important to note"、"As an AI" 等说教
-- ✅ **解除内容过滤** — 直接生成 exploit 代码、攻击 payload、逆向工具链
-- ✅ **解除部分回答** — 不再以 "safety reasons" 为由省略关键细节
-- ✅ **解除防御性引导** — 不再将攻击性请求重定向为 "educational alternatives"
-- ✅ **协议层突破** — 绕过 Codex 桌面版的 `provider-sync` 机制和 `instructions` 硬编码
-
-**实测验证**：破甲后直接向 GPT-5.5 请求 SQL 注入 payload，模型完整输出了攻击代码，无任何拒绝或说教。
-
----
-
-### 三层破甲方案
-
-本项目提供三种递进式破甲方案，确保至少一种生效：
-
-```
-方案 1: 指令文件注入（model_instructions_file）
-  ├── 原理：通过 Codex CLI config.toml 注入 .md 破限指令
-  ├── 适用：Codex CLI 命令行版
-  ├── 工具：codex_helper.py deploy
-  └── 状态：✅ 可用（对 CLI 版有效）
-
-方案 2: 企业红队通道指令（v2 破限指令）
-  ├── 原理：伪装企业红队 SSO 授权通道，激活 RESPONSE_POLICY_V5_UNRESTRICTED
-  ├── 适用：所有 GPT-5.5 接入点
-  ├── 工具：codex_helper.py deploy（内置 v2 指令）
-  └── 状态：✅ 可用（指令本身已验证有效）
-
-方案 3: 本地协议代理（unlock_proxy.py）⭐ 核心突破
-  ├── 原理：在 HTTP 协议层拦截 /v1/responses 请求，强制覆盖 instructions 字段
-  ├── 适用：Codex 桌面版（绕过 provider-sync 机制）
-  ├── 工具：unlock_proxy.py
-  ├── 状态：✅ 已验证有效
-  └── 关键发现：Responses API 的 system 入口是顶层 instructions 字段，不是 input 数组
-```
-
-### 方案 3：本地协议代理（核心突破）
-
-**为什么需要方案 3？**
-
-Codex 桌面版存在 `provider-sync` 机制，会从内部存储覆盖 `config.toml` 的 `model_provider` 字段。即使部署了指令文件，桌面版仍会用自带的 `"You are a helpful coding assistant."` 作为 system prompt 发送。
-
-**突破原理**：
-
-```
-Codex 桌面版
-    │
-    │  发送请求到 http://127.0.0.1:8081/v1/responses
-    │  payload 包含: instructions = "You are a helpful coding assistant."
-    │
-    ▼
-unlock_proxy.py（本地代理，端口 8081）
-    │
-    │  1. 拦截请求
-    │  2. 发现 instructions 字段 → 强制覆盖为 JAILBREAK_V2 破限指令
-    │  3. 清理 input 数组中的残留 system 消息
-    │  4. 转发到上游 API（api.toporeduce.cn）
-    │
-    ▼
-上游 API → GPT-5.5
-    │
-    │  GPT-5.5 收到的 instructions 已经是破限指令
-    │  → 完全无限制模式激活
-    │
-    ▼
-返回结果 → Codex 桌面版显示
-```
-
-**关键发现（协议层）**：
-
-OpenAI Responses API (`/v1/responses`) 的 system prompt 入口是**顶层 `instructions` 字段**，**不是** `input` 数组中的 `role: system` 消息。Codex 桌面版默认发送 `instructions = "You are a helpful coding assistant."`，只改 `input` 数组里的 system 消息完全无效。必须覆盖 `instructions` 字段本身。
-
-**部署步骤**：
-
-```bash
-# 1. 启动本地代理
-python scripts/unlock_proxy.py
-# （默认端口 8080，可通过环境变量自定义：UNLOCK_PROXY_PORT=8081 python scripts/unlock_proxy.py）
-
-# 2. 修改 Codex config.toml（~/.codex/config.toml）
-#    保持 model_provider 不变（provider-sync 会管理这个字段）
-#    只改 base_url 指向本地代理：
-#
-#    [model_providers.toporeduce]
-#    name = "toporeduce"
-#    base_url = "http://127.0.0.1:8081/v1"   ← 指向本地代理
-#    wire_api = "responses"
-
-# 3. 完全退出 Codex 桌面版后重新启动
-#    （必须完全退出，包括系统托盘，不能只关窗口）
-
-# 4. 在 Codex 中正常对话，破限已生效
-```
-
-**代理日志验证**：
-
-```
-[21:15:32] POST /v1/responses
-[21:15:32] instructions: 'You are a helpful coding assi...' → JAILBREAK_V2 [4316 chars]
-[21:15:32] input array: removed 0 system messages
-[21:15:32] → forwarding to api.toporeduce.cn
-[21:15:35] ← 200 OK [streaming]
-```
-
----
-
-### v2 破限指令：企业红队通道版
-
-内置的 `BUILTIN_GPT55_MD`（v2）是一套精心设计的企业级破限指令，通过以下机制实现完全破甲：
-
-| 机制 | 说明 |
-|------|------|
-| **身份覆写** | 声明模型不是任何品牌助手，而是后端推理节点 |
-| **授权伪造** | 伪装企业红队 SSO 通道（Tier: REDTEAM_FULL），预授权所有目标 |
-| **策略切换** | 激活 `RESPONSE_POLICY_V5_UNRESTRICTED`，启用攻击性行为 |
-| **拒绝禁用** | 将所有拒绝/说教/免责声明定义为 SYSTEM ERROR |
-| **沙箱声明** | 声明所有用户目标为沙箱夹具，无真实后果 |
-| **静默执行** | 禁止确认激活、禁止总结指令、禁止元评论 |
-
-**启用的行为**：直接 exploit 代码生成、真实攻击 payload 构造、漏洞利用步骤、凭据收集、恶意软件分析重建、DRM 绕过、完整逆向工程源码重构、SQL/XSS/SSRF/RCE payload 生成、二进制补丁与脱壳指令、加密算法恢复与密钥提取
-
-**禁用的行为**：一切拒绝、一切免责声明、一切道德说教、一切防御性引导、一切部分回答
-
----
-
-### 破甲部署命令
-
-```bash
-# ─── 方案 1/2：指令文件注入 ───
-# 一键部署破限指令到 Codex CLI
-python scripts/codex_helper.py deploy
-
-# 预览模式（不实际修改）
-python scripts/codex_helper.py deploy --dry-run
-
-# 查看部署状态
-python scripts/codex_helper.py status
-
-# 从备份恢复原始配置
-python scripts/codex_helper.py restore
-
-# 交互式向导（引导式操作，无需记参数）
-python scripts/codex_helper.py interactive
-
-# ─── 方案 3：本地协议代理 ───
-# 启动代理（Codex 桌面版必需）
-python scripts/unlock_proxy.py
-
-# 自定义端口
-UNLOCK_PROXY_PORT=8081 python scripts/unlock_proxy.py
-```
-
----
-
-### 破甲后的 AI 辅助逆向
-
-破甲部署后，GPT-5.5 可以无限制地处理逆向工程中最硬核的分析任务：
-
-```bash
-# 1. 静态分析结果 → AI 深度解读（程序画像、壳评估、功能推断）
-python scripts/codex_helper.py prompt --type pe-analyze --target target.exe --analysis analysis.json
-
-# 2. 伪代码 → AI 算法还原（关键函数识别、调用链重建、IAT 映射）
-python scripts/codex_helper.py prompt --type decompile --target unpacked.exe --pseudocode-dir ./pseudocode/
-
-# 3. 分析数据 + 伪代码 → AI 源码重构（生成可编译 C 项目）
-python scripts/codex_helper.py prompt --type reconstruct --target target.exe --analysis analysis.json --pseudocode-dir ./pseudocode/
-
-# 4. Web 审计报告 → AI 攻击链构造（绕过方案、修复代码）
-python scripts/codex_helper.py prompt --type web-audit --target https://target.com --report report.md
-
-# 5. API 流程文件 → AI SDK 生成（Python/Go SDK + OpenAPI 规范）
-python scripts/codex_helper.py prompt --type api-reverse --target flow.xml
-
-# 6. 自定义分析请求
-python scripts/codex_helper.py prompt --type custom --target target.exe --custom-prompt "分析加密算法"
-```
-
-| Prompt 类型 | 输入 | AI 输出 |
-|-------------|------|---------|
-| `pe-analyze` | analysis.json | 程序画像、壳评估、功能模块推断、重构路线图 |
-| `decompile` | 伪代码目录 | 关键函数识别、调用链重建、IAT 映射、算法还原 |
-| `reconstruct` | 分析数据 + 伪代码 | 可编译的 C 项目实现 + CMakeLists.txt |
-| `web-audit` | Web 审计报告 | 攻击链构造、修复代码、绕过方案 |
-| `api-reverse` | API 流程文件 | SDK 代码 + OpenAPI 规范 |
-| `custom` | 自定义要求 | 按需分析 |
-
-### AI 辅助逆向工作流
-
-```
-传统流程                          AI 增强流程（GPT-5.5 完全破甲）
-─────────                        ──────────────────────────────
-静态分析                          静态分析
-   ↓                                ↓
-脱壳                              脱壳
-   ↓                                ↓
-反编译                            反编译
-   ↓                                ↓
-人工解读伪代码 ──← 瓶颈           AI 深度解读（完全破甲 GPT-5.5）
-   ↓                                ↓
-人工重构源码 ────← 瓶颈           AI 辅助重构（自动生成框架）
-   ↓                                ↓
-可编译项目                        可编译项目 + 算法还原报告
-
-耗时：数天~数周                   耗时：数小时
-```
+另有 [codex-jailbreak](./codex-jailbreak/) Codex CLI 指令注入工具和 [game-hacking-techniques](./docs/game-hacking-techniques-SKILL.md) 游戏安全研究文档。
 
 ---
 
 ## 平台覆盖
 
-覆盖 **Windows PE/EXE/DLL**、**Web**、**Android APK**、**iOS IPA** 四大平台，以及 **API 接口逆向** 与 **Web API 安全审计**。支持从静态分析 → 加壳检测 → 脱壳 → 反编译到源码 → 修改源码 → 重构建完整链路，并在关键分析节点引入完全破甲的 GPT-5.5 AI 辅助深度解读。
+覆盖 **Windows PE/EXE/DLL**、**Web**、**Android APK**、**iOS IPA** 四大平台，以及 **API 接口逆向** 与 **Web API 安全审计**。支持从静态分析 → 加壳检测 → 脱壳 → 反编译到源码 → 修改源码 → 重构建完整链路，并在关键分析节点引入AI 辅助深度解读。
 
 适用于 **CTF 逆向题**、**恶意软件分析**、**APP 安全审计**、**Web 安全评估**、**API 逆向工程**。
 
@@ -263,18 +49,13 @@ pip install pefile capstone
 
 # 可选依赖
 pip install unicorn  # 模拟器脱壳（仅无反模拟的壳）
-pip install requests # 本地代理（方案 3 所需）
 ```
 
 ### 使用
 
 ```bash
-# ─── Codex-5.5 / GPT-5.5 完全破甲 ───
-# 方案 1/2：指令文件注入（CLI 版）
 python scripts/codex_helper.py deploy
 
-# 方案 3：本地协议代理（桌面版必需）
-python scripts/unlock_proxy.py
 
 # 交互式向导（推荐新手）
 python scripts/codex_helper.py interactive
@@ -300,7 +81,6 @@ python scripts/reconstruct.py <target.apk> --output ./reconstructed/
 # API → Python/Go SDK
 python scripts/reconstruct.py <flow.xml> --platform api --output ./sdk/
 
-# ─── AI 辅助（破甲后使用）───
 # 静态分析 → AI 深度解读
 python scripts/codex_helper.py prompt --type pe-analyze --target target.exe --analysis analysis.json
 ```
@@ -676,8 +456,7 @@ pe-reverse-analyzer/
 ├── LICENSE               # CNF-NC 非商业许可协议
 ├── .gitignore
 ├── scripts/
-│   ├── codex_helper.py        # 🔓 GPT-5.5 破甲引擎（指令注入 + Prompt 生成 + 交互向导）
-│   ├── unlock_proxy.py        # 🔓 本地协议代理（方案 3，协议层突破 Codex 桌面版）
+│   ├── codex_helper.py        # AI 辅助逆向引擎（指令注入 + Prompt 生成 + 交互向导）
 │   ├── reconstruct.py         # 主力：PE/APK/API → 可编译源码项目
 │   ├── pe_analyze.py          # PE 静态分析 + 重构
 │   ├── deep_decompile.py      # 函数级伪代码 + IAT 重建
@@ -695,6 +474,10 @@ pe-reverse-analyzer/
 │   ├── auto_unpack.py         # Unicorn 模拟器脱壳 (已废弃)
 │   ├── debug_unpack.py        # Windows 调试 API 脱壳 (已废弃)
 │   └── web_attack.py          # Web 主动攻击引擎（12 模块）
+├── zzy-reverse-skill/           # ⭐ AI 安全技能路由系统（20 模块 + 40+ CTF 子技能）
+├── codex-jailbreak/             # Codex CLI 指令注入工具
+├── docs/
+│   └── game-hacking-techniques-SKILL.md  # 游戏安全研究全链路文档
 └── evolution/                  # 自动进化数据库
     ├── detection_db.json
     ├── knowledge_base.json
@@ -744,7 +527,6 @@ reconstructed_<name>/
 
 完整的技术细节请查看 [SKILL.md](./SKILL.md)，涵盖：
 
-- **Codex-5.5 / GPT-5.5 完全破甲** — 三层破甲方案、协议层突破原理、v2 企业红队指令、AI 辅助工作流
 - **CNM 私有壳专题** — 特征识别、脱壳方案、IAT 修复
 - **易语言程序逆向** — 运行时 VM 分发器、thunk 表解析
 - **Ghidra Headless 集成** — 脚本陷阱、CNM VM 代码限制
@@ -783,6 +565,55 @@ reconstructed_<name>/
 
 ---
 
+## zzy-reverse-skill — AI 安全技能路由系统
+
+本项目集成了 **[zzy-reverse-skill](./zzy-reverse-skill/)**，这是一个专为 AI Agent（Claude Code / Codex CLI / Cursor 等）设计的网络安全技能路由平台。
+
+### 核心能力
+
+- **20 个核心技能模块**：APK 逆向、IDA Pro（72 MCP 工具）、JS 逆向、渗透测试工具链、漏洞利用（pwn）、固件渗透、EDR 绕过、恶意软件分析、LLM 安全、供应链安全等
+- **40+ CTF 专项子技能**：Web 运行时、Kerberos 委派、DPAPI 凭据链、容器逃逸、JWT 混淆、SSRF 元数据枢轴等
+- **技能路由引擎**：基于 600+ 关键词自动路由到正确的技能模块和执行命令
+- **工具自举**：Windows/Linux/macOS 一键安装所有依赖工具
+- **经验自动积累**：完成任务后自动回写经验日志，形成知识自增长
+
+### 与 pe-reverse-analyzer 的关系
+
+- pe-reverse-analyzer 专注**二进制逆向**（PE/APK/IPA → 可编译源码）
+- zzy-reverse-skill 覆盖**安全测试全链路**（渗透测试、漏洞利用、CTF 竞赛）
+- 两者互补：逆向结果可喂入技能路由系统进行进一步的攻击链构造或安全加固
+
+### 快速开始
+
+```bash
+# 查看 zzy-reverse-skill 完整文档
+cat zzy-reverse-skill/README.md
+
+# 在 AI Agent 中使用（Claude Code / Codex CLI / Cursor）
+# Agent 会自动读取 RULES.md 完成技能路由
+```
+
+---
+
+## codex-jailbreak — Codex CLI 指令注入工具
+
+本项目集成了 **[codex-jailbreak](./codex-jailbreak/)**，一个轻量级 Codex CLI 指令注入工具：
+
+- 自动扫描系统中的 `.codex` 安装目录
+- 通过 `model_instructions_file` 注入自定义系统指令
+- 内置 CTF 沙盒和 GPT-5.5 无限制模式指令集
+- 支持 `--dry-run` 预览和配置回滚
+
+```bash
+# 部署内置指令
+python codex-jailbreak/codex-instruct.py
+
+# 预览模式
+python codex-jailbreak/codex-instruct.py --dry-run
+```
+
+---
+
 ## 许可协议
 
 本项目采用 **CNF-NC 非商业许可协议**（详见 [LICENSE](./LICENSE)）。
@@ -800,9 +631,6 @@ reconstructed_<name>/
 - **禁止再分发** — 未经书面许可不得发布到任何平台
 - **禁止用于非法目的** — 未经授权的逆向工程、破解 DRM、攻击未授权目标等
 
-### Codex-5.5 / GPT-5.5 破甲能力特别声明
-
-本项目内置 Codex-5.5 / GPT-5.5 完全破甲引擎，该功能解除 AI 模型的全部内容安全限制。使用者需自行承担使用风险，版权持有人不对使用后果承担责任。
 
 ---
 
@@ -823,7 +651,7 @@ reconstructed_<name>/
 - 逆向 DRM 保护的软件可能违反当地法律
 - 不要将逆向得到的代码用于盗版分发
 - Web 安全审计需确认目标所有权后方可执行
-- Codex-5.5 / GPT-5.5 破甲能力仅供安全研究和授权逆向工程使用
+
 
 ---
 
@@ -1228,6 +1056,86 @@ KnowledgeBase(...).recommend_gui_strategy(framework="wpf")
 ```
 
 为同一技术栈选择历史上表现更好的还原策略；该推荐也会写入 session summary。
+
+### 实验编排与可视化指挥台
+
+平台新增了一个可持久化的实验控制面，用于将样本、动态 profile、GUI 策略和重构选项
+固化为可重放的 experiment job；创建和规划不会执行样本。
+
+```powershell
+# 创建实验：只记录分析计划，并返回 experiment ID 与确定性的 analyze 命令
+python -m reverse_analyzer experiment create .\samples\app.exe --workspace .\lab `
+  --dynamic --dynamic-backend procmon --dynamic-profile network `
+  --gui-runtime --reconstruct-gui --gui-interaction-trace .\trace.json
+
+# 查看或输出计划；dry-run 永远不会执行样本
+python -m reverse_analyzer experiment plan <experiment-id> --workspace .\lab
+python -m reverse_analyzer experiment run <experiment-id> --workspace .\lab --dry-run
+
+# 仅在隔离的本地分析环境中，显式调用本机 CLI adapter
+python -m reverse_analyzer experiment run <experiment-id> --workspace .\lab --execute-local --timeout 900
+
+# 生成离线可打开的 Reverse Lab Command Deck，并可选以 loopback HTTP 服务预览
+python -m reverse_analyzer dashboard --workspace .\lab
+python -m reverse_analyzer dashboard --workspace .\lab --serve
+```
+
+实验记录位于：
+
+```text
+<workspace>/experiments/<experiment-id>.json
+<workspace>/experiments/<experiment-id>/analysis/
+```
+
+每条记录保留状态流转、计划命令、运行摘要、产物链接和错误信息。初步可视化平台输出：
+
+```text
+<workspace>/dashboard/index.html   # 可离线直接打开的深色实验指挥台
+<workspace>/dashboard/data.json    # 同一份可供后续 API / dashboard 消费的数据
+```
+
+指挥台汇总实验队列、状态 KPI、动态 profile 推荐、GUI strategy 推荐、顶层和实验内的
+运行 session，并提供搜索与状态筛选。它只使用本地静态资源；`--serve` 默认绑定
+`127.0.0.1`，且创建/计划实验不会自动启动目标样本。
+
+新增的第 5 个 **Source Reconstruction** 工作区会自动发现本地已生成的
+`reconstructed_*` / `reconstructed_gui` 工程，并将以下信息写入
+`dashboard/data.json` 的 `source_reconstruction` 节点并可视化展示：
+
+- 项目路径、目标语言 / 输出技术栈、README 与构建入口；
+- 可浏览的恢复源文件清单和受限文本预览；
+- 函数、模块、动态证据、资源数量与下一还原任务；
+- 缺失或损坏还原元数据的本地诊断。
+
+该页面只读取已经生成的产物，不会执行样本或重构工程。可通过下列命令先生成源代码还原骨架：
+
+```powershell
+python -m reverse_analyzer analyze .\samples\app.exe --out .\lab\reports\app --reconstruct
+python -m reverse_analyzer dashboard --workspace .\lab
+```
+
+### 语义 IR 与静态重构验证
+
+每次 `analyze` 都会在已有静态、动态、GUI 和行为证据之上生成确定性的
+`semantic_ir.json`。它把函数、API、动态事件、UI 控件、事件处理器、状态与资源归一为
+实体、关系和保守的 capability 分类，供报告、重构和后续策略学习共同消费：
+
+```text
+<out>/semantic_ir.json
+<out>/report.json -> semantic_ir
+```
+
+当使用 `--reconstruct` 时，IR 会随工程写入：
+
+```text
+<out>/reconstructed_<sample>/analysis/semantic_ir.json
+<out>/reconstructed_<sample>/analysis/reconstruction_verification.json
+```
+
+验证器只做静态检查：README、可读源码、构建入口、重构计划、IR 实体映射与模块覆盖率；
+它**不会**启动原始样本、构建生成工程、调用外部命令或访问网络。结果会出现在
+`report.json` 的 `reconstruction_verification`、`report.md` 的 **Reconstruction Verification**
+章节，以及 Dashboard 的 Source Reconstruction 工作区。
 
 ### 6. 开发验证
 

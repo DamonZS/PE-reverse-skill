@@ -220,6 +220,60 @@ class ReportBuilderTests(unittest.TestCase):
         self.assertIn("Reconstruction Plan", markdown)
         self.assertIn("YARA match: SuspiciousWindowsApiCombo", {item["title"] for item in report["findings"]})
 
+    def test_report_builder_exposes_semantic_ir_and_reconstruction_verification(self):
+        session = SimpleNamespace(session_id="semantic-1", target="sample.exe", status="succeeded", artifacts=[])
+        tool_results = [
+            {
+                "tool_name": "semantic_ir_build",
+                "result": {
+                    "tool": "semantic_ir_build",
+                    "status": "ok",
+                    "data": {
+                        "status": "ok",
+                        "schema_version": 1,
+                        "summary": {
+                            "entity_count": 4,
+                            "relation_count": 3,
+                            "capability_count": 2,
+                            "function_count": 1,
+                            "api_count": 1,
+                            "dynamic_event_count": 1,
+                            "ui_control_count": 0,
+                            "ui_state_count": 0,
+                        },
+                        "capabilities": [
+                            {"name": "network", "category": "network", "confidence": 0.9, "evidence_count": 2}
+                        ],
+                    },
+                },
+            },
+            {
+                "tool_name": "reconstruction_verify",
+                "result": {
+                    "tool": "reconstruction_verify",
+                    "status": "ok",
+                    "data": {
+                        "status": "ok",
+                        "schema_version": 1,
+                        "score": 0.8,
+                        "coverage": {"semantic_coverage": 0.75, "module_coverage": 1.0},
+                        "checks": [{"name": "source_files", "status": "ok", "detail": "2 source files", "weight": 0.2}],
+                        "recommendations": [],
+                    },
+                },
+            },
+        ]
+
+        builder = ReportBuilder(session, tool_results)
+        report = builder.build()
+        markdown = builder.to_markdown()
+
+        self.assertEqual(report["semantic_ir"]["summary"]["entity_count"], 4)
+        self.assertEqual(report["semantic_ir"]["capabilities"][0]["name"], "network")
+        self.assertEqual(report["reconstruction_verification"]["score"], 0.8)
+        self.assertIn("## Semantic IR", markdown)
+        self.assertIn("## Reconstruction Verification", markdown)
+
     def test_report_builder_extracts_ghidra_capability_findings(self):
         session = SimpleNamespace(session_id="s5", target="sample.exe", status="succeeded", artifacts=[])
         tool_results = [

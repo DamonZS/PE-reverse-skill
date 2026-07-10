@@ -36,6 +36,8 @@ class ReportBuilder:
         behavior_graph = _behavior_graph(tool_trace)
         decompiler = _decompiler(tool_trace)
         reconstruction = _reconstruction(self.session, tool_trace)
+        semantic_ir = _semantic_ir(tool_trace)
+        reconstruction_verification = _reconstruction_verification(tool_trace)
         findings = _findings(self.knowledge, tool_trace)
         recommendations = _recommendations(
             findings,
@@ -58,6 +60,8 @@ class ReportBuilder:
             "behavior_graph": behavior_graph,
             "decompiler": decompiler,
             "reconstruction": reconstruction,
+            "semantic_ir": semantic_ir,
+            "reconstruction_verification": reconstruction_verification,
             "findings": findings,
             "recommendations": recommendations,
             "artifacts": artifacts,
@@ -201,6 +205,26 @@ class ReportBuilder:
                 lines.append(f"- **Linked Handlers:** {summary.get('linked_handler_count')}")
             if summary.get("dynamic_event_count") is not None:
                 lines.append(f"- **Dynamic Events:** {summary.get('dynamic_event_count')}")
+
+        semantic_ir = report.get("semantic_ir") or {}
+        if isinstance(semantic_ir, Mapping) and semantic_ir:
+            summary = semantic_ir.get("summary") if isinstance(semantic_ir.get("summary"), Mapping) else {}
+            lines.extend(["", "## Semantic IR", ""])
+            lines.append(f"- **Status:** {semantic_ir.get('status') or 'unknown'}")
+            lines.append(f"- **Schema Version:** {semantic_ir.get('schema_version') or 'unknown'}")
+            lines.append(f"- **Entities:** {summary.get('entity_count', len(semantic_ir.get('entities') or []))}")
+            lines.append(f"- **Relations:** {summary.get('relation_count', len(semantic_ir.get('relations') or []))}")
+            lines.append(f"- **Capabilities:** {summary.get('capability_count', len(semantic_ir.get('capabilities') or []))}")
+            capabilities = semantic_ir.get("capabilities") or []
+            if capabilities:
+                lines.append("- **Top Capabilities:**")
+                for capability in capabilities[:8]:
+                    if not isinstance(capability, Mapping):
+                        continue
+                    lines.append(
+                        f"  - {capability.get('name') or capability.get('category')}: "
+                        f"confidence={capability.get('confidence')} evidence={capability.get('evidence_count')}"
+                    )
 
         gui_analysis = report.get("gui_analysis") or {}
         if gui_analysis:
@@ -381,6 +405,30 @@ class ReportBuilder:
                     lines.append(
                         f"  - {task.get('name')}: {len(task.get('subtasks') or [])} subtasks"
                     )
+
+        reconstruction_verification = report.get("reconstruction_verification") or {}
+        if isinstance(reconstruction_verification, Mapping) and reconstruction_verification:
+            coverage = (
+                reconstruction_verification.get("coverage")
+                if isinstance(reconstruction_verification.get("coverage"), Mapping)
+                else {}
+            )
+            lines.extend(["", "## Reconstruction Verification", ""])
+            lines.append(f"- **Status:** {reconstruction_verification.get('status') or 'unknown'}")
+            if reconstruction_verification.get("score") is not None:
+                lines.append(f"- **Score:** {reconstruction_verification.get('score')}")
+            if coverage:
+                lines.append(
+                    "- **Coverage:** "
+                    f"semantic={coverage.get('semantic_coverage', 0)} "
+                    f"modules={coverage.get('module_coverage', 0)} "
+                    f"source_files={coverage.get('source_file_count', 0)}"
+                )
+            recommendations = reconstruction_verification.get("recommendations") or []
+            if recommendations:
+                lines.append("- **Verification Recommendations:**")
+                for item in recommendations[:6]:
+                    lines.append(f"  - {item}")
 
         lines.extend(["", "## Findings", ""])
         if report["findings"]:
@@ -824,6 +872,38 @@ def _behavior_graph(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
         payload = _tool_payload(trace)
         if not isinstance(payload, Mapping):
             return {}
+        result = dict(payload)
+        result.setdefault("status", _tool_status(trace))
+        return result
+    return {}
+
+
+def _semantic_ir(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Expose the deterministic semantic intermediate representation stage."""
+
+    for trace in reversed(tool_trace):
+        tool_name = str(trace.get("tool_name") or trace.get("tool") or "")
+        if tool_name != "semantic_ir_build":
+            continue
+        payload = _tool_payload(trace)
+        if not isinstance(payload, Mapping):
+            return {"status": _tool_status(trace)}
+        result = dict(payload)
+        result.setdefault("status", _tool_status(trace))
+        return result
+    return {}
+
+
+def _reconstruction_verification(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Expose static reconstruction verification without re-running a project."""
+
+    for trace in reversed(tool_trace):
+        tool_name = str(trace.get("tool_name") or trace.get("tool") or "")
+        if tool_name != "reconstruction_verify":
+            continue
+        payload = _tool_payload(trace)
+        if not isinstance(payload, Mapping):
+            return {"status": _tool_status(trace)}
         result = dict(payload)
         result.setdefault("status", _tool_status(trace))
         return result

@@ -1,0 +1,11 @@
+{
+    "schema_version": 2,
+    "commit": "",
+    "indexed_at": "2026-07-10T09:21:46Z",
+    "project": "D-Project-pe-reverse-analyzer-main",
+    "nodes": 1420,
+    "edges": 6450,
+    "original_size": 8323072,
+    "compressed_size": 1532413,
+    "compression_level": 3
+}
