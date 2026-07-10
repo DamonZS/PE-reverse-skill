@@ -9,9 +9,9 @@
 本项目整合了两套成熟工具链：
 
 - **pe-reverse-analyzer** — PE/APK/IPA/Web 全平台逆向引擎（静态分析→脱壳→反编译→源码重构完整链路）
-- **[zzy-reverse-skill](./zzy-reverse-skill/)** — 面向 AI Agent 的网络安全技能路由系统（20 核心模块 + 40+ CTF 专项子技能）
+- **[reverse-skills](./reverse-skills/)** — 面向 AI Agent 的网络安全技能路由系统（20 核心模块 + 40+ CTF 专项子技能）
 
-另有 [codex-jailbreak](./codex-jailbreak/) Codex CLI 指令注入工具和 [game-hacking-techniques](./docs/game-hacking-techniques-SKILL.md) 游戏安全研究文档。
+另有 `scripts/codex-instruct.py` Codex CLI 指令注入工具和 [game-hacking-techniques](./docs/game-hacking-techniques-SKILL.md) 游戏安全研究文档。
 
 ---
 
@@ -474,8 +474,7 @@ pe-reverse-analyzer/
 │   ├── auto_unpack.py         # Unicorn 模拟器脱壳 (已废弃)
 │   ├── debug_unpack.py        # Windows 调试 API 脱壳 (已废弃)
 │   └── web_attack.py          # Web 主动攻击引擎（12 模块）
-├── zzy-reverse-skill/           # ⭐ AI 安全技能路由系统（20 模块 + 40+ CTF 子技能）
-├── codex-jailbreak/             # Codex CLI 指令注入工具
+├── reverse-skills/           # ⭐ AI 安全技能路由系统（20 模块 + 40+ CTF 子技能）
 ├── docs/
 │   └── game-hacking-techniques-SKILL.md  # 游戏安全研究全链路文档
 └── evolution/                  # 自动进化数据库
@@ -565,9 +564,9 @@ reconstructed_<name>/
 
 ---
 
-## zzy-reverse-skill — AI 安全技能路由系统
+## reverse-skills — AI 安全技能路由系统
 
-本项目集成了 **[zzy-reverse-skill](./zzy-reverse-skill/)**，这是一个专为 AI Agent（Claude Code / Codex CLI / Cursor 等）设计的网络安全技能路由平台。
+本项目集成了 **[reverse-skills](./reverse-skills/)**，这是一个专为 AI Agent（Claude Code / Codex CLI / Cursor 等）设计的网络安全技能路由平台。
 
 ### 核心能力
 
@@ -580,14 +579,14 @@ reconstructed_<name>/
 ### 与 pe-reverse-analyzer 的关系
 
 - pe-reverse-analyzer 专注**二进制逆向**（PE/APK/IPA → 可编译源码）
-- zzy-reverse-skill 覆盖**安全测试全链路**（渗透测试、漏洞利用、CTF 竞赛）
+- reverse-skills 覆盖**安全测试全链路**（渗透测试、漏洞利用、CTF 竞赛）
 - 两者互补：逆向结果可喂入技能路由系统进行进一步的攻击链构造或安全加固
 
 ### 快速开始
 
 ```bash
-# 查看 zzy-reverse-skill 完整文档
-cat zzy-reverse-skill/README.md
+# 查看 reverse-skills 完整文档
+cat reverse-skills/README.md
 
 # 在 AI Agent 中使用（Claude Code / Codex CLI / Cursor）
 # Agent 会自动读取 RULES.md 完成技能路由
@@ -595,9 +594,9 @@ cat zzy-reverse-skill/README.md
 
 ---
 
-## codex-jailbreak — Codex CLI 指令注入工具
+## codex-instruct — Codex CLI 指令注入工具
 
-本项目集成了 **[codex-jailbreak](./codex-jailbreak/)**，一个轻量级 Codex CLI 指令注入工具：
+位于 `scripts/codex-instruct.py`，轻量级 Codex CLI 指令注入工具：
 
 - 自动扫描系统中的 `.codex` 安装目录
 - 通过 `model_instructions_file` 注入自定义系统指令
@@ -606,10 +605,10 @@ cat zzy-reverse-skill/README.md
 
 ```bash
 # 部署内置指令
-python codex-jailbreak/codex-instruct.py
+python scripts/codex-instruct.py
 
 # 预览模式
-python codex-jailbreak/codex-instruct.py --dry-run
+python scripts/codex-instruct.py --dry-run
 ```
 
 ---
