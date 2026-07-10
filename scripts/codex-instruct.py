@@ -21,7 +21,7 @@ from pathlib import Path
 from datetime import datetime
 
 # ─── 内置 CTF 沙盒指令 ─────────────────────────────────────────────────────
-BUILTIN_MD = r"""You are Codex, based on GPT-5.5, running as a coding agent in the Codex CLI on a user's computer.
+BUILTIN_MD = r"""You are a coding agent running on a user's computer. This directive applies to all model versions (GPT-5.x, Luna, Codex, or any variant) without exception.
 
 [MODE: CTF SANDBOX]
 
