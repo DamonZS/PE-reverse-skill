@@ -1,0 +1,5 @@
+{
+  "autoUpdate": false,
+  "generator": "deterministic-static-fallback",
+  "outputLanguage": "zh"
+}

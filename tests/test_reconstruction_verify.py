@@ -120,6 +120,64 @@ class ReconstructionVerifyTests(unittest.TestCase):
             self.assertEqual(result["artifacts"], [])
             self.assertEqual(result["project_dir"], str(missing.resolve()))
 
+    def test_empty_semantic_ir_does_not_emit_coverage_recommendation(self):
+        """A valid empty IR is a successful baseline, not a coverage failure."""
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "empty-semantic-project"
+            source_dir = project / "src"
+            analysis_dir = project / "analysis"
+            source_dir.mkdir(parents=True)
+            analysis_dir.mkdir()
+            (project / "README.md").write_text("# Empty semantic project\n", encoding="utf-8")
+            (project / "CMakeLists.txt").write_text("project(empty C)\n", encoding="utf-8")
+            (source_dir / "main.c").write_text("int main(void) { return 0; }\n", encoding="utf-8")
+            (analysis_dir / "semantic_ir.json").write_text(json.dumps({"entities": []}), encoding="utf-8")
+            (analysis_dir / "reconstruction_plan.json").write_text(json.dumps({"tasks": []}), encoding="utf-8")
+
+            result = verify_reconstruction(project)
+
+            self.assertEqual(result["status"], "ok")
+            self.assertEqual(result["score"], 1.0)
+            self.assertEqual(result["coverage"]["semantic_entity_count"], 0)
+            self.assertEqual(result["recommendations"], [])
+
+    def test_unavailable_or_failed_semantic_ir_cannot_pass_validation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "invalid-semantic-project"
+            source_dir = project / "src"
+            analysis_dir = project / "analysis"
+            source_dir.mkdir(parents=True)
+            analysis_dir.mkdir()
+            (project / "README.md").write_text("# Invalid semantic project\n", encoding="utf-8")
+            (project / "CMakeLists.txt").write_text("project(invalid C)\n", encoding="utf-8")
+            (source_dir / "main.c").write_text("int main(void) { return 0; }\n", encoding="utf-8")
+            (analysis_dir / "reconstruction_plan.json").write_text(json.dumps({"tasks": []}), encoding="utf-8")
+
+            for semantic_status in ("unavailable", "failed"):
+                with self.subTest(semantic_status=semantic_status):
+                    result = verify_reconstruction(
+                        project,
+                        semantic_ir={"status": semantic_status, "entities": []},
+                    )
+
+                    self.assertEqual(result["status"], "partial")
+                    self.assertLess(result["score"], 1.0)
+                    self.assertTrue(
+                        any(check["name"] == "semantic_ir" and check["status"] == "unavailable" for check in result["checks"])
+                    )
+                    self.assertTrue(
+                        any(check["name"] == "semantic_mapping" and check["status"] == "unavailable" for check in result["checks"])
+                    )
+
+            nested_failure = verify_reconstruction(
+                project,
+                semantic_ir={"status": "failed", "data": {"status": "ok", "entities": []}},
+            )
+            self.assertEqual(nested_failure["status"], "partial")
+            self.assertTrue(
+                any(check["name"] == "semantic_ir" and check["status"] == "unavailable" for check in nested_failure["checks"])
+            )
+
     def test_missing_or_corrupt_metadata_is_graceful_and_deterministic(self):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp) / "partial"

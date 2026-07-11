@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -432,9 +433,23 @@ def gui_visual_parse(
     return {"status": "ok", **data}
 
 
-def reconstruct_gui_project(path: str | os.PathLike[str], out_dir: str | os.PathLike[str], gui_analysis: Mapping[str, Any] | None = None) -> Dict[str, Any]:
+def reconstruct_gui_project(
+    path: str | os.PathLike[str],
+    out_dir: str | os.PathLike[str],
+    gui_analysis: Mapping[str, Any] | None = None,
+    *,
+    semantic_ir: Mapping[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Generate a GUI reconstruction skeleton and preserve static evidence.
+
+    ``semantic_ir`` is optional for direct callers, but the CLI supplies it so
+    the generated project can be statically verified without re-running the
+    original sample or any generated code.
+    """
+
     sample = _require_path(path)
     gui_analysis = gui_analysis or {}
+    semantic_payload = _normalize_semantic_ir(semantic_ir)
     strategy = gui_analysis.get("strategy") if isinstance(gui_analysis.get("strategy"), Mapping) else {}
     framework = str(gui_analysis.get("framework") or strategy.get("framework") or "unknown")
     output_stack = str(strategy.get("output_stack") or (STRATEGY_MAP.get(framework) or STRATEGY_MAP["unknown"])["output_stack"])
@@ -517,6 +532,19 @@ def reconstruct_gui_project(path: str | os.PathLike[str], out_dir: str | os.Path
     for asset in copied_assets:
         files[f"assets/{asset.relative_to(assets_dir).as_posix()}"] = str(asset)
     files["README.md"] = _write(project_dir / "README.md", _render_gui_readme(sample, framework, output_stack, gui_analysis))
+    reconstruction_plan = _build_gui_reconstruction_plan(
+        framework=framework,
+        output_stack=output_stack,
+        strategy=strategy,
+        source_file=_gui_source_file(files),
+        semantic_ir=semantic_payload,
+    )
+    files["analysis/reconstruction_plan.json"] = _write_json(
+        analysis_dir / "reconstruction_plan.json",
+        reconstruction_plan,
+    )
+    if semantic_payload:
+        files["analysis/semantic_ir.json"] = _write_json(analysis_dir / "semantic_ir.json", semantic_payload)
     return {
         "status": "ok",
         "project_dir": str(project_dir),
@@ -529,6 +557,8 @@ def reconstruct_gui_project(path: str | os.PathLike[str], out_dir: str | os.Path
         "artifacts": [{"name": name, "path": path_value, "kind": "gui-reconstruction"} for name, path_value in sorted(files.items())],
         "renderer": renderer,
         "renderer_error": renderer_error,
+        "reconstruction_plan": reconstruction_plan,
+        "semantic_ir": _semantic_ir_summary(semantic_payload),
         "stub_only": not bool(renderer),
     }
 
@@ -983,10 +1013,158 @@ def _bounded_count_score(values: Iterable[Any]) -> float:
     return min(1.0, total / 10.0)
 
 
+def _normalize_semantic_ir(value: Mapping[str, Any] | None) -> Dict[str, Any]:
+    """Keep copied IR evidence JSON-safe and structurally predictable."""
+
+    if not isinstance(value, Mapping):
+        return {}
+    try:
+        normalized = _json_safe(value)
+    except (RecursionError, TypeError, ValueError):
+        return {}
+    if not isinstance(normalized, Mapping):
+        return {}
+    result = dict(normalized)
+    for field in ("entities", "relations", "capabilities"):
+        if field in result and not isinstance(result[field], list):
+            result[field] = []
+    return result
+
+
+def _semantic_ir_summary(semantic_ir: Mapping[str, Any]) -> Dict[str, Any]:
+    if not semantic_ir:
+        return {}
+    supplied = semantic_ir.get("summary") if isinstance(semantic_ir.get("summary"), Mapping) else {}
+    entities = semantic_ir.get("entities") if isinstance(semantic_ir.get("entities"), list) else []
+    relations = semantic_ir.get("relations") if isinstance(semantic_ir.get("relations"), list) else []
+    capabilities = semantic_ir.get("capabilities") if isinstance(semantic_ir.get("capabilities"), list) else []
+    return {
+        "schema_version": semantic_ir.get("schema_version"),
+        "entity_count": _safe_count(supplied.get("entity_count"), len(entities)),
+        "relation_count": _safe_count(supplied.get("relation_count"), len(relations)),
+        "capability_count": _safe_count(supplied.get("capability_count"), len(capabilities)),
+    }
+
+
+def _safe_count(value: Any, default: int = 0) -> int:
+    try:
+        return max(0, int(value))
+    except (OverflowError, TypeError, ValueError):
+        return default
+
+
+def _build_gui_reconstruction_plan(
+    *,
+    framework: str,
+    output_stack: str,
+    strategy: Mapping[str, Any],
+    source_file: str | None,
+    semantic_ir: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Describe the static GUI artifact boundary consumed by the verifier."""
+
+    metadata: Dict[str, Any] = {
+        "module": "gui",
+        "framework": framework,
+        "output_stack": output_stack,
+    }
+    if source_file:
+        metadata["module_file"] = source_file
+    plan: Dict[str, Any] = {
+        "schema_version": 1,
+        "kind": "gui-reconstruction",
+        "framework": framework,
+        "output_stack": output_stack,
+        "strategy": strategy.get("name") or strategy.get("strategy"),
+        "tasks": [
+            {
+                "name": "reconstruct_gui",
+                "metadata": metadata,
+            }
+        ],
+    }
+    summary = _semantic_ir_summary(semantic_ir)
+    if summary:
+        plan["semantic_ir"] = summary
+    return plan
+
+
+def _gui_source_file(files: Mapping[str, str]) -> str | None:
+    source_suffixes = {
+        ".c",
+        ".cc",
+        ".cpp",
+        ".cxx",
+        ".cs",
+        ".dart",
+        ".fs",
+        ".go",
+        ".h",
+        ".hpp",
+        ".html",
+        ".java",
+        ".js",
+        ".jsx",
+        ".kt",
+        ".kts",
+        ".pas",
+        ".py",
+        ".rs",
+        ".swift",
+        ".ts",
+        ".tsx",
+        ".vb",
+        ".xaml",
+        ".xml",
+    }
+    candidates = [
+        name
+        for name in sorted(files, key=str.casefold)
+        if not name.startswith("analysis/") and Path(name).suffix.lower() in source_suffixes
+    ]
+    source_candidates = [name for name in candidates if name.startswith("src/")]
+    return (source_candidates or candidates or [None])[0]
+
+
 def _write_json(path: Path, data: Any) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(_json_safe(data), ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
     return str(path)
+
+
+def _json_safe(value: Any, active: set[int] | None = None) -> Any:
+    active = active if active is not None else set()
+    if isinstance(value, Mapping):
+        object_id = id(value)
+        if object_id in active:
+            return "<cycle>"
+        active.add(object_id)
+        try:
+            return {
+                str(key): _json_safe(item, active)
+                for key, item in sorted(value.items(), key=lambda item: str(item[0]))
+            }
+        finally:
+            active.discard(object_id)
+    if isinstance(value, (list, tuple)):
+        object_id = id(value)
+        if object_id in active:
+            return ["<cycle>"]
+        active.add(object_id)
+        try:
+            return [_json_safe(item, active) for item in value]
+        finally:
+            active.discard(object_id)
+    if isinstance(value, (set, frozenset)):
+        return [_json_safe(item, active) for item in sorted(value, key=lambda item: repr(item))]
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if value is None or isinstance(value, (str, int, bool)):
+        return value
+    return str(value)
 
 
 def _screenshot_files(path: Path) -> list[Path]:
