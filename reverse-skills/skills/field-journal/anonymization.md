@@ -1,6 +1,6 @@
 # Field-Journal 脱敏规范
 
-> 写 field-journal、提交 PR、分享 payload、对外发报告时**必须脱敏**。下面这套占位符规范借鉴自 PentAGI 多 agent 系统的 anonymization 协议，目标是：**保留可复用价值的同时，不暴露真实目标**。
+> 写 field-journal、提交 PR、分享 payload、对外发报告时**必须脱敏**。下面这套占位符规范借鉴自 PE 多 agent 系统的 anonymization 协议，目标是：**保留可复用价值的同时，不暴露真实目标**。
 
 ## 占位符总表
 

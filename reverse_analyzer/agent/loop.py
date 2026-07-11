@@ -1,4 +1,4 @@
-﻿"""PentAGI-style analyze → tool → observe loop."""
+﻿"""PE-style analyze → tool → observe loop."""
 
 from __future__ import annotations
 

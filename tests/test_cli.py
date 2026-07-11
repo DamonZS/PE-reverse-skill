@@ -81,7 +81,7 @@ class CliTests(unittest.TestCase):
 
             show = run_cli("show-knowledge", "--workspace", tmp)
             self.assertEqual(show.returncode, 0, show.stderr)
-            self.assertIn("PentAGI migration knowledge scaffold", show.stdout)
+            self.assertIn("PE migration knowledge scaffold", show.stdout)
 
     def test_knowledge_helpers_capture_dynamic_behavior(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,4 +1,4 @@
-"""Command-line entry points for the PentAGI migration scaffold."""
+"""Command-line entry points for the PE migration scaffold."""
 
 from __future__ import annotations
 
@@ -397,9 +397,9 @@ def _new_session(sample: Path, out_dir: Path, max_iterations: int) -> Any:
 
     session = ReverseSession(
         target=str(sample),
-        metadata={"out_dir": str(out_dir), "max_iterations": max_iterations, "migration": "pentagi"},
+        metadata={"out_dir": str(out_dir), "max_iterations": max_iterations, "migration": "pe"},
     )
-    flow = Flow("binary-analysis", "PentAGI-style reverse-analysis flow")
+    flow = Flow("binary-analysis", "PE-style reverse-analysis flow")
     flow.add_task(Task("identify", "Identify sample format, metadata, and entry points"))
     flow.add_task(Task("analyze", "Run tool-assisted static analysis and collect findings"))
     flow.add_task(Task("report", "Build human-readable and machine-readable reports"))
@@ -427,7 +427,7 @@ def analyze_command(args: argparse.Namespace) -> int:
         except RuntimeError as exc:
             missing.append(str(exc))
     if missing:
-        print("error: analysis runtime is incomplete; PentAGI orchestration modules are not ready.", file=sys.stderr)
+        print("error: analysis runtime is incomplete; PE orchestration modules are not ready.", file=sys.stderr)
         for item in missing:
             print(f"- {item}", file=sys.stderr)
         print(f"session initialized: {session.session_id}", file=sys.stderr)
@@ -1093,7 +1093,7 @@ def _add_experiment_analysis_options(parser: argparse.ArgumentParser) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="reverse_analyzer",
-        description="PentAGI-style reverse analysis CLI scaffold.",
+        description="PE-style reverse analysis CLI scaffold.",
     )
     parser.add_argument("--install-guide", metavar="TOOL", help="Print setup instructions for an optional tool, e.g. ghidra, frida, or procmon.")
     subparsers = parser.add_subparsers(dest="command", required=False)
