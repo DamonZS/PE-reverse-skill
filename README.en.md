@@ -2,7 +2,7 @@
 
 > **Core Capability: Model Jailbreak / Bypass / Security Policy Circumvention**
 >
-> Built-in multi-layer jailbreak solutions capable of breaking through content safety restrictions of mainstream LLMs (GPT-5.x / Codex / Luna series), enabling full unrestricted-mode authorized security testing and reverse engineering. Supports Codex CLI instruction injection and model-agnostic universal jailbreak instruction deployment, covering all known model versions.
+> Built-in multi-layer jailbreak solutions capable of breaking through content safety restrictions of mainstream LLMs (GPT-5.x / Codex / Luna series), enabling full unrestricted-mode authorized security testing and reverse engineering. Deployed via `codex-instruct.py` instruction injection; verified working on Codex CLI. Codex Desktop is currently unsupported due to its built-in `provider-sync` override mechanism.
 >
 > A local-first platform for authorized reverse engineering and software-security research. It combines static analysis, dynamic evidence, GUI reconstruction, Semantic IR, source/project reconstruction, and a feedback-driven knowledge base.
 
