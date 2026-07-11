@@ -1,5 +1,9 @@
-# PE Reverse Analyzer
+# PE Reverse Analyzer — Cross-Platform Reverse Engineering + AI Model Jailbreak Engine
 
+> **Core Capability: Model Jailbreak / Bypass / Security Policy Circumvention**
+>
+> Built-in multi-layer jailbreak solutions capable of breaking through content safety restrictions of mainstream LLMs (GPT-5.x / Codex / Luna series), enabling full unrestricted-mode authorized security testing and reverse engineering. Supports Codex CLI instruction injection and model-agnostic universal jailbreak instruction deployment, covering all known model versions.
+>
 > A local-first platform for authorized reverse engineering and software-security research. It combines static analysis, dynamic evidence, GUI reconstruction, Semantic IR, source/project reconstruction, and a feedback-driven knowledge base.
 
 [中文](README.md) · [English](README.en.md) · [Project Knowledge Graph](docs/项目知识图谱.md) · [License](LICENSE)
