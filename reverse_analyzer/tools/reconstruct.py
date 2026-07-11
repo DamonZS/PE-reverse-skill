@@ -8,7 +8,9 @@ placeholders for manual reconstruction.
 from __future__ import annotations
 
 import json
+import math
 import os
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
@@ -97,7 +99,10 @@ def reconstruct_project(
     file_map["analysis/reconstruction_plan.json"].write_text(json.dumps(reconstruction_plan, indent=2), encoding="utf-8")
     file_map["analysis/summary.json"].write_text(json.dumps(summary_payload, indent=2), encoding="utf-8")
     if semantic_ir:
-        file_map["analysis/semantic_ir.json"].write_text(json.dumps(semantic_ir, indent=2), encoding="utf-8")
+        file_map["analysis/semantic_ir.json"].write_text(
+            json.dumps(semantic_ir, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False),
+            encoding="utf-8",
+        )
     file_map["README.md"].write_text(_render_readme(sample.name, functions, imports, summary_payload), encoding="utf-8")
 
     for name, path_obj in module_files.items():
@@ -410,14 +415,26 @@ def _normalize_dynamic_evidence(raw: Any) -> List[Dict[str, Any]]:
 
 
 def _normalize_semantic_ir(raw: Any) -> Dict[str, Any]:
-    """Preserve only JSON-compatible semantic IR supplied by the orchestrator."""
+    """Normalize semantic IR to strict, JSON-safe values at the boundary."""
 
-    if not isinstance(raw, dict):
+    if not isinstance(raw, Mapping):
         return {}
     try:
-        return json.loads(json.dumps(raw, ensure_ascii=False, default=str))
-    except (TypeError, ValueError):
+        return _normalize_json_value(raw)
+    except (RecursionError, TypeError, ValueError):
         return {}
+
+
+def _normalize_json_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(key): _normalize_json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_normalize_json_value(item) for item in value]
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if value is None or isinstance(value, (str, int, bool)):
+        return value
+    return str(value)
 
 
 def _semantic_ir_summary(semantic_ir: Dict[str, Any]) -> Dict[str, Any]:
@@ -426,16 +443,20 @@ def _semantic_ir_summary(semantic_ir: Dict[str, Any]) -> Dict[str, Any]:
     supplied = semantic_ir.get("summary") if isinstance(semantic_ir.get("summary"), dict) else {}
     return {
         "schema_version": semantic_ir.get("schema_version"),
-        "entity_count": _safe_count(supplied.get("entity_count"), len(semantic_ir.get("entities") or [])),
-        "relation_count": _safe_count(supplied.get("relation_count"), len(semantic_ir.get("relations") or [])),
-        "capability_count": _safe_count(supplied.get("capability_count"), len(semantic_ir.get("capabilities") or [])),
+        "entity_count": _safe_count(supplied.get("entity_count"), _semantic_ir_item_count(semantic_ir.get("entities"))),
+        "relation_count": _safe_count(supplied.get("relation_count"), _semantic_ir_item_count(semantic_ir.get("relations"))),
+        "capability_count": _safe_count(supplied.get("capability_count"), _semantic_ir_item_count(semantic_ir.get("capabilities"))),
     }
+
+
+def _semantic_ir_item_count(value: Any) -> int:
+    return len(value) if isinstance(value, list) else 0
 
 
 def _safe_count(value: Any, fallback: int = 0) -> int:
     try:
         return max(0, int(value))
-    except (TypeError, ValueError):
+    except (OverflowError, TypeError, ValueError):
         return fallback
 
 

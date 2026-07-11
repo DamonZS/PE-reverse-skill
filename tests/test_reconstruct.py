@@ -1,5 +1,6 @@
 ﻿import json
 import tempfile
+from collections import UserDict
 import unittest
 from pathlib import Path
 
@@ -249,6 +250,74 @@ class ReconstructProjectTests(unittest.TestCase):
             self.assertEqual(summary["semantic_ir"]["capability_count"], 1)
             self.assertTrue(any(item["name"] == "analysis/semantic_ir.json" for item in result["artifacts"]))
             self.assertIn("Semantic IR", (project_dir / "README.md").read_text(encoding="utf-8"))
+
+    def test_semantic_ir_malformed_collections_and_nonfinite_values_are_safe(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "malformed.exe"
+            sample.write_bytes(b"MZ")
+            semantic_ir = UserDict(
+                {
+                    "schema_version": 1,
+                    "entities": 7,
+                    "relations": None,
+                    "capabilities": True,
+                    "metadata": {
+                        "not_a_number": float("nan"),
+                        "positive_infinity": float("inf"),
+                        "negative_infinity": float("-inf"),
+                    },
+                }
+            )
+
+            result = reconstruct_project(sample, root / "out", analysis={"semantic_ir": semantic_ir})
+            project_dir = Path(result["project_dir"])
+            persisted_text = (project_dir / "analysis" / "semantic_ir.json").read_text(encoding="utf-8")
+            persisted = json.loads(persisted_text)
+
+            self.assertEqual(
+                result["semantic_ir"],
+                {"schema_version": 1, "entity_count": 0, "relation_count": 0, "capability_count": 0},
+            )
+            self.assertEqual(persisted["entities"], 7)
+            self.assertIsNone(persisted["relations"])
+            self.assertTrue(persisted["capabilities"])
+            self.assertEqual(persisted["metadata"], {
+                "not_a_number": None,
+                "positive_infinity": None,
+                "negative_infinity": None,
+            })
+            self.assertNotIn("NaN", persisted_text)
+            self.assertNotIn("Infinity", persisted_text)
+
+    def test_semantic_ir_persistence_is_deterministic(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "deterministic.exe"
+            sample.write_bytes(b"MZ")
+            first_ir = {
+                "schema_version": 1,
+                "entities": [{"id": "function:entry", "kind": "function", "metadata": {"z": 2, "a": 1}}],
+                "relations": [{"id": "edge:entry-api", "source": "function:entry", "target": "api:connect"}],
+                "capabilities": [{"id": "capability:network", "name": "network", "entity_ids": ["api:connect"]}],
+                "summary": {"entity_count": 1, "relation_count": 1, "capability_count": 1},
+            }
+            second_ir = {
+                "summary": {"capability_count": 1, "relation_count": 1, "entity_count": 1},
+                "capabilities": [{"entity_ids": ["api:connect"], "name": "network", "id": "capability:network"}],
+                "relations": [{"target": "api:connect", "source": "function:entry", "id": "edge:entry-api"}],
+                "entities": [{"metadata": {"a": 1, "z": 2}, "kind": "function", "id": "function:entry"}],
+                "schema_version": 1,
+            }
+
+            first_result = reconstruct_project(sample, root / "out-first", analysis={"semantic_ir": first_ir})
+            second_result = reconstruct_project(sample, root / "out-second", analysis={"semantic_ir": second_ir})
+            first_bytes = (Path(first_result["project_dir"]) / "analysis" / "semantic_ir.json").read_bytes()
+            second_bytes = (Path(second_result["project_dir"]) / "analysis" / "semantic_ir.json").read_bytes()
+
+            self.assertEqual(first_bytes, second_bytes)
+            self.assertEqual(json.loads(first_bytes), json.loads(second_bytes))
+
     def test_returns_artifacts_list_for_generated_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

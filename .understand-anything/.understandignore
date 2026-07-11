@@ -1,0 +1,9 @@
+# Generated knowledge graph inputs should not include build/runtime caches
+.git/
+__pycache__/
+.reverse_analyzer/
+.workbuddy/
+.codebase-memory/
+node_modules/
+build/
+dist/
