@@ -4,6 +4,5 @@ __pycache__/
 .pytest_cache/
 .workbuddy/
 tmp/
-evolution/
 .reverse_analyzer/
 reports/
