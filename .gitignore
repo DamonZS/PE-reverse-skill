@@ -3,3 +3,6 @@ __pycache__/
 *.pyo
 .pytest_cache/
 .workbuddy/
+tmp/
+.reverse_analyzer/
+reports/

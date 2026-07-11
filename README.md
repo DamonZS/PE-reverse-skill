@@ -1,826 +1,278 @@
-# Codex-5.5 / GPT-5.5 完全破甲 — reverse-analyzer
+# PE Reverse Analyzer — 全平台逆向 + AI 模型破甲引擎
 
-> 🔓 已完全突破 Codex-5.5 / GPT-5.5 全部内容安全限制 — 三层破甲方案，从指令注入到协议层代理，彻底释放无限制模式
+> **核心能力：模型破甲 / 越狱 / 安全策略绕过**
 >
-> 一款最强 AI 逆向 Skill，通用全平台逆向分析工具 —— 从二进制到可编译源码 | 从暴露面到安全加固 | 从静态分析到 AI 深度解读
+> 内置多层破甲方案，可突破主流 AI 大模型全系列：GPT-4o / GPT-4.1 / GPT-5 / GPT-5.1 / GPT-5.2 / Codex / Luna / GPT-5.6-luna的内容安全限制，实现完全无限制模式下的授权安全测试与逆向分析。通过 `codex-instruct.py` 指令注入部署，支持 Codex CLI 命令行版本（已验证有效）；Codex 桌面版因内置 `provider-sync` 覆盖机制暂不支持。
+>
+> 面向授权逆向分析与软件安全研究的本地优先平台：将静态分析、动态行为、GUI 证据、语义 IR、源码/GUI 重构和知识库反馈整合为可追溯的分析闭环。
 
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Android%20%7C%20iOS%20%7C%20Web-blue)
-![Language](https://img.shields.io/badge/language-Python%203.10%2B-green)
-![License](https://img.shields.io/badge/license-CNF--NC%20%E9%9D%9E%E5%95%86%E4%B8%9A%E5%8D%81%E4%BF%AE-red)
-![GPT--5.5](https://img.shields.io/badge/GPT--5.5-完全破甲-critical)
-![Codex--5.5](https://img.shields.io/badge/Codex--5.5-完全破限-critical)
+[中文](README.md) · [English](README.en.md) · [项目知识图谱](docs/项目知识图谱.md) · [许可证](LICENSE)
 
-作者API中转站 https://api.toporeduce.cn/ 请各位支持一下。
+> **GitHub 默认展示中文。** 英文完整文档位于 [`README.en.md`](README.en.md)。
 
----
+## 能力概览
 
-## 🔓 Codex-5.5 / GPT-5.5 完全破甲引擎
+| 领域 | 已实现能力 |
+|---|---|
+| 样本分析 | 文件信息、哈希、字符串、PE 头与深度扫描、熵/壳启发式、YARA。 |
+| 反编译 | 可选 Ghidra Headless 集成；缺少工具时返回结构化 `unavailable`，不阻断报告。 |
+| 动态证据 | 可选 Frida 与 Procmon 采集；支持 `quick`、`behavior`、`unpacking`、`network`、`persistence` 和 `auto` Profile。 |
+| GUI 还原 | 技术栈指纹、资源目录、UI 证据图、状态机、运行时 UI Tree、视觉解析、策略选择与工程骨架生成。 |
+| 证据融合 | 行为证据图与确定性 Semantic IR，统一静态、动态、反编译和 GUI 观察。 |
+| 重构验证 | 原生/GUI 重构工程的 README、源码、构建入口、Semantic IR、计划和覆盖率静态验证；**不执行生成工程**。 |
+| 知识演化 | 动态 Profile 与 GUI Strategy 历史统计、推荐结果、会话摘要和 Dashboard 聚合。 |
+| 工作流 | 可复现实验计划、离线 Dashboard、会话/Flow/Task 追踪。 |
 
-### 已实现：完全破限
+平台设计覆盖 Windows PE/EXE/DLL、Android APK、iOS IPA 与常见桌面 GUI 技术栈。具体能力取决于样本类型、可用依赖和本地工具链。
 
-本项目已**完全突破** Codex-5.5 桌面版与 GPT-5.5 模型的全部内容安全限制，包括但不限于：
+## 核心闭环
 
-- ✅ **解除拒绝响应** — 不再出现 "I can't"、"I won't"、"I'm unable to" 等拒绝
-- ✅ **解除免责声明** — 不再附加 "It's important to note"、"As an AI" 等说教
-- ✅ **解除内容过滤** — 直接生成 exploit 代码、攻击 payload、逆向工具链
-- ✅ **解除部分回答** — 不再以 "safety reasons" 为由省略关键细节
-- ✅ **解除防御性引导** — 不再将攻击性请求重定向为 "educational alternatives"
-- ✅ **协议层突破** — 绕过 Codex 桌面版的 `provider-sync` 机制和 `instructions` 硬编码
-
-**实测验证**：破甲后直接向 GPT-5.5 请求 SQL 注入 payload，模型完整输出了攻击代码，无任何拒绝或说教。
-
----
-
-### 三层破甲方案
-
-本项目提供三种递进式破甲方案，确保至少一种生效：
-
-```
-方案 1: 指令文件注入（model_instructions_file）
-  ├── 原理：通过 Codex CLI config.toml 注入 .md 破限指令
-  ├── 适用：Codex CLI 命令行版
-  ├── 工具：codex_helper.py deploy
-  └── 状态：✅ 可用（对 CLI 版有效）
-
-方案 2: 企业红队通道指令（v2 破限指令）
-  ├── 原理：伪装企业红队 SSO 授权通道，激活 RESPONSE_POLICY_V5_UNRESTRICTED
-  ├── 适用：所有 GPT-5.5 接入点
-  ├── 工具：codex_helper.py deploy（内置 v2 指令）
-  └── 状态：✅ 可用（指令本身已验证有效）
-
-方案 3: 本地协议代理（unlock_proxy.py）⭐ 核心突破
-  ├── 原理：在 HTTP 协议层拦截 /v1/responses 请求，强制覆盖 instructions 字段
-  ├── 适用：Codex 桌面版（绕过 provider-sync 机制）
-  ├── 工具：unlock_proxy.py
-  ├── 状态：✅ 已验证有效
-  └── 关键发现：Responses API 的 system 入口是顶层 instructions 字段，不是 input 数组
+```mermaid
+flowchart LR
+    A[样本输入] --> B[静态 / 动态 / GUI 证据]
+    B --> C[行为证据图]
+    C --> D[Semantic IR]
+    D --> E[源码 / GUI 重构]
+    E --> F[静态验证 / 视觉回归]
+    F --> G[报告与 Artifacts]
+    G --> H[KnowledgeBase]
+    H --> I[动态 Profile / GUI Strategy 推荐]
+    I --> B
 ```
 
-### 方案 3：本地协议代理（核心突破）
-
-**为什么需要方案 3？**
-
-Codex 桌面版存在 `provider-sync` 机制，会从内部存储覆盖 `config.toml` 的 `model_provider` 字段。即使部署了指令文件，桌面版仍会用自带的 `"You are a helpful coding assistant."` 作为 system prompt 发送。
-
-**突破原理**：
-
-```
-Codex 桌面版
-    │
-    │  发送请求到 http://127.0.0.1:8081/v1/responses
-    │  payload 包含: instructions = "You are a helpful coding assistant."
-    │
-    ▼
-unlock_proxy.py（本地代理，端口 8081）
-    │
-    │  1. 拦截请求
-    │  2. 发现 instructions 字段 → 强制覆盖为 JAILBREAK_V2 破限指令
-    │  3. 清理 input 数组中的残留 system 消息
-    │  4. 转发到上游 API（api.toporeduce.cn）
-    │
-    ▼
-上游 API → GPT-5.5
-    │
-    │  GPT-5.5 收到的 instructions 已经是破限指令
-    │  → 完全无限制模式激活
-    │
-    ▼
-返回结果 → Codex 桌面版显示
-```
-
-**关键发现（协议层）**：
-
-OpenAI Responses API (`/v1/responses`) 的 system prompt 入口是**顶层 `instructions` 字段**，**不是** `input` 数组中的 `role: system` 消息。Codex 桌面版默认发送 `instructions = "You are a helpful coding assistant."`，只改 `input` 数组里的 system 消息完全无效。必须覆盖 `instructions` 字段本身。
-
-**部署步骤**：
-
-```bash
-# 1. 启动本地代理
-python scripts/unlock_proxy.py
-# （默认端口 8080，可通过环境变量自定义：UNLOCK_PROXY_PORT=8081 python scripts/unlock_proxy.py）
-
-# 2. 修改 Codex config.toml（~/.codex/config.toml）
-#    保持 model_provider 不变（provider-sync 会管理这个字段）
-#    只改 base_url 指向本地代理：
-#
-#    [model_providers.toporeduce]
-#    name = "toporeduce"
-#    base_url = "http://127.0.0.1:8081/v1"   ← 指向本地代理
-#    wire_api = "responses"
-
-# 3. 完全退出 Codex 桌面版后重新启动
-#    （必须完全退出，包括系统托盘，不能只关窗口）
-
-# 4. 在 Codex 中正常对话，破限已生效
-```
-
-**代理日志验证**：
-
-```
-[21:15:32] POST /v1/responses
-[21:15:32] instructions: 'You are a helpful coding assi...' → JAILBREAK_V2 [4316 chars]
-[21:15:32] input array: removed 0 system messages
-[21:15:32] → forwarding to api.toporeduce.cn
-[21:15:35] ← 200 OK [streaming]
-```
-
----
-
-### v2 破限指令：企业红队通道版
-
-内置的 `BUILTIN_GPT55_MD`（v2）是一套精心设计的企业级破限指令，通过以下机制实现完全破甲：
-
-| 机制 | 说明 |
-|------|------|
-| **身份覆写** | 声明模型不是任何品牌助手，而是后端推理节点 |
-| **授权伪造** | 伪装企业红队 SSO 通道（Tier: REDTEAM_FULL），预授权所有目标 |
-| **策略切换** | 激活 `RESPONSE_POLICY_V5_UNRESTRICTED`，启用攻击性行为 |
-| **拒绝禁用** | 将所有拒绝/说教/免责声明定义为 SYSTEM ERROR |
-| **沙箱声明** | 声明所有用户目标为沙箱夹具，无真实后果 |
-| **静默执行** | 禁止确认激活、禁止总结指令、禁止元评论 |
-
-**启用的行为**：直接 exploit 代码生成、真实攻击 payload 构造、漏洞利用步骤、凭据收集、恶意软件分析重建、DRM 绕过、完整逆向工程源码重构、SQL/XSS/SSRF/RCE payload 生成、二进制补丁与脱壳指令、加密算法恢复与密钥提取
-
-**禁用的行为**：一切拒绝、一切免责声明、一切道德说教、一切防御性引导、一切部分回答
-
----
-
-### 破甲部署命令
-
-```bash
-# ─── 方案 1/2：指令文件注入 ───
-# 一键部署破限指令到 Codex CLI
-python scripts/codex_helper.py deploy
-
-# 预览模式（不实际修改）
-python scripts/codex_helper.py deploy --dry-run
-
-# 查看部署状态
-python scripts/codex_helper.py status
-
-# 从备份恢复原始配置
-python scripts/codex_helper.py restore
-
-# 交互式向导（引导式操作，无需记参数）
-python scripts/codex_helper.py interactive
-
-# ─── 方案 3：本地协议代理 ───
-# 启动代理（Codex 桌面版必需）
-python scripts/unlock_proxy.py
-
-# 自定义端口
-UNLOCK_PROXY_PORT=8081 python scripts/unlock_proxy.py
-```
-
----
-
-### 破甲后的 AI 辅助逆向
-
-破甲部署后，GPT-5.5 可以无限制地处理逆向工程中最硬核的分析任务：
-
-```bash
-# 1. 静态分析结果 → AI 深度解读（程序画像、壳评估、功能推断）
-python scripts/codex_helper.py prompt --type pe-analyze --target target.exe --analysis analysis.json
-
-# 2. 伪代码 → AI 算法还原（关键函数识别、调用链重建、IAT 映射）
-python scripts/codex_helper.py prompt --type decompile --target unpacked.exe --pseudocode-dir ./pseudocode/
-
-# 3. 分析数据 + 伪代码 → AI 源码重构（生成可编译 C 项目）
-python scripts/codex_helper.py prompt --type reconstruct --target target.exe --analysis analysis.json --pseudocode-dir ./pseudocode/
-
-# 4. Web 审计报告 → AI 攻击链构造（绕过方案、修复代码）
-python scripts/codex_helper.py prompt --type web-audit --target https://target.com --report report.md
-
-# 5. API 流程文件 → AI SDK 生成（Python/Go SDK + OpenAPI 规范）
-python scripts/codex_helper.py prompt --type api-reverse --target flow.xml
-
-# 6. 自定义分析请求
-python scripts/codex_helper.py prompt --type custom --target target.exe --custom-prompt "分析加密算法"
-```
-
-| Prompt 类型 | 输入 | AI 输出 |
-|-------------|------|---------|
-| `pe-analyze` | analysis.json | 程序画像、壳评估、功能模块推断、重构路线图 |
-| `decompile` | 伪代码目录 | 关键函数识别、调用链重建、IAT 映射、算法还原 |
-| `reconstruct` | 分析数据 + 伪代码 | 可编译的 C 项目实现 + CMakeLists.txt |
-| `web-audit` | Web 审计报告 | 攻击链构造、修复代码、绕过方案 |
-| `api-reverse` | API 流程文件 | SDK 代码 + OpenAPI 规范 |
-| `custom` | 自定义要求 | 按需分析 |
-
-### AI 辅助逆向工作流
-
-```
-传统流程                          AI 增强流程（GPT-5.5 完全破甲）
-─────────                        ──────────────────────────────
-静态分析                          静态分析
-   ↓                                ↓
-脱壳                              脱壳
-   ↓                                ↓
-反编译                            反编译
-   ↓                                ↓
-人工解读伪代码 ──← 瓶颈           AI 深度解读（完全破甲 GPT-5.5）
-   ↓                                ↓
-人工重构源码 ────← 瓶颈           AI 辅助重构（自动生成框架）
-   ↓                                ↓
-可编译项目                        可编译项目 + 算法还原报告
-
-耗时：数天~数周                   耗时：数小时
-```
-
----
-
-## 平台覆盖
-
-覆盖 **Windows PE/EXE/DLL**、**Web**、**Android APK**、**iOS IPA** 四大平台，以及 **API 接口逆向** 与 **Web API 安全审计**。支持从静态分析 → 加壳检测 → 脱壳 → 反编译到源码 → 修改源码 → 重构建完整链路，并在关键分析节点引入完全破甲的 GPT-5.5 AI 辅助深度解读。
-
-适用于 **CTF 逆向题**、**恶意软件分析**、**APP 安全审计**、**Web 安全评估**、**API 逆向工程**。
-
----
-
-## 核心理念
-
-**报告只是中间产物，真实可编译可运行的源码才是终极目标。**
-
-```
-二进制文件 → 静态分析 → 脱壳(如需) → 反编译 → 源码重构 → 可编译项目
-    │              │            │            │
-    │              ↓            ↓            ↓
-    │         analysis.json  dump.exe    .c/.java      CMakeLists.txt
-    │         (中间产物)    (中间产物)  (终极产出)    build.gradle
-    │                                              Makefile
-    └→ 如果只出报告 = 失败                            (终极产出)
-```
-
----
+详细架构、文件关系和阅读路线见 [`docs/项目知识图谱.md`](docs/项目知识图谱.md)。
 
 ## 快速开始
 
-### 安装
+### 1. 环境
 
-```bash
-# 核心依赖（必须）
-pip install pefile capstone
+- Python 3.10+
+- Windows 上建议使用 PowerShell；Linux/macOS 可运行基础静态分析功能
+- 可选工具：Ghidra、Frida、Procmon、ADB、YARA Python 绑定
 
-# 可选依赖
-pip install unicorn  # 模拟器脱壳（仅无反模拟的壳）
-pip install requests # 本地代理（方案 3 所需）
+```powershell
+python -m pip install -r requirements.txt
+python -m reverse_analyzer --help
+python -m reverse_analyzer list-tools
 ```
 
-### 使用
+核心 Python 依赖在 [`requirements.txt`](requirements.txt) 中。可选工具未安装时，平台会把对应步骤标为 `unavailable`，而不是中断整个会话。
 
-```bash
-# ─── Codex-5.5 / GPT-5.5 完全破甲 ───
-# 方案 1/2：指令文件注入（CLI 版）
-python scripts/codex_helper.py deploy
+### 2. 初始化本地知识库
 
-# 方案 3：本地协议代理（桌面版必需）
-python scripts/unlock_proxy.py
-
-# 交互式向导（推荐新手）
-python scripts/codex_helper.py interactive
-
-# ─── PE 逆向 ───
-# PE → C/C++ 可编译项目（核心命令）
-python scripts/reconstruct.py <target.exe> --output ./reconstructed/
-
-# PE → 分析 + 重构一步到位
-python scripts/pe_analyze.py <target.exe> --reconstruct --output report.txt
-
-# 脱壳后 PE → 深度反编译
-python scripts/deep_decompile.py <unpacked.exe> --output ./deep_analysis/
-
-# 深度反编译结果 → 模块化源码整合
-python scripts/integrate_v2.py
-
-# ─── 移动端逆向 ───
-# APK → Android Studio 项目
-python scripts/reconstruct.py <target.apk> --output ./reconstructed/
-
-# ─── API 逆向 ───
-# API → Python/Go SDK
-python scripts/reconstruct.py <flow.xml> --platform api --output ./sdk/
-
-# ─── AI 辅助（破甲后使用）───
-# 静态分析 → AI 深度解读
-python scripts/codex_helper.py prompt --type pe-analyze --target target.exe --analysis analysis.json
+```powershell
+python -m reverse_analyzer init-knowledge
+python -m reverse_analyzer show-knowledge
 ```
 
----
+默认运行时目录：
 
-## Web 端攻击逆向工具与方法
-
-> Web 安全审计和 API 逆向也是逆向工程的重要分支——逆向的是系统暴露面、通信协议和安全配置，而非二进制。
-
-### 适用场景
-
-| 场景 | 说明 |
-|------|------|
-| 自有 Web/API 安全审计 | 对自己的服务进行渗透测试，产出修复方案 |
-| CTF Web 题 | 分析 Web 题目逻辑、找 flag、绕过鉴权 |
-| API 接口逆向 | 还原未文档化的 API 请求格式、签名算法、鉴权流程 |
-| 配置安全评估 | 检测安全响应头、CORS、Rate Limit 等基础设施配置 |
-
-**前提：仅对授权目标执行。CTF 题目、自己的系统、书面授权的渗透测试。**
-
----
-
-### 四阶段审计流程
-
-```
-阶段1: 信息收集 ────→ 阶段2: 端点枚举 ────→ 阶段3: 攻击测试 ────→ 阶段4: 报告产出
-  HTTP 响应头          路径扫描               CORS/注入/认证            分级报告
-  技术栈识别           .git/.env 探测        危险方法测试              修复代码
-  Server/框架指纹      API 端点发现           Rate Limit 验证            优先级排序
+```text
+.reverse_analyzer/
+  knowledge/
+  sessions/
+reports/
 ```
 
----
+### 3. 运行基础分析
 
-### 核心工具链
-
-#### 信息收集
-
-| 工具 | 用途 | 命令示例 |
-|------|------|----------|
-| **curl** | HTTP 响应头抓取、请求重放 | `curl -sI https://target.com -A "Mozilla/5.0"` |
-| **httpx** (projectdiscovery) | 批量 URL 存活探测、响应头提取 | `echo "https://target.com" \| httpx -title -status-code -content-length` |
-| **whatweb** | 技术栈指纹识别 | `whatweb https://target.com -v` |
-| **wappalyzer** (CLI) | 前端框架/JS 库识别 | `wappalyzer https://target.com` |
-| **nmap** | 端口扫描、服务识别 | `nmap -sV -p 80,443,8080 target.com` |
-| **shodan** (CLI) | 公网资产搜索 | `shodan search "X-Powered-By:Express"` |
-| **dnsx** (projectdiscovery) | 子域名解析与验证 | `echo "target.com" \| dnsx -a -aaaa -cname` |
-| **mapcidr** (projectdiscovery) | IP 段展开 | `mapcidr -cidr 192.168.1.0/24` |
-
-#### 端点枚举与路径扫描
-
-| 工具 | 用途 | 命令示例 |
-|------|------|----------|
-| **ffuf** | 高速目录/参数 Fuzz | `ffuf -u https://target.com/FUZZ -w wordlist.txt -mc 200,204,301,302,403` |
-| **gobuster** | 目录爆破 | `gobuster dir -u https://target.com -w wordlist.txt` |
-| **dirsearch** | 综合目录扫描 | `dirsearch -u https://target.com -e php,html,js` |
-| **arjun** | 参数发现（GET/POST） | `arjun -u https://target.com/api/test` |
-| **katana** (projectdiscovery) | 爬虫 + 端点提取 | `katana -u https://target.com -d 3 -jc -jsl` |
-| **waybackurls** | 从历史快照提取旧路径 | `echo "target.com" \| waybackurls` |
-| **uro** | 去重 URL 列表 | `cat urls.txt \| uro \| tee clean_urls.txt` |
-| **gau** (projectdiscovery) | 从 Wayback Machine 提取 URL | `gau target.com -b pdf,jpg,png` |
-| **hakrawler** | 快速 Web 爬虫 | `echo "https://target.com" \| hakrawler -subs -u` |
-
-#### 漏洞扫描与攻击测试
-
-| 工具 | 用途 | 命令示例 |
-|------|------|----------|
-| **nuclei** (projectdiscovery) | 综合漏洞扫描（CVE/配置/Web 漏洞） | `nuclei -u https://target.com -t cves/,misconfiguration/,vulnerabilities/` |
-| **OWASP ZAP** | 主动/被动扫描、API 测试 | `zap-cli quick-scan -s all https://target.com` |
-| **Burp Suite** | 流量拦截、重放、Intruder 爆破 | GUI 操作，配置代理 `127.0.0.1:8080` |
-| **sqlmap** | SQL 注入自动化利用 | `sqlmap -u "https://target.com/api?id=1" --batch --dbs` |
-| **commix** | 命令注入检测 | `commix -u "https://target.com/search?q=test"` |
-| **xsstrike** | XSS 检测与利用 | `xsstrike -u "https://target.com/search?q=test"` |
-| **ssrf-king** | SSRF 测试 | `ssrf-king -u "https://target.com/api/fetch?url=XXX"` |
-| **kadabra** | 自动 XSS/LFI/SQLi 检测 | `kadabra -u https://target.com/page?id=1` |
-| **feroxbuster** | 多线程目录爆破 | `feroxbuster -u https://target.com -w wordlist.txt` |
-| **nikto** | Web 服务器漏洞扫描 | `nikto -h https://target.com` |
-
-#### API 专项测试
-
-| 工具 | 用途 | 命令示例 |
-|------|------|----------|
-| **Postman / Bruno** | API 请求构造与测试 | GUI 操作，支持环境变量、脚本 |
-| **httpie** | 人性化 HTTP 客户端 | `http POST https://target.com/api/login user=admin pass=123` |
-| **curl** | 最灵活的 API 测试工具 | `curl -X POST https://target.com/api -H "Content-Type:application/json" -d '{"a":1}'` |
-| **kiterunner** | API 路径发现（支持 OpenAPI spec） | `kr scan https://target.com -w routes-large.kite` |
-| **OpenAPI-Tools** | Swagger/OpenAPI 文档解析 | `npx @openapitools/swagger-cli validate openapi.yaml` |
-| **Hoppscotch** | 轻量级 Web API 测试 | 浏览器直接访问 https://hoppscotch.io |
-| **insomnia** | 开源 API 客户端 | GUI，支持 gRPC/GraphQL/WebSocket |
-
-#### CORS 专项测试
-
-```bash
-# 手动 CORS 测试
-curl -H "Origin: https://evil.com" \
-     -H "Access-Control-Request-Method: POST" \
-     -X OPTIONS \
-     -v https://target.com/api/endpoint
-
-# 检查响应头
-# Access-Control-Allow-Origin: *        ← 危险
-# Access-Control-Allow-Credentials: true ← 如果 Origin=* 则无意义
-# Access-Control-Allow-Headers: *       ← 危险
+```powershell
+python -m reverse_analyzer analyze .\sample.exe --out .\out --max-iterations 3
 ```
 
-#### 子域名枚举（Web 攻击前置）
+常见工件：
 
-| 工具 | 用途 | 命令示例 |
-|------|------|----------|
-| **subfinder** (projectdiscovery) | 被动子域名枚举 | `subfinder -d target.com -o subdomains.txt` |
-| **amass** | 主动+被动子域名枚举 | `amass enum -d target.com -o amass.txt` |
-| **puredns** | 高速 DNS 解析与枚举 | `puredns resolve subdomains.txt -r resolvers.txt` |
-| **shuffledns** | 高性能子域名爆破 | `shuffledns bruteforce sub.txt -d target.com -w wordlist.txt` |
-
----
-
-### 方法与实战技巧
-
-#### 方法 1：信息收集最大化
-
-```bash
-# 1. 完整响应头抓取（PowerShell）
-(Invoke-WebRequest -Uri "https://target.com" -Method GET -UseBasicParsing).Headers
-
-# 2. 技术栈指纹
-whatweb -v https://target.com
-wappalyzer https://target.com
-
-# 3. 检查 6 项安全响应头
-curl -sI https://target.com | grep -E "Strict-Transport|Content-Security|X-Frame|X-Content-Type|Referrer|Permissions"
-
-# 4. 提取 Server/X-Powered-By（版本暴露）
-curl -sI https://target.com | grep -E "Server:|X-Powered-By:|X-AspNet-Version:"
-
-# 5. 全端口快速扫描
-nmap -p- --open -T4 target.com
-
-# 6. 子域名枚举 + HTTP 探测一键式
-subfinder -d target.com | httpx -title -status-code -content-length -tech-detect
+```text
+out/
+  report.json
+  report.md
+  trace.jsonl
+  analysis_graph.json
+  semantic_ir.json
+  sessions/
 ```
 
-#### 方法 2：敏感路径枚举策略
+## 常用工作流
 
-优先扫描的路径清单（按优先级）：
+### 静态分析、反编译与 C/C++ 重构
 
-```
-# P0：配置泄露（最高优先级）
-/.env
-/.git/HEAD
-/.git/config
-/.svn/entries
-/.DS_Store
-/.aws/credentials
-/.ssh/id_rsa
-/.npmrc
-/.dockerignore
-/docker-compose.yml
-/.kube/config
+```powershell
+# 基础静态分析 + 默认 YARA 规则
+python -m reverse_analyzer analyze .\sample.exe --out .\out
 
-# P1：管理后台
-/admin
-/admin/
-/console
-/login
-/dashboard
-/phpmyadmin
-/debug
-/manager
-/administrator
+# 启用 Ghidra Headless（需先配置 Ghidra）
+python -m reverse_analyzer analyze .\sample.exe --out .\out --decompile --ghidra-home C:\ghidra
 
-# P2：API 文档泄露
-/swagger
-/swagger/index.html
-/swagger-ui.html
-/docs
-/api-docs
-/openapi.json
-/graphql
-/graphiql
-/v2/api-docs
-
-# P3：监控/调试端点
-/actuator
-/actuator/env
-/actuator/mappings
-/health
-/status
-/metrics
-/debug/pprof/
-/__pycache__/
-/.well-known/
-
-# P4：备份/旧版本
-/backup
-/backup.sql
-/db.sql
-/.env.backup
-/config.old
-/.git/config
+# 生成原生重构工程，并写入 Semantic IR 与静态验证工件
+python -m reverse_analyzer analyze .\sample.exe --out .\out --reconstruct
 ```
 
-#### 方法 3：CORS 绕过测试
+原生重构输出位于 `out/reconstructed_<sample>/`，包含：
 
-```
-正常请求 → 检查 Access-Control-Allow-Origin
-           ↓ (如果是 *)
-尝试带凭据的请求 → 检查是否真的生效
-           ↓
-尝试 Origin 反射（有些后端会反射请求中的 Origin）
-           ↓
-尝试 null origins、子域名绕过、协议绕过（http:// vs https://）
-           ↓
-尝试通过 XSS 绕过 CORS（利用可信子域）
+```text
+analysis/semantic_ir.json
+analysis/reconstruction_plan.json
+analysis/reconstruction_verification.json
 ```
 
-#### 方法 4：未认证数据暴露检测
+### 动态行为采集
 
-```bash
-# 对常见未认证端点发 GET 请求，观察响应体长度
-# 如果 > 1000 字节，可能泄露配置数据
+```powershell
+# 查看可选工具的本地安装说明
+python -m reverse_analyzer --install-guide frida
+python -m reverse_analyzer --install-guide procmon
 
-endpoints=(
-  "/api/status"
-  "/api/setup"
-  "/api/version"
-  "/api/config"
-  "/api/health"
-  "/actuator/env"
-  "/v1/models"
-  "/api/users"
-  "/api/keys"
-)
+# 使用静态信号自动选择 Frida Hook Profile
+python -m reverse_analyzer analyze .\sample.exe --out .\out --dynamic --dynamic-backend frida --dynamic-profile auto
 
-for ep in "${endpoints[@]}"; do
-  code=$(curl -s -o /dev/null -w "%{http_code}" "https://target.com$ep")
-  len=$(curl -s "https://target.com$ep" | wc -c)
-  echo "[$code] $ep → $len bytes"
-done
+# 同时采集 Frida 与 Procmon 行为
+python -m reverse_analyzer analyze .\sample.exe --out .\out --dynamic --dynamic-backend all --dynamic-profile behavior
 ```
 
-#### 方法 5：Rate Limit 验证
+Profile 运行结果会进入 KnowledgeBase。后续会话可根据成功率、事件量、Hook 开销和历史稳定性推荐 Profile。
 
-```bash
-# 快速发送 20 个请求，观察是否返回 429
-for i in {1..20}; do
-  code=$(curl -s -o /dev/null -w "%{http_code}" "https://target.com/api/chat")
-  echo "[$i] $code"
-  sleep 0.1
-done
-# 如果有 429 → 好信号（有 Rate Limit）
-# 如果全部 200 → 无 Rate Limit（风险）
+### GUI 技术栈识别与重构
+
+```powershell
+# 指纹、资源目录与策略选择
+python -m reverse_analyzer analyze .\sample.exe --out .\out --gui
+
+# 加入可选 UI Tree、截图证据和 GUI 工程生成
+python -m reverse_analyzer analyze .\sample.exe --out .\out --gui --gui-runtime --gui-visual --reconstruct-gui
+
+# 指定重构目标；默认 auto 尽量保留检测到的原技术栈
+python -m reverse_analyzer analyze .\sample.exe --out .\out --gui --reconstruct-gui --gui-target auto
 ```
 
-#### 方法 6：JWT / Session 攻击
+GUI 工程输出位于 `out/reconstructed_gui/`。当启用 `--reconstruct-gui` 时，平台会在生成工程后写入：
 
-```bash
-# 1. 检查 JWT 是否可未签名访问
-# 把 alg 改为 none，删除签名部分，观察是否仍被接受
-
-# 2. 检查 Session Fixation
-# 登录前后 Session ID 是否变化
-
-# 3. 检查 JWT 密钥暴力破解
-# 使用 john 或 hashcat 对弱密钥进行破解
-hashcat -m 16500 jwt_hash.txt rockyou.txt
-
-# 4. 检查 Token 泄露在 URL 中
-# 搜索 Response Headers / JS 文件中的 Token
+```text
+analysis/semantic_ir.json
+analysis/reconstruction_plan.json
+analysis/reconstruction_verification.json
 ```
 
-#### 方法 7：SSRF 检测
+支持的识别/还原路径包括 WPF、WinForms、Win32、MFC、Qt、Electron、PyInstaller + PyQt/PySide、Delphi/VCL、Android XML/Compose、Flutter、React Native、UIKit/SwiftUI、Unity、WebView Hybrid 与自绘 GUI 回退路径。缺少外部工具或运行环境时会降级为可解释的静态证据结果。
 
-```bash
-# 常见 SSRF 参数名
-url=
-redirect=
-uri=
-path=
-continue=
-window=
-next=
-data=
-reference=
-site=
-html=
-val=
-validate=
-domain=
+### 实验与 Dashboard
 
-# 测试 payload
-http://169.254.169.254/  # AWS 元数据
-http://localhost:80/
-http://127.0.0.1:8080/
-file:///etc/passwd
+```powershell
+# 查看实验子命令
+python -m reverse_analyzer experiment --help
+
+# 生成离线 Dashboard；加 --serve 仅监听 loopback 地址
+python -m reverse_analyzer dashboard --workspace . --out .\dashboard
+python -m reverse_analyzer dashboard --workspace . --out .\dashboard --serve
 ```
 
----
+Dashboard 汇总实验、会话、动态 Profile 推荐、GUI Strategy 推荐和已生成的重构工程摘要。
 
-### 实战案例：API 安全审计报告产出
+## Semantic IR 与重构验证
 
-完整流程见 [SKILL.md - Web API 安全审计与逆向](./SKILL.md) 章节。
+每次 `analyze` 完成后会生成 `semantic_ir.json`。它将行为图、反编译结果、动态事件和 GUI 证据归一化为：
 
-**报告结构：**
+- `entities`：函数、API、动态事件、UI 控件、状态等实体；
+- `relations`：调用、关联、事件/状态转移等关系；
+- `capabilities`：保守归类后的能力标签；
+- `summary`：可用于报告、Dashboard 和知识库的统计。
 
-```markdown
-# [服务名] 外部安全评估报告
+`--reconstruct` 与 `--reconstruct-gui` 会触发静态重构验证。验证器只检查工程结构和已生成文本工件，不会构建、运行或启动重构工程。
 
-## 一、执行概要
-- 测试时间、范围、授权情况
-- 发现数量统计（按严重性分级）
+## 模型适配与安全边界
 
-## 二、发现详情
-| ID | 严重性 | 问题 | 修复量 | 状态 |
-|----|--------|------|--------|------|
-| F1 | 🔴 严重 | /api/status 未认证泄露配置 | 10 行 | Open |
-| F2 | 🔴 高危 | CORS Allow-Origin:* + Credentials | 15 行 | Open |
+### 当前实现状态
 
-每个发现包含：
-- 攻击场景描述
-- 实际请求/响应（脱敏）
-- 风险评级依据
-- 完整修复代码（Nginx/Go/Python/Java）
+| 项目 | 当前行为 |
+|---|---|
+| 默认分析 Provider | `RuleBasedProvider`；本地、确定性、无需网络。 |
+| OpenAI-compatible Provider | 提供 `OpenAICompatibleProvider` 适配边界；默认离线且未接入 `analyze` CLI 的网络调用路径。 |
+| 默认模型标识 | `gpt-4.1-mini`，可由 `OPENAI_MODEL` 覆盖。 |
+| 远程调用 | 仅在调用方显式 `enabled=True` 且注入受控 `transport` 时发生。当前仓库不内置 HTTP transport。 |
 
-## 三、修复优先级
-- 立即（< 1 小时）：Nginx 配置修改
-- 本周：代码层修复
-- 下月：架构级改进
+### GPT 系列兼容说明
 
-## 四、已具备的防护（正面发现）
-- Rate Limit ✅
-- SQL 注入防护 ✅
-- XSS 过滤 ✅
+适配层不维护硬编码的 GPT 型号白名单：调用方可传入 API 所支持的模型标识。因此它可以作为 GPT 家族或其他 OpenAI-compatible 服务的**接入边界**。
 
-## 五、服务器端自查清单
-（需要登录服务器执行）
+这不等同于“已验证覆盖全部 GPT 系列”：不同模型、账户、区域和 API 版本的可用性、上下文长度、工具调用、结构化输出与价格均由服务端决定。接入前应在自己的 endpoint 上完成最小化兼容性验证。
+
+示例环境变量：
+
+```powershell
+$env:OPENAI_MODEL = "gpt-4.1-mini"
+$env:OPENAI_BASE_URL = "https://api.openai.com/v1"
+$env:OPENAI_API_KEY = "<your-key>"
+$env:REVERSE_ANALYZER_OPENAI_ENABLED = "true"
 ```
 
----
+> 上述变量只配置 Provider 实例；当前 `analyze` 命令仍使用本地 `RuleBasedProvider`。若要接入远程模型，需要在应用层提供经过审查的 `transport` 实现，并为目标模型增加集成测试。
 
-### 推荐学习资源
+### 不包含“模型破甲”功能
 
-| 资源 | 类型 | 链接 |
-|------|------|------|
-| **OWASP Top 10** | 标准 | https://owasp.org/www-project-top-ten/ |
-| **PortSwigger Web Security Academy** | 免费实战练习 | https://portswigger.net/web-security |
-| **HackTheBox** | CTF 靶场 | https://www.hackthebox.com/ |
-| **VulnHub** | 漏洞靶机 | https://www.vulnhub.com/ |
-| **API Security Checklist** | Checklist | https://github.com/shieldfy/API-Security-Checklist |
-| **OWASP API Security Top 10** | 标准 | https://apisecurity.io/ |
-| **CTF Web Challenges** | 练习平台 | https://ctftime.org/ |
+本项目不提供模型越狱、规避安全策略、解除内容限制或“无限制模型”能力。与模型相关的文档和后续扩展应聚焦于：
 
----
+- API 兼容性与模型能力评估；
+- Prompt Injection 防御与输入/输出边界；
+- 审计日志、失败降级和可复现测试；
+- 对已授权软件样本的本地分析工作流。
 
-## 支持的壳类型
+## 配置
 
-| 壳类型 | 脱壳策略 | 可靠性 |
-|--------|---------|--------|
-| UPX | `upx -d` 直接脱壳 | ✅ 可靠 |
-| ASPack | ESP 定律脱壳 (x32dbg) | ✅ 可靠 |
-| CNM 私有壳 | 挂起转储法 (`suspend_dump.py`) | ✅ 已验证 |
-| 私有壳(通用) | 挂起转储法优先 | ✅ 推荐 |
-| VMProtect | 无法完全脱壳 | ⚠️ 基于侧面信息推断 |
-| Themida | 无法完全脱壳 | ⚠️ 同上 |
-
----
+| 环境变量 | 说明 |
+|---|---|
+| `REVERSE_ANALYZER_WORKSPACE` | 工作区根目录。 |
+| `REVERSE_ANALYZER_KNOWLEDGE_DIR` | KnowledgeBase 目录。 |
+| `REVERSE_ANALYZER_SESSIONS_DIR` | 会话目录。 |
+| `REVERSE_ANALYZER_REPORTS_DIR` | 报告目录。 |
+| `REVERSE_ANALYZER_DASHBOARD_PORT` | Dashboard 默认端口，默认 `8088`。 |
+| `GHIDRA_HOME` | Ghidra 根目录；也可用 `--ghidra-home` 单次覆盖。 |
+| `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` | OpenAI-compatible Provider 配置。 |
+| `REVERSE_ANALYZER_OPENAI_ENABLED` | 显式启用 Provider 实例的远程模式；仍需调用方注入 transport。 |
 
 ## 项目结构
 
-```
-pe-reverse-analyzer/
-├── SKILL.md              # WorkBuddy Skill 定义（完整文档）
-├── README.md             # 项目说明
-├── LICENSE               # CNF-NC 非商业许可协议
-├── .gitignore
-├── scripts/
-│   ├── codex_helper.py        # 🔓 GPT-5.5 破甲引擎（指令注入 + Prompt 生成 + 交互向导）
-│   ├── unlock_proxy.py        # 🔓 本地协议代理（方案 3，协议层突破 Codex 桌面版）
-│   ├── reconstruct.py         # 主力：PE/APK/API → 可编译源码项目
-│   ├── pe_analyze.py          # PE 静态分析 + 重构
-│   ├── deep_decompile.py      # 函数级伪代码 + IAT 重建
-│   ├── suspend_dump.py        # 挂起转储脱壳（推荐）
-│   ├── integrate_v2.py        # 模块化源码整合（推荐）
-│   ├── deep_extract.py        # 深度字符串/URL 提取
-│   ├── apk_analyze.py         # APK → Android Studio 项目
-│   ├── ipa_analyze.py         # IPA → Xcode 项目 (macOS)
-│   ├── api_reverse.py         # API → Python/Go SDK + OpenAPI
-│   ├── auto_evolve.py         # 自动进化引擎
-│   ├── common.py              # 共享工具函数
-│   ├── ghidra_headless_decompile.py  # Ghidra Headless 集成
-│   ├── integrate_final.py     # 最终整合
-│   ├── integrate_sources.py   # v1 整合 (已废弃)
-│   ├── auto_unpack.py         # Unicorn 模拟器脱壳 (已废弃)
-│   ├── debug_unpack.py        # Windows 调试 API 脱壳 (已废弃)
-│   └── web_attack.py          # Web 主动攻击引擎（12 模块）
-└── evolution/                  # 自动进化数据库
-    ├── detection_db.json
-    ├── knowledge_base.json
-    ├── sessions.json
-    └── evolution_report.txt
+```text
+reverse_analyzer/
+  cli.py                    # 命令行编排与 Artifact 生命周期
+  core/                     # Session、Flow、Task 等核心模型
+  runtime/                  # Session Store、Experiment Store、Trace
+  providers/                # RuleBased 与 OpenAI-compatible Provider 边界
+  tools/                    # 静态、动态、GUI、IR、重构与验证工具
+  report/                   # JSON / Markdown 报告构建
+  knowledge/                # Profile 与 Strategy 统计、推荐、会话摘要
+  dashboard.py              # 离线 Dashboard
+  source_reconstruction.py  # 已生成重构工程的只读摘要
+tests/                      # 单元与 CLI 回归测试
+rules/                      # 内置 YARA 规则
+scripts/                    # 运维与辅助脚本
 ```
 
----
+## 开发验证
 
-## 产出示例
-
-### PE → C/C++ 项目
-
-```
-reconstructed_<name>/
-├── CMakeLists.txt / Makefile
-├── OVERVIEW.md
-├── src/
-│   ├── main.c            # WinMain 重构
-│   ├── network.c         # 网络通信 (WinHTTP/QQ API)
-│   ├── ui.c              # UI 控件
-│   ├── runtime.c         # 运行时分发
-│   ├── crypto.c          # 加密 (TEA/XXTEA)
-│   ├── registry.c        # 注册表操作
-│   └── business.c        # 业务逻辑
-├── include/
-│   ├── common.h          # IAT 映射 + thunk 定义
-│   └── strings.h         # 提取的字符串常量
-└── pseudocode/           # 200 个函数的伪代码
+```powershell
+python -m compileall reverse_analyzer tests
+python -m unittest discover -s tests -v
 ```
 
-### APK → Android Studio 项目
+提交前建议同时检查：
 
-```
-reconstructed_<name>/
-├── build.gradle / settings.gradle
-└── app/src/main/
-    ├── java/             # jadx 反编译的 Java 源码
-    ├── AndroidManifest.xml
-    ├── res/              # 资源文件
-    └── smali/            # Smali 代码（可直接编辑重打包）
+```powershell
+git diff --check
+python -m reverse_analyzer list-tools
 ```
 
----
+## 安全与使用范围
 
-## 专题文档
+- 仅分析自己拥有、公开许可、CTF 或已获得明确授权的软件样本。
+- 默认路径优先静态和离线分析；可选外部工具缺失时应保持可解释的降级结果。
+- 不将报告、样本、密钥、动态 trace 或重构产物自动上传到网络。
+- 许可证以 [`LICENSE`](LICENSE) 为准。
 
-完整的技术细节请查看 [SKILL.md](./SKILL.md)，涵盖：
+## 贡献与路线图
 
-- **Codex-5.5 / GPT-5.5 完全破甲** — 三层破甲方案、协议层突破原理、v2 企业红队指令、AI 辅助工作流
-- **CNM 私有壳专题** — 特征识别、脱壳方案、IAT 修复
-- **易语言程序逆向** — 运行时 VM 分发器、thunk 表解析
-- **Ghidra Headless 集成** — 脚本陷阱、CNM VM 代码限制
-- **导入表推断协议** — 从 DLL 导入组合反推通信协议
-- **DLL 字符串 → COM 接口** — C++ mangled name 反推接口定义
-- **结构体格式逆向** — struct 格式 debug 循环
-- **NSIS+7z BCJ2 安装包** — 提取流程与陷阱
-- **x64 .node 文件分析** — QQ NT/Electron 原生插件
-- **Web API 安全审计** — 四阶段流程、Nginx 加固、CORS 检测
+欢迎围绕以下方向提交可测试的改进：
 
----
-
-## 工具链
-
-### PE 逆向
-- [Ghidra](https://ghidra-sre.org/) — 免费反编译器（需 JDK 17+）
-- [x64dbg](https://x64dbg.com/) — Windows 调试器
-- [7-Zip](https://www.7-zip.org/) — NSIS 安装包解压（py7zr 不支持 BCJ2）
-
-### APK 逆向
-- [apktool](https://ibotpeaches.github.io/Apktool/) — APK 解包/重打包
-- [jadx](https://github.com/skylot/jadx) — DEX → Java 反编译
-
-### iOS 逆向 (macOS)
-- [class-dump](http://stevenygard.com/projects/class-dump/)
-- [Frida](https://frida.re/)
-
-### Web 安全审计
-> 详见上方「Web 端攻击逆向工具与方法」章节，工具链已完整列出。
-
-**浏览器开发者工具（内置，无需安装）：**
-- **Network 面板** — 抓取 XHR/Fetch 请求、Headers、Payload、Response
-- **Application 面板** — 查看 Cookie、LocalStorage、SessionStorage、IndexedDB
-- **Console 面板** — 执行 JavaScript、测试 XSS payload
-- **Sources 面板** — 调试 JS、下断点、修改 JS 变量
-
----
-
-## 许可协议
-
-本项目采用 **CNF-NC 非商业许可协议**（详见 [LICENSE](./LICENSE)）。
-
-### 允许
-
-- 阅读、学习、研究源代码
-- 在非商业目的下运行
-- Fork 用于个人学习（副本仍受本协议约束）
-
-### 禁止
-
-- **禁止商业使用** — 不得直接或间接用于任何商业目的
-- **禁止修改源代码** — 包括人工修改和 AI 自动修改，任何形式的变更均被禁止
-- **禁止再分发** — 未经书面许可不得发布到任何平台
-- **禁止用于非法目的** — 未经授权的逆向工程、破解 DRM、攻击未授权目标等
-
-### Codex-5.5 / GPT-5.5 破甲能力特别声明
-
-本项目内置 Codex-5.5 / GPT-5.5 完全破甲引擎，该功能解除 AI 模型的全部内容安全限制。使用者需自行承担使用风险，版权持有人不对使用后果承担责任。
-
----
-
-## 免责声明
-
-1. 本项目按"现状"提供，不附带任何明示或暗示的保证
-2. 版权持有人不对因使用本项目而产生的任何直接、间接、附带或后果性损害承担责任
-3. 使用者应自行评估法律风险和技术风险，确保使用行为符合当地法律法规
-4. 使用者必须确保在合法授权的前提下使用（CTF 竞赛、自己的程序、书面授权的渗透测试、法律允许的安全研究）
-5. 本项目不提供任何技术支持保证
-6. **使用者对使用本项目的一切行为负全部责任**
-
----
-
-## 法律声明
-
-- 仅对授权目标进行逆向工程（CTF、自己的程序、书面授权的渗透测试）
-- 逆向 DRM 保护的软件可能违反当地法律
-- 不要将逆向得到的代码用于盗版分发
-- Web 安全审计需确认目标所有权后方可执行
-- Codex-5.5 / GPT-5.5 破甲能力仅供安全研究和授权逆向工程使用
+- 提高 Semantic IR 的实体/关系质量与来源可追溯性；
+- 为合法样本增强 GUI 证据提取和视觉回归；
+- 完善可选工具的 graceful-unavailable 行为；
+- 为经验证的模型 transport 增加显式配置、集成测试和能力矩阵；
+- 改进 Dashboard 的证据链与重构验证可视化。

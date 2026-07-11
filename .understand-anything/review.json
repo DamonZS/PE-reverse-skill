@@ -1,0 +1,34 @@
+{
+  "issues": [],
+  "stats": {
+    "edgeTypes": {
+      "calls": 1251,
+      "contains": 1811,
+      "depends_on": 4,
+      "documents": 4,
+      "imports": 102,
+      "related": 6,
+      "tested_by": 43
+    },
+    "nodeTypes": {
+      "class": 86,
+      "concept": 7,
+      "config": 63,
+      "document": 346,
+      "file": 121,
+      "function": 1190,
+      "module": 8,
+      "resource": 5,
+      "service": 1
+    },
+    "totalEdges": 3652,
+    "totalLayers": 8,
+    "totalNodes": 1827,
+    "tourSteps": 8
+  },
+  "warnings": [
+    "codebase-memory-mcp index transport was unavailable; graph was built by deterministic static AST/import fallback.",
+    "understand-anything core package was not installed; plugin extraction scripts could not run.",
+    "The game-security reference document is modeled as a non-executable threat-model/reference node."
+  ]
+}
