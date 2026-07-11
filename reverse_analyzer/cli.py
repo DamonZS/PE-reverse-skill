@@ -131,6 +131,16 @@ _BUILTIN_TOOLS = [
         "description": "Fuse static, dynamic, GUI, resource, and state-machine observations into a provenance-backed behavior graph.",
     },
     {
+        "name": "semantic_ir_build",
+        "status": "available",
+        "description": "Normalize behavior, decompiler, dynamic, and GUI evidence into a deterministic semantic intermediate representation.",
+    },
+    {
+        "name": "reconstruction_verify",
+        "status": "available",
+        "description": "Statically validate generated reconstruction artifacts, semantic coverage, and planned module coverage without executing code.",
+    },
+    {
         "name": "gui_xaml_extract",
         "status": "available",
         "description": "Parse extracted WPF XAML resources into control, layout, and event-handler evidence.",
@@ -598,6 +608,20 @@ def analyze_command(args: argparse.Namespace) -> int:
     semantic_ir = _result_payload(semantic_result)
     if not isinstance(semantic_ir, Mapping):
         semantic_ir = {}
+
+    if args.reconstruct_gui:
+        extra_artifacts.extend(
+            _run_gui_reconstruction(
+                tool_executor,
+                tool_results,
+                result,
+                session,
+                session_store,
+                sample,
+                out_dir,
+                semantic_ir,
+            )
+        )
 
     if args.reconstruct:
         analysis = _build_reconstruction_analysis(tool_results)
@@ -1662,16 +1686,6 @@ def _run_gui_pipeline(
     )
     if isinstance(behavior_graph_payload, Mapping):
         gui_analysis["behavior_graph"] = behavior_graph_payload
-    if args.reconstruct_gui:
-        _, reconstruction = execute_and_record(
-            "reconstruct_gui_project",
-            {"path": str(sample), "out_dir": str(out_dir), "gui_analysis": gui_analysis},
-            path=str(sample),
-            out_dir=str(out_dir),
-            gui_analysis=gui_analysis,
-        )
-        if isinstance(reconstruction, Mapping):
-            gui_analysis["reconstruction"] = reconstruction
     if args.gui_visual or args.reconstruct_gui:
         execute_and_record(
             "gui_visual_regression",
@@ -1680,6 +1694,103 @@ def _run_gui_pipeline(
             reconstructed_screenshot_dir=None,
             out_dir=str(out_dir),
         )
+    return artifacts
+
+
+def _gui_reconstruction_analysis(tool_results: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Rebuild the GUI generator input after semantic IR evidence is available."""
+
+    fingerprint = _latest_tool_payload(tool_results, "gui_fingerprint")
+    strategy = _latest_tool_payload(tool_results, "gui_strategy_select")
+    if not fingerprint and not strategy:
+        return {}
+    resources = _latest_tool_payload(tool_results, "gui_resource_extract")
+    xaml_evidence = _latest_tool_payload(tool_results, "gui_xaml_extract")
+    runtime_tree = _latest_tool_payload(tool_results, "gui_runtime_probe")
+    visual = _latest_tool_payload(tool_results, "gui_visual_parse")
+    evidence_graph = _latest_tool_payload(tool_results, "gui_evidence_graph")
+    state_machine = _latest_tool_payload(tool_results, "gui_state_machine")
+    interaction_trace = _latest_tool_payload(tool_results, "gui_interaction_trace")
+    behavior_graph = _latest_tool_payload(tool_results, "gui_behavior_graph")
+    return {
+        "status": "ok",
+        "platform": fingerprint.get("platform") if isinstance(fingerprint, Mapping) else None,
+        "framework": fingerprint.get("framework") if isinstance(fingerprint, Mapping) else None,
+        "confidence": fingerprint.get("confidence") if isinstance(fingerprint, Mapping) else None,
+        "evidence": fingerprint.get("evidence") if isinstance(fingerprint, Mapping) else [],
+        "fingerprint": fingerprint,
+        "resources": resources,
+        "xaml_evidence": xaml_evidence,
+        "runtime_tree": runtime_tree,
+        "visual": visual,
+        "evidence_graph": evidence_graph,
+        "interaction_trace": interaction_trace,
+        "state_machine": state_machine,
+        "strategy": strategy,
+        "behavior_graph": behavior_graph,
+    }
+
+
+def _run_gui_reconstruction(
+    tool_executor: Any,
+    tool_results: list[Any],
+    result: Any,
+    session: Any,
+    session_store: Any,
+    sample: Path,
+    out_dir: Path,
+    semantic_ir: Mapping[str, Any],
+) -> list[str]:
+    """Generate and statically verify a GUI project using the completed IR."""
+
+    strategy = _latest_tool_payload(tool_results, "gui_strategy_select")
+    if strategy and str(strategy.get("status") or "ok").casefold() == "failed":
+        return []
+    gui_analysis = _gui_reconstruction_analysis(tool_results)
+    if not gui_analysis:
+        return []
+    gui_analysis["semantic_ir"] = dict(semantic_ir)
+    reconstruction_result = tool_executor.execute(
+        "reconstruct_gui_project",
+        path=str(sample),
+        out_dir=str(out_dir),
+        gui_analysis=gui_analysis,
+        semantic_ir=semantic_ir,
+    )
+    _append_observation(
+        tool_results,
+        result,
+        session,
+        session_store,
+        "reconstruct_gui_project",
+        {
+            "path": str(sample),
+            "out_dir": str(out_dir),
+            "gui_analysis": gui_analysis,
+            "semantic_ir": dict(semantic_ir),
+        },
+        reconstruction_result,
+    )
+    artifacts = _record_artifacts(session, session_store, reconstruction_result)
+    reconstruction_payload = _result_payload(reconstruction_result)
+    project_dir = reconstruction_payload.get("project_dir") if isinstance(reconstruction_payload, Mapping) else None
+    if not project_dir:
+        return artifacts
+    verification_result = tool_executor.execute(
+        "reconstruction_verify",
+        project_dir=str(project_dir),
+        semantic_ir=semantic_ir,
+    )
+    _append_observation(
+        tool_results,
+        result,
+        session,
+        session_store,
+        "reconstruction_verify",
+        {"project_dir": str(project_dir), "semantic_ir": dict(semantic_ir), "reconstruction_kind": "gui"},
+        verification_result,
+    )
+    artifacts.extend(_record_artifacts(session, session_store, verification_result))
     return artifacts
 
 
@@ -1832,6 +1943,15 @@ def _build_reconstruction_analysis(tool_results: Sequence[Mapping[str, Any]]) ->
             graph_summary = payload.get("summary") if isinstance(payload.get("summary"), Mapping) else {}
             summary["behavior_graph_node_count"] = graph_summary.get("node_count", len(payload.get("nodes") or []))
             summary["behavior_graph_edge_count"] = graph_summary.get("edge_count", len(payload.get("edges") or []))
+        elif tool_name == "semantic_ir_build":
+            analysis["semantic_ir"] = dict(payload)
+            semantic_summary = payload.get("summary") if isinstance(payload.get("summary"), Mapping) else {}
+            semantic_entities = payload.get("entities") if isinstance(payload.get("entities"), list) else []
+            semantic_relations = payload.get("relations") if isinstance(payload.get("relations"), list) else []
+            semantic_capabilities = payload.get("capabilities") if isinstance(payload.get("capabilities"), list) else []
+            summary["semantic_entity_count"] = semantic_summary.get("entity_count", len(semantic_entities))
+            summary["semantic_relation_count"] = semantic_summary.get("relation_count", len(semantic_relations))
+            summary["semantic_capability_count"] = semantic_summary.get("capability_count", len(semantic_capabilities))
 
     if "functions" not in analysis:
         analysis["functions"] = []
@@ -2163,12 +2283,14 @@ def _semantic_ir_summary(report_data: Mapping[str, Any]) -> Dict[str, Any]:
     if not isinstance(semantic_ir, Mapping) or not semantic_ir:
         return {}
     summary = semantic_ir.get("summary") if isinstance(semantic_ir.get("summary"), Mapping) else {}
+    entities = semantic_ir.get("entities") if isinstance(semantic_ir.get("entities"), list) else []
+    relations = semantic_ir.get("relations") if isinstance(semantic_ir.get("relations"), list) else []
     capabilities = semantic_ir.get("capabilities") if isinstance(semantic_ir.get("capabilities"), list) else []
     return {
         "status": semantic_ir.get("status"),
         "schema_version": semantic_ir.get("schema_version"),
-        "entity_count": _safe_int(summary.get("entity_count"), default=len(semantic_ir.get("entities") or [])),
-        "relation_count": _safe_int(summary.get("relation_count"), default=len(semantic_ir.get("relations") or [])),
+        "entity_count": _safe_int(summary.get("entity_count"), default=len(entities)),
+        "relation_count": _safe_int(summary.get("relation_count"), default=len(relations)),
         "capability_count": _safe_int(summary.get("capability_count"), default=len(capabilities)),
         "capabilities": [
             item.get("name") or item.get("category")
@@ -2212,6 +2334,8 @@ def _knowledge_features(sample: Path, report_data: Mapping[str, Any]) -> Dict[st
     behavior_summary = behavior_graph.get("summary") if isinstance(behavior_graph.get("summary"), Mapping) else {}
     semantic_ir = report_data.get("semantic_ir") if isinstance(report_data.get("semantic_ir"), Mapping) else {}
     semantic_summary = semantic_ir.get("summary") if isinstance(semantic_ir.get("summary"), Mapping) else {}
+    semantic_entities = semantic_ir.get("entities") if isinstance(semantic_ir.get("entities"), list) else []
+    semantic_relations = semantic_ir.get("relations") if isinstance(semantic_ir.get("relations"), list) else []
     semantic_capabilities = semantic_ir.get("capabilities") if isinstance(semantic_ir.get("capabilities"), list) else []
     reconstruction_verification = (
         report_data.get("reconstruction_verification")
@@ -2293,8 +2417,8 @@ def _knowledge_features(sample: Path, report_data: Mapping[str, Any]) -> Dict[st
         "semantic": {
             "status": semantic_ir.get("status"),
             "schema_version": semantic_ir.get("schema_version"),
-            "entity_count": _safe_int(semantic_summary.get("entity_count"), default=len(semantic_ir.get("entities") or [])),
-            "relation_count": _safe_int(semantic_summary.get("relation_count"), default=len(semantic_ir.get("relations") or [])),
+            "entity_count": _safe_int(semantic_summary.get("entity_count"), default=len(semantic_entities)),
+            "relation_count": _safe_int(semantic_summary.get("relation_count"), default=len(semantic_relations)),
             "capability_count": _safe_int(semantic_summary.get("capability_count"), default=len(semantic_capabilities)),
             "capabilities": [
                 item.get("name") or item.get("category")

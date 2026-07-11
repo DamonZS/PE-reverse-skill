@@ -209,13 +209,15 @@ class ReportBuilder:
         semantic_ir = report.get("semantic_ir") or {}
         if isinstance(semantic_ir, Mapping) and semantic_ir:
             summary = semantic_ir.get("summary") if isinstance(semantic_ir.get("summary"), Mapping) else {}
+            entities = semantic_ir.get("entities") if isinstance(semantic_ir.get("entities"), list) else []
+            relations = semantic_ir.get("relations") if isinstance(semantic_ir.get("relations"), list) else []
+            capabilities = semantic_ir.get("capabilities") if isinstance(semantic_ir.get("capabilities"), list) else []
             lines.extend(["", "## Semantic IR", ""])
             lines.append(f"- **Status:** {semantic_ir.get('status') or 'unknown'}")
             lines.append(f"- **Schema Version:** {semantic_ir.get('schema_version') or 'unknown'}")
-            lines.append(f"- **Entities:** {summary.get('entity_count', len(semantic_ir.get('entities') or []))}")
-            lines.append(f"- **Relations:** {summary.get('relation_count', len(semantic_ir.get('relations') or []))}")
-            lines.append(f"- **Capabilities:** {summary.get('capability_count', len(semantic_ir.get('capabilities') or []))}")
-            capabilities = semantic_ir.get("capabilities") or []
+            lines.append(f"- **Entities:** {summary.get('entity_count', len(entities))}")
+            lines.append(f"- **Relations:** {summary.get('relation_count', len(relations))}")
+            lines.append(f"- **Capabilities:** {summary.get('capability_count', len(capabilities))}")
             if capabilities:
                 lines.append("- **Top Capabilities:**")
                 for capability in capabilities[:8]:
@@ -312,6 +314,13 @@ class ReportBuilder:
                 lines.append(f"- **GUI Reconstruction:** {gui_reconstruction.get('status') or 'unknown'}")
                 if gui_reconstruction.get("project_dir"):
                     lines.append(f"  - Project Dir: {gui_reconstruction['project_dir']}")
+            gui_verification = gui_analysis.get("reconstruction_verification") or {}
+            if isinstance(gui_verification, Mapping) and gui_verification:
+                lines.append(
+                    "  - Static Verification: "
+                    f"{gui_verification.get('status') or 'unknown'}"
+                    + (f" (score={gui_verification['score']})" if gui_verification.get("score") is not None else "")
+                )
 
             regression = gui_analysis.get("regression") or {}
             if isinstance(regression, Mapping):
@@ -786,6 +795,24 @@ def _gui_analysis(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     strategy, strategy_status = stage("gui_strategy_select")
     reconstruction, reconstruction_status = stage("reconstruct_gui_project")
     regression, regression_status = stage("gui_visual_regression")
+    gui_verification: Dict[str, Any] = {}
+    gui_project_dir = reconstruction.get("project_dir") if isinstance(reconstruction, Mapping) else None
+    if gui_project_dir:
+        expected_project = str(gui_project_dir).replace("\\", "/").rstrip("/").casefold()
+        for trace in reversed(tool_trace):
+            tool_name = str(trace.get("tool_name") or trace.get("tool") or "")
+            if tool_name != "reconstruction_verify":
+                continue
+            tool_args = trace.get("tool_args") if isinstance(trace.get("tool_args"), Mapping) else {}
+            candidate_project = tool_args.get("project_dir") if isinstance(tool_args, Mapping) else None
+            candidate = str(candidate_project).replace("\\", "/").rstrip("/").casefold() if candidate_project else ""
+            if candidate != expected_project:
+                continue
+            payload = _tool_payload(trace)
+            if isinstance(payload, Mapping):
+                gui_verification = dict(payload)
+                gui_verification.setdefault("status", _tool_status(trace))
+            break
 
     core_statuses = [status for status in (fingerprint_status, strategy_status) if status != "unknown"]
     if "failed" in core_statuses:
@@ -857,6 +884,7 @@ def _gui_analysis(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
         "runtime_tree": runtime_tree,
         "visual": visual,
         "reconstruction": reconstruction_data,
+        "reconstruction_verification": gui_verification,
         "regression": regression_data,
         "artifacts": _dedupe_artifacts(artifacts),
     }
@@ -889,6 +917,9 @@ def _semantic_ir(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
         if not isinstance(payload, Mapping):
             return {"status": _tool_status(trace)}
         result = dict(payload)
+        for field in ("entities", "relations", "capabilities"):
+            if field in result and not isinstance(result[field], list):
+                result[field] = []
         result.setdefault("status", _tool_status(trace))
         return result
     return {}

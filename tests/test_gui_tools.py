@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 import zipfile
@@ -102,7 +103,14 @@ class GuiToolTests(unittest.TestCase):
                 "visual": {"screenshot_count": 1},
             }
 
-            result = reconstruct_gui_project(sample, root / "out", analysis)
+            semantic_ir = {
+                "status": "ok",
+                "schema_version": 1,
+                "entities": [{"id": "ui:electron", "kind": "ui_control", "name": "ElectronShell"}],
+                "relations": [],
+                "capabilities": [],
+            }
+            result = reconstruct_gui_project(sample, root / "out", analysis, semantic_ir=semantic_ir)
             project = Path(result["project_dir"])
 
             self.assertEqual(result["output_stack"], "electron")
@@ -112,6 +120,13 @@ class GuiToolTests(unittest.TestCase):
             self.assertTrue((project / "analysis" / "gui_fingerprint.json").is_file())
             self.assertTrue((project / "analysis" / "ui_tree.json").is_file())
             self.assertTrue((project / "analysis" / "visual_parse.json").is_file())
+            self.assertEqual(
+                json.loads((project / "analysis" / "semantic_ir.json").read_text(encoding="utf-8")),
+                semantic_ir,
+            )
+            plan = json.loads((project / "analysis" / "reconstruction_plan.json").read_text(encoding="utf-8"))
+            self.assertEqual(plan["framework"], "electron")
+            self.assertTrue(plan["tasks"])
 
     def test_wpf_reconstruction_renders_evidence_graph_controls_and_handlers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
