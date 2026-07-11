@@ -8,14 +8,7 @@
 <p align="center"><em style="font-family: Georgia, serif; font-size: 1.2em; color: #777;">Navigate the dark waters, sail against the stream.</em></p>
 
 <p align="center">
-  <a href="https://github.com/zhaoxuya520/reverse-skill/stargazers"><img src="https://img.shields.io/github/stars/zhaoxuya520/reverse-skill?style=flat&logo=github" alt="stars"></a>
-  <a href="https://github.com/zhaoxuya520/reverse-skill/forks"><img src="https://img.shields.io/github/forks/zhaoxuya520/reverse-skill?style=flat&logo=github" alt="forks"></a>
-  <a href="https://github.com/zhaoxuya520/reverse-skill/issues"><img src="https://img.shields.io/github/issues/zhaoxuya520/reverse-skill?style=flat&logo=github" alt="issues"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
-</p>
-
-<p align="center">
-  <a href="https://trendshift.io/repositories/43969?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-43969" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/43969/daily" alt="zhaoxuya520%2Freverse-skill | Trendshift" width="250" height="55"/></a>
 </p>
 
 <br/>
@@ -57,12 +50,6 @@ Full routing matrix: [skills/routing.md](skills/routing.md)
 
 <br/>
 
-<div align="center">
-  <a href="https://star-history.com/#zhaoxuya520/reverse-skill&Date">
-    <img src="https://api.star-history.com/svg?repos=zhaoxuya520/reverse-skill&type=Date" alt="Star History" width="650" />
-  </a>
-</div>
-
 <br/>
 
 <p align="right">(<a href="#about">back to top</a>)</p>
@@ -90,7 +77,7 @@ Full routing matrix: [skills/routing.md](skills/routing.md)
 ### Installation
 
 ```
-git clone https://github.com/zhaoxuya520/reverse-skill.git
+git clone https://github.com/DamonZS/Codex-Pe-reverse-analyzer.git
 ```
 
 Then refresh the tool index per platform:
@@ -187,14 +174,6 @@ Contributions are welcome! Fork the repo, create a feature branch, and open a PR
 3. `git commit -m 'Add some AmazingFeature'`
 4. `git push origin feature/AmazingFeature`
 5. Open a Pull Request
-
-### Contributors
-
-<a href="https://github.com/zhaoxuya520/reverse-skill/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=zhaoxuya520/reverse-skill" alt="contributors" />
-</a>
-
-<p align="right">(<a href="#contributing">back to top</a>)</p>
 
 <a id="license"></a>
 
