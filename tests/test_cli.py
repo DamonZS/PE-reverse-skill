@@ -13,6 +13,7 @@ from unittest.mock import patch
 from reverse_analyzer.cli import (
     _knowledge_features,
     _knowledge_observations,
+    _build_reconstruction_analysis,
     _load_gui_interaction_trace,
     _persist_knowledge,
     _record_dynamic_profile_stats,
@@ -65,6 +66,8 @@ class CliTests(unittest.TestCase):
         self.assertIn("gui_fingerprint", result.stdout)
         self.assertIn("gui_strategy_select", result.stdout)
         self.assertIn("reconstruct_gui_project", result.stdout)
+        self.assertIn("semantic_ir_build", result.stdout)
+        self.assertIn("reconstruction_verify", result.stdout)
         self.assertIn("session-store", result.stdout)
         self.assertIn("AgentLoop", result.stdout)
         self.assertIn("ToolExecutor", result.stdout)
@@ -239,6 +242,18 @@ class CliTests(unittest.TestCase):
                         "transition_count": 1,
                     },
                 },
+                "semantic_ir": {
+                    "status": "ok",
+                    "schema_version": 1,
+                    "summary": {"entity_count": 3, "relation_count": 2, "capability_count": 1},
+                    "capabilities": [{"name": "network", "category": "network"}],
+                },
+                "reconstruction_verification": {
+                    "status": "ok",
+                    "schema_version": 1,
+                    "score": 0.8,
+                    "coverage": {"semantic_coverage": 0.75, "module_coverage": 1.0},
+                },
             }
 
             _persist_knowledge(
@@ -262,6 +277,27 @@ class CliTests(unittest.TestCase):
                     "dynamic_event_count": 3,
                     "state_count": 2,
                     "transition_count": 1,
+                },
+            )
+            self.assertEqual(
+                sessions[0]["semantic_ir"],
+                {
+                    "status": "ok",
+                    "schema_version": 1,
+                    "entity_count": 3,
+                    "relation_count": 2,
+                    "capability_count": 1,
+                    "capabilities": ["network"],
+                },
+            )
+            self.assertEqual(
+                sessions[0]["reconstruction_verification"],
+                {
+                    "status": "ok",
+                    "schema_version": 1,
+                    "score": 0.8,
+                    "semantic_coverage": 0.75,
+                    "module_coverage": 1.0,
                 },
             )
 
@@ -304,6 +340,56 @@ class CliTests(unittest.TestCase):
             self.assertIn(str(sample), stored["samples"])
             self.assertIn("knowledge_base.session_summary_failed", stderr.getvalue())
 
+    def test_knowledge_helpers_normalize_malformed_semantic_ir_collections(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "sample.exe"
+            sample.write_bytes(b"MZ")
+            config = AnalyzerConfig(
+                workspace=root,
+                knowledge_dir=root / "knowledge",
+                sessions_dir=root / "sessions",
+                reports_dir=root / "reports",
+            )
+            report_data = {
+                "sample": {"status": "ok"},
+                "pe_analysis": {},
+                "yara": {},
+                "dynamic_analysis": {},
+                "decompiler": {},
+                "reconstruction": {},
+                "findings": [],
+                "gui_analysis": {},
+                "behavior_graph": {},
+                "semantic_ir": {
+                    "status": "ok",
+                    "schema_version": 1,
+                    "entities": "not-a-list",
+                    "relations": {"not": "a-list"},
+                    "capabilities": 3,
+                },
+            }
+
+            features = _knowledge_features(sample, report_data)
+            self.assertEqual(features["semantic"]["entity_count"], 0)
+            self.assertEqual(features["semantic"]["relation_count"], 0)
+            self.assertEqual(features["semantic"]["capability_count"], 0)
+
+            _persist_knowledge(
+                config,
+                sample,
+                SimpleNamespace(session_id="malformed-semantic-ir"),
+                root / "out",
+                report_data,
+                [],
+            )
+
+            sessions = KnowledgeBase(config.knowledge_dir).load_sessions()
+            self.assertEqual(len(sessions), 1)
+            self.assertEqual(sessions[0]["semantic_ir"]["entity_count"], 0)
+            self.assertEqual(sessions[0]["semantic_ir"]["relation_count"], 0)
+            self.assertEqual(sessions[0]["semantic_ir"]["capabilities"], [])
+
     def test_gui_interaction_trace_loader_handles_invalid_path_types_and_size(self) -> None:
         for invalid_path in ("\0", object()):
             payload = _load_gui_interaction_trace(invalid_path)  # type: ignore[arg-type]
@@ -339,6 +425,24 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(artifacts, [])
         self.assertEqual(executor.calls, 0)
+
+    def test_reconstruction_analysis_normalizes_malformed_semantic_ir_collections(self) -> None:
+        analysis = _build_reconstruction_analysis(
+            [
+                {
+                    "tool_name": "semantic_ir_build",
+                    "result": {
+                        "tool": "semantic_ir_build",
+                        "status": "ok",
+                        "data": {"entities": 1, "relations": {"edge": "bad"}, "capabilities": "network"},
+                    },
+                }
+            ]
+        )
+
+        self.assertEqual(analysis["summary"]["semantic_entity_count"], 0)
+        self.assertEqual(analysis["summary"]["semantic_relation_count"], 0)
+        self.assertEqual(analysis["summary"]["semantic_capability_count"], 0)
 
     def test_record_dynamic_profile_stats_from_report_data(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -422,7 +526,17 @@ class CliTests(unittest.TestCase):
             self.assertEqual(report["gui_analysis"]["framework"], "wpf")
             self.assertEqual(report["gui_analysis"]["strategy"]["name"], "extract_baml_generate_wpf")
             self.assertTrue((out_dir / "gui" / "fingerprint.json").is_file())
-            self.assertTrue((out_dir / "reconstructed_gui" / "README.md").is_file())
+            reconstructed = out_dir / "reconstructed_gui"
+            self.assertTrue((reconstructed / "README.md").is_file())
+            self.assertTrue((reconstructed / "analysis" / "semantic_ir.json").is_file())
+            self.assertTrue((reconstructed / "analysis" / "reconstruction_plan.json").is_file())
+            self.assertTrue((reconstructed / "analysis" / "reconstruction_verification.json").is_file())
+            self.assertIn(report["reconstruction_verification"]["status"], {"ok", "partial"})
+            self.assertGreater(report["reconstruction_verification"]["score"], 0)
+            self.assertEqual(
+                Path(report["gui_analysis"]["reconstruction_verification"]["project_dir"]),
+                reconstructed,
+            )
             markdown = (out_dir / "report.md").read_text(encoding="utf-8")
             self.assertIn("## GUI Analysis", markdown)
             self.assertIn("## GUI Reconstruction Strategy", markdown)
@@ -470,6 +584,34 @@ class CliTests(unittest.TestCase):
             self.assertIn('Content="Save"', generated_xaml)
             self.assertIn('Click="SaveButton_Click"', generated_xaml)
             self.assertIn("void SaveButton_Click(", generated_code)
+
+    def test_gui_verification_remains_attached_to_gui_project_with_native_reconstruction(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "sample.exe"
+            out_dir = root / "analysis"
+            sample.write_text("MZ PresentationFramework.dll InitializeComponent .baml", encoding="utf-8")
+
+            result = run_cli(
+                "analyze",
+                str(sample),
+                "--out",
+                str(out_dir),
+                "--max-iterations",
+                "1",
+                "--gui",
+                "--reconstruct-gui",
+                "--reconstruct",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
+            gui_project = Path(report["gui_analysis"]["reconstruction"]["project_dir"])
+            native_project = Path(report["reconstruction"]["project_dir"])
+            self.assertEqual(Path(report["gui_analysis"]["reconstruction_verification"]["project_dir"]), gui_project)
+            self.assertEqual(Path(report["reconstruction_verification"]["project_dir"]), native_project)
+            self.assertNotEqual(gui_project, native_project)
+
     def test_analyze_writes_reports_and_uses_registered_tools(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

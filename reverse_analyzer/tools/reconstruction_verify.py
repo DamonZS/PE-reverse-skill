@@ -29,6 +29,8 @@ _SOURCE_SUFFIXES = {
     ".cxx",
     ".hpp",
     ".cs",
+    ".dart",
+    ".html",
     ".xaml",
     ".xml",
     ".vb",
@@ -44,8 +46,23 @@ _SOURCE_SUFFIXES = {
     ".go",
     ".rs",
     ".swift",
+    ".pas",
+    ".lpr",
 }
-_BUILD_FILENAMES = {"cmakelists.txt", "makefile", "meson.build", "build.ninja"}
+_BUILD_FILENAMES = {
+    "cmakelists.txt",
+    "makefile",
+    "meson.build",
+    "build.ninja",
+    "package.json",
+    "pubspec.yaml",
+    "requirements.txt",
+    "settings.gradle",
+    "settings.gradle.kts",
+    "build.gradle",
+    "build.gradle.kts",
+    "podfile",
+}
 _BUILD_SUFFIXES = {".sln", ".vcxproj", ".csproj", ".fsproj", ".vbproj", ".xcodeproj"}
 _SKIP_DIRECTORIES = {
     ".git",
@@ -70,6 +87,7 @@ _CHECK_WEIGHTS = {
     "module_coverage": 0.10,
 }
 _STATUS_VALUES = {"pass": 1.0, "partial": 0.5, "unavailable": 0.0, "fail": 0.0}
+_INVALID_SEMANTIC_STATUSES = {"unavailable", "failed", "error"}
 
 
 def verify_reconstruction(
@@ -509,6 +527,13 @@ def _has_semantic_entities_collection(payload: Mapping[str, Any] | None) -> bool
     if not isinstance(payload, Mapping):
         return False
     source = _payload_mapping(payload, ("entities",))
+    statuses = {
+        status.casefold()
+        for status in (_text(payload.get("status")), _text(source.get("status")))
+        if status
+    }
+    if statuses.intersection(_INVALID_SEMANTIC_STATUSES):
+        return False
     return isinstance(source.get("entities"), (Mapping, list, tuple, set, frozenset))
 
 
@@ -554,7 +579,13 @@ def _recommendations(checks: list[dict[str, Any]], coverage: Mapping[str, Any]) 
         recommendations.add("Add stable semantic entity names to readable source files to improve semantic coverage.")
     if status_by_name.get("module_coverage") == "partial":
         recommendations.add("Add or reference readable source files for each planned reconstruction module.")
-    if not recommendations and float(coverage.get("semantic_coverage") or 0.0) < 1.0:
+    semantic_entity_count = coverage.get("semantic_entity_count")
+    if (
+        not recommendations
+        and isinstance(semantic_entity_count, int)
+        and semantic_entity_count > 0
+        and float(coverage.get("semantic_coverage") or 0.0) < 1.0
+    ):
         recommendations.add("Increase semantic entity coverage in the generated source files.")
     return sorted(recommendations)
 

@@ -274,6 +274,36 @@ class ReportBuilderTests(unittest.TestCase):
         self.assertIn("## Semantic IR", markdown)
         self.assertIn("## Reconstruction Verification", markdown)
 
+    def test_report_builder_normalizes_malformed_semantic_ir_collections(self):
+        session = SimpleNamespace(session_id="semantic-malformed", target="sample.exe", status="succeeded", artifacts=[])
+        tool_results = [
+            {
+                "tool_name": "semantic_ir_build",
+                "result": {
+                    "tool": "semantic_ir_build",
+                    "status": "ok",
+                    "data": {
+                        "status": "ok",
+                        "schema_version": 1,
+                        "entities": "entry",
+                        "relations": {"source": "entry", "target": "worker"},
+                        "capabilities": 7,
+                    },
+                },
+            }
+        ]
+
+        report = ReportBuilder(session, tool_results).build()
+        markdown = ReportBuilder(session, tool_results).to_markdown()
+
+        self.assertEqual(report["semantic_ir"]["entities"], [])
+        self.assertEqual(report["semantic_ir"]["relations"], [])
+        self.assertEqual(report["semantic_ir"]["capabilities"], [])
+        self.assertIn("- **Entities:** 0", markdown)
+        self.assertIn("- **Relations:** 0", markdown)
+        self.assertIn("- **Capabilities:** 0", markdown)
+        self.assertNotIn("- **Top Capabilities:**", markdown)
+
     def test_report_builder_extracts_ghidra_capability_findings(self):
         session = SimpleNamespace(session_id="s5", target="sample.exe", status="succeeded", artifacts=[])
         tool_results = [
