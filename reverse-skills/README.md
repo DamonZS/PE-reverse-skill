@@ -11,14 +11,7 @@
 逆向/渗透/安全技能路由包 — AI 自动路由 · 按需自举工具链 · 自动进化经验库</p>
 
 <p align="center">
-  <a href="https://github.com/zhaoxuya520/reverse-skill/stargazers"><img src="https://img.shields.io/github/stars/zhaoxuya520/reverse-skill?style=flat&logo=github" alt="stars"></a>
-  <a href="https://github.com/zhaoxuya520/reverse-skill/forks"><img src="https://img.shields.io/github/forks/zhaoxuya520/reverse-skill?style=flat&logo=github" alt="forks"></a>
-  <a href="https://github.com/zhaoxuya520/reverse-skill/issues"><img src="https://img.shields.io/github/issues/zhaoxuya520/reverse-skill?style=flat&logo=github" alt="issues"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="license"></a>
-</p>
-
-<p align="center">
-  <a href="https://trendshift.io/repositories/43969?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-43969" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/43969/daily" alt="zhaoxuya520%2Freverse-skill | Trendshift" width="250" height="55"/></a>
 </p>
 
 <br/>
@@ -59,12 +52,6 @@
 
 <br/>
 
-<div align="center">
-  <a href="https://star-history.com/#zhaoxuya520/reverse-skill&Date">
-    <img src="https://api.star-history.com/svg?repos=zhaoxuya520/reverse-skill&type=Date" alt="Star History" width="650" />
-  </a>
-</div>
-
 <br/>
 
 <p align="right">(<a href="#关于项目">返回顶部</a>)</p>
@@ -92,7 +79,7 @@
 ### 安装
 
 ```
-git clone https://github.com/zhaoxuya520/reverse-skill.git
+git clone https://github.com/DamonZS/Codex-Pe-reverse-analyzer.git
 ```
 
 ### 初次使用
@@ -183,12 +170,6 @@ git clone https://github.com/zhaoxuya520/reverse-skill.git
 3. `git commit -m 'Add some AmazingFeature'`
 4. `git push origin feature/AmazingFeature`
 5. 提交 Pull Request
-
-### 贡献者
-
-<a href="https://github.com/zhaoxuya520/reverse-skill/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=zhaoxuya520/reverse-skill" alt="contributors" />
-</a>
 
 <p align="right">(<a href="#贡献">返回顶部</a>)</p>
 

@@ -17,7 +17,7 @@ DEFAULT_DASHBOARD_PORT = 8088
 
 @dataclass(frozen=True)
 class AnalyzerConfig:
-    """Runtime locations used by the PentAGI migration scaffold."""
+    """Runtime locations used by the PE migration scaffold."""
 
     workspace: Path
     knowledge_dir: Path
@@ -70,7 +70,7 @@ def write_default_knowledge(config: AnalyzerConfig) -> Path:
                     "providers": [],
                     "tool_notes": {},
                     "reports": [],
-                    "description": "PentAGI migration knowledge scaffold for reverse-analyzer.",
+                    "description": "PE migration knowledge scaffold for reverse-analyzer.",
                 },
                 indent=2,
                 ensure_ascii=False,
