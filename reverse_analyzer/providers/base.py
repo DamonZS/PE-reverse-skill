@@ -11,7 +11,7 @@ class ProviderMessage:
     """A provider decision returned to :class:`AgentLoop`.
 
     Exactly one of ``tool_name`` or ``final_answer`` is normally populated.
-    ``barrier`` gives providers a second, PentAGI-like stop signal for cases
+    ``barrier`` gives providers a second, PE-like stop signal for cases
     where the next safe action is to hand control back to the caller.
     """
 
