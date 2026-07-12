@@ -131,6 +131,22 @@ python -m reverse_analyzer analyze .\sample.exe --out .\out --dynamic --dynamic-
 
 Profile 运行结果会进入 KnowledgeBase。后续会话可根据成功率、事件量、Hook 开销和历史稳定性推荐 Profile。
 
+### 只读运行时内存证据
+
+`--memory-analysis` 会采集受限的运行时内存证据。若目标已启动，可配合 `--attach-pid <PID>` 附加到该进程；`--memory-plan <PATH>` 可提供预定义的快照、差分和地址映射计划。
+
+```powershell
+# 对已启动的目标采集只读内存快照
+python -m reverse_analyzer analyze .\sample.exe --out .\out --memory-analysis --attach-pid 4242
+
+# 按计划采集快照、差分与地址到 RVA 映射
+python -m reverse_analyzer analyze .\sample.exe --out .\out --memory-analysis --memory-plan .\memory-plan.json --attach-pid 4242
+```
+
+会话输出会保留快照、差分和地址映射工件（如 `memory_snapshot_<pid>.json`、`memory_diff.json`、`memory_address_map.json`）。快照记录模块、虚拟内存区域和受字节上限约束的样本；差分标出新增、移除和变化的区域；映射会尽可能将进程地址关联到加载模块、RVA、PE 节和文件偏移。`report.json` 与 `report.md` 会汇总这些运行时内存证据。
+
+内存采集阶段仅使用查询和读取权限，不写入或修改目标进程。Windows 只读内存 API、目标进程或访问权限不可用时，该阶段会标记为 `unavailable`，不会中断会话；已有快照的离线差分和地址映射仍可独立产生证据。
+
 ### 离线二进制补丁与载荷嵌入
 
 `patch-binary` 对文件副本执行可验证补丁，不会原地修改输入文件。支持定点字节替换、AOB 特征码替换、PE RVA 替换，以及追加**非可执行** overlay 数据载荷；每次成功应用都会生成审计清单和回滚清单。
@@ -167,6 +183,22 @@ python -m reverse_analyzer patch-binary .\sample.exe --plan .\patch.json --out .
 ```
 
 可用操作为 `replace_offset`、`replace_rva`、`replace_aob` 与 `embed_overlay`。所有替换均要求预期字节匹配；输出包含 `patch_manifest.json` 与 `rollback.json`，可由内置 patch 工具 API 恢复为原始副本。
+
+### 可信证据清单与离线校验
+
+每次 `analyze` 成功结束时，输出目录会生成 `evidence-manifest.json`。它以 SHA-256 记录已声明分析工件的相对路径、大小、哈希和来源信息，并将其摘要写入 `report.json`、`report.md` 与 session summary。
+
+```powershell
+# 正常分析后生成 out\evidence-manifest.json
+python -m reverse_analyzer analyze .\sample.exe --out .\out
+
+# 在原目录或整体搬迁后的输出目录中校验工件
+python -m reverse_analyzer evidence verify --manifest .\out\evidence-manifest.json
+```
+
+校验会报告缺失文件、大小变化、SHA-256 不匹配、清单 ID 被篡改以及越出输出目录的路径。清单只使用相对工件路径，因此整个 `out` 目录迁移后仍可校验；原始 sample 作为外部来源信息记录 SHA-256，不要求它被复制进证据包。为避免哈希自引用循环，`report.json`、`report.md` 与 manifest 自身不纳入当前清单覆盖范围。
+
+补丁工作流始终在新文件副本上执行，审计清单和 `rollback.json` 可用于校验并生成恢复副本；运行时内存能力仅产生受边界限制的只读快照、差分与地址映射证据，不提供进程写入、注入或执行功能。
 
 ### GUI 技术栈识别与重构
 

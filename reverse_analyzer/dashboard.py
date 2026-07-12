@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 from typing import Any, Iterable
 
+from .dashboard_platform_core import build_platform_core_view
 from .source_reconstruction import summarize_source_reconstruction
 
 
@@ -40,6 +41,9 @@ def build_dashboard(
     dynamic_profiles = _load_json(knowledge_root / "dynamic_profiles.json", diagnostics)
     gui_strategies = _load_json(knowledge_root / "gui_strategies.json", diagnostics)
     source_reconstruction = summarize_source_reconstruction(root)
+    binary_patches = _load_binary_patches(root, diagnostics)
+    evidence_manifests = _load_evidence_manifests(root, diagnostics)
+    platform_core_report = _load_platform_core_report(root, diagnostics)
 
     experiments.sort(key=_record_timestamp, reverse=True)
     sessions.sort(key=_record_timestamp, reverse=True)
@@ -63,6 +67,9 @@ def build_dashboard(
             "gui_strategy": _recommend_gui_strategy(gui_strategies),
         },
         "source_reconstruction": source_reconstruction,
+        "binary_patches": binary_patches,
+        "evidence_manifests": evidence_manifests,
+        "platform_core": build_platform_core_view(platform_core_report),
         "diagnostics": diagnostics,
     }
 
@@ -80,6 +87,19 @@ def serve_dashboard(
     handler = partial(SimpleHTTPRequestHandler, directory=str(Path(directory)))
     return ThreadingHTTPServer((host, port), handler)
 
+
+
+def _load_platform_core_report(workspace: Path, diagnostics: dict[str, Any]) -> dict[str, Any]:
+    candidates = []
+    try:
+        candidates = sorted(workspace.rglob("report.json"), key=lambda path: path.stat().st_mtime, reverse=True)
+    except OSError:
+        candidates = []
+    for path in candidates:
+        payload = _load_json(path, diagnostics)
+        if isinstance(payload, dict) and isinstance(payload.get("platform_core"), dict):
+            return payload
+    return {"platform_core": {"status": "unavailable"}}
 
 def _session_directories(workspace: Path) -> tuple[Path, ...]:
     """Return top-level and local-runner session directories for a workspace."""
@@ -145,6 +165,304 @@ def _record_timestamp(record: dict[str, Any]) -> str:
         if value is not None:
             return str(value)
     return ""
+
+
+def _load_binary_patches(workspace: Path, diagnostics: dict[str, Any]) -> dict[str, Any]:
+    """Collect structurally valid, output-associated patch audit manifests.
+
+    Patch commands may write artifacts beside a requested output, so manifests
+    are discovered recursively rather than assuming one fixed session layout.
+    A file merely named ``patch_manifest.json`` is not sufficient evidence of a
+    completed patch: it must match the patch tool's schema and either live in
+    the default patch-artifact directory or have a matching rollback plan.
+    A patch manifest and its rollback instructions in the same directory describe
+    one patch audit item. A rollback result manifest is a separate audit item.
+    """
+
+    artifacts: dict[tuple[Path, str], dict[str, Any]] = {}
+    try:
+        paths = sorted(
+            {
+                *workspace.rglob("patch_manifest.json"),
+                *workspace.rglob("rollback.json"),
+                *workspace.rglob("rollback_manifest.json"),
+            },
+            key=lambda path: str(path),
+        )
+    except OSError:
+        paths = []
+
+    loaded: dict[Path, dict[str, Any]] = {}
+    for path in paths:
+        value = _load_json(path, diagnostics)
+        if not isinstance(value, dict):
+            if value is not None:
+                diagnostics["invalid_records"] += 1
+            continue
+        loaded[path] = value
+
+    for path, value in loaded.items():
+        # ``rollback.json`` contains restoration instructions for a patch
+        # audit, not a separately applied patch result.  It is consulted below
+        # only to prove a custom artifact directory belongs to the patch tool.
+        if path.name == "rollback.json":
+            continue
+        audit_type = "rollback" if path.name == "rollback_manifest.json" else "patch"
+        if not _is_trusted_patch_audit(path, value, loaded):
+            diagnostics["invalid_records"] += 1
+            diagnostics["skipped_files"].append(
+                {
+                    "path": str(path),
+                    "error": "ignored untrusted or incomplete binary patch audit manifest",
+                }
+            )
+            continue
+        item = artifacts.setdefault(
+            (path.parent.resolve(), audit_type),
+            {"timestamp": "", "audit_type": audit_type},
+        )
+        item["artifact_path"] = str(path.parent)
+        if path.name == "rollback_manifest.json":
+            item["rollback_manifest_path"] = str(path)
+            fields = {
+                "patched_path": "source_path",
+                "restored_path": "patched_path",
+                "patched_sha256": "source_sha256",
+                "restored_sha256": "patched_sha256",
+                "status": "status",
+                "dry_run": "dry_run",
+            }
+        else:
+            item["manifest_path" if path.name == "patch_manifest.json" else "rollback_path"] = str(path)
+            fields = {
+                "source_path": "source_path",
+                "patched_path": "patched_path",
+                "source_sha256": "source_sha256",
+                "patched_sha256": "patched_sha256",
+                "status": "status",
+                "dry_run": "dry_run",
+            }
+        for key, normalized_key in fields.items():
+            if key in value and value[key] is not None:
+                item[normalized_key] = value[key]
+        if isinstance(value.get("operations"), list) and (
+            path.name != "rollback.json" or "operation_count" not in item
+        ):
+            item["operation_count"] = len(value["operations"])
+        timestamp = _record_timestamp(value)
+        if timestamp:
+            item["timestamp"] = timestamp
+        elif not item["timestamp"]:
+            try:
+                item["timestamp"] = datetime.fromtimestamp(
+                    path.stat().st_mtime, tz=timezone.utc
+                ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            except OSError:
+                pass
+
+    recent: list[dict[str, Any]] = []
+    for item in artifacts.values():
+        status = str(item.get("status") or ("planned" if item.get("dry_run") else "unknown"))
+        recent.append(
+            {
+                "source_path": _audit_text(item.get("source_path")),
+                "patched_path": _audit_text(item.get("patched_path")),
+                "source_sha256": _audit_text(item.get("source_sha256")),
+                "patched_sha256": _audit_text(item.get("patched_sha256")),
+                "operation_count": _audit_count(item.get("operation_count")),
+                "timestamp": _audit_text(item.get("timestamp")),
+                "status": status,
+                "dry_run": bool(item.get("dry_run")),
+                "artifact_path": _audit_text(item.get("artifact_path")),
+                "audit_type": _audit_text(item.get("audit_type")) or "patch",
+            }
+        )
+    recent.sort(key=lambda item: item["timestamp"], reverse=True)
+    return {
+        "count": len(recent),
+        "dry_run_count": sum(item["dry_run"] for item in recent),
+        "applied_count": sum(not item["dry_run"] and item["status"].lower() == "ok" for item in recent),
+        "recent": recent[:20],
+    }
+
+
+def _load_evidence_manifests(workspace: Path, diagnostics: dict[str, Any]) -> dict[str, Any]:
+    """Verify discovered evidence packages before exposing their status in UI.
+
+    Dashboard data must not treat a file merely named ``evidence-manifest.json``
+    as trusted. Each candidate is parsed and verified through the same path and
+    hash checks exposed by the CLI. Invalid packages remain visible as failed
+    audit rows rather than being mistaken for successful analysis evidence.
+    """
+
+    try:
+        paths = sorted(workspace.rglob("evidence-manifest.json"), key=lambda path: str(path))
+    except OSError:
+        paths = []
+
+    rows: list[dict[str, Any]] = []
+    for path in paths:
+        payload = _load_json(path, diagnostics)
+        if not isinstance(payload, dict):
+            if payload is not None:
+                diagnostics["invalid_records"] += 1
+            continue
+        try:
+            from .evidence import EVIDENCE_MANIFEST_SCHEMA, verify_manifest
+
+            verification = verify_manifest(path)
+        except Exception as error:  # noqa: BLE001 - dashboard remains usable without optional data
+            verification = {
+                "status": "failed",
+                "valid": False,
+                "verified_file_count": 0,
+                "unavailable_stage_count": 0,
+                "issues": [{"kind": "verification_error", "detail": f"{type(error).__name__}: {error}"}],
+            }
+            EVIDENCE_MANIFEST_SCHEMA = "reverse_analyzer.evidence_manifest/v1"
+
+        artifacts = payload.get("artifacts")
+        artifact_count = len(artifacts) if isinstance(artifacts, list) else 0
+        covered_file_count = sum(
+            1
+            for item in artifacts or []
+            if isinstance(item, dict)
+            and item.get("sha256")
+            and str(item.get("status") or "ok").lower()
+            in {"ok", "succeeded", "success", "available", "complete", "completed"}
+        )
+        issues = verification.get("issues") if isinstance(verification.get("issues"), list) else []
+        try:
+            relative_path = path.resolve().relative_to(workspace.resolve()).as_posix()
+        except ValueError:
+            relative_path = str(path)
+        rows.append(
+            {
+                "manifest_path": relative_path,
+                "manifest_id": payload.get("manifest_id"),
+                "schema": payload.get("schema"),
+                "schema_valid": payload.get("schema") == EVIDENCE_MANIFEST_SCHEMA,
+                "status": "ok" if verification.get("valid") else "failed",
+                "artifact_count": artifact_count,
+                "covered_file_count": covered_file_count,
+                "verified_file_count": _audit_count(verification.get("verified_file_count")),
+                "unavailable_stage_count": _audit_count(verification.get("unavailable_stage_count")),
+                "issue_count": len(issues),
+                "issue_kinds": sorted(
+                    {str(item.get("kind") or "unknown") for item in issues if isinstance(item, dict)}
+                ),
+            }
+        )
+
+    rows.sort(key=lambda item: (item["status"] != "failed", item["manifest_path"]))
+    return {
+        "count": len(rows),
+        "valid_count": sum(1 for item in rows if item["status"] == "ok"),
+        "failed_count": sum(1 for item in rows if item["status"] != "ok"),
+        "covered_file_count": sum(int(item["covered_file_count"]) for item in rows),
+        "verified_file_count": sum(int(item["verified_file_count"]) for item in rows),
+        "recent": rows[:50],
+    }
+
+
+def _is_trusted_patch_audit(
+    path: Path,
+    payload: dict[str, Any],
+    loaded: dict[Path, dict[str, Any]],
+) -> bool:
+    """Accept only schema-valid patch outputs, never filename-only matches."""
+
+    if path.name == "patch_manifest.json":
+        if not _is_patch_apply_manifest(payload):
+            return False
+        # The normal CLI location is explicit.  A caller may also select a
+        # custom artifact directory, in which case the paired rollback plan
+        # supplies the association proof.
+        if path.parent.name.endswith(".patch-artifacts"):
+            return True
+        return _is_matching_rollback_plan(payload, loaded.get(path.parent / "rollback.json"))
+    if path.name == "rollback_manifest.json":
+        return _is_patch_rollback_manifest(payload)
+    return False
+
+
+def _is_patch_apply_manifest(payload: dict[str, Any]) -> bool:
+    return (
+        _has_schema_v1(payload)
+        and _has_text_fields(payload, "source_path", "patched_path")
+        and _has_sha256_fields(payload, "source_sha256", "patched_sha256")
+        and _has_audit_state(payload)
+        and isinstance(payload.get("operations"), list)
+    )
+
+
+def _is_patch_rollback_manifest(payload: dict[str, Any]) -> bool:
+    return (
+        _has_schema_v1(payload)
+        and _has_text_fields(payload, "patched_path", "restored_path")
+        and _has_sha256_fields(payload, "patched_sha256", "restored_sha256")
+        and _has_audit_state(payload)
+        and isinstance(payload.get("operations"), list)
+    )
+
+
+def _is_matching_rollback_plan(
+    manifest: dict[str, Any],
+    rollback: dict[str, Any] | None,
+) -> bool:
+    if not isinstance(rollback, dict):
+        return False
+    if not _has_schema_v1(rollback) or not _has_text_fields(rollback, "source_path"):
+        return False
+    if not _has_sha256_fields(rollback, "source_sha256", "patched_sha256"):
+        return False
+    if not isinstance(rollback.get("operations"), list):
+        return False
+    return (
+        rollback.get("source_path") == manifest.get("source_path")
+        and rollback.get("source_sha256") == manifest.get("source_sha256")
+        and rollback.get("patched_sha256") == manifest.get("patched_sha256")
+    )
+
+
+def _has_schema_v1(payload: dict[str, Any]) -> bool:
+    return payload.get("schema_version") == 1 and not isinstance(payload.get("schema_version"), bool)
+
+
+def _has_text_fields(payload: dict[str, Any], *names: str) -> bool:
+    return all(isinstance(payload.get(name), str) and bool(payload[name].strip()) for name in names)
+
+
+def _has_sha256_fields(payload: dict[str, Any], *names: str) -> bool:
+    return all(
+        isinstance(payload.get(name), str)
+        and len(payload[name]) == 64
+        and all(character in "0123456789abcdefABCDEF" for character in payload[name])
+        for name in names
+    )
+
+
+def _has_audit_state(payload: dict[str, Any]) -> bool:
+    return (
+        isinstance(payload.get("dry_run"), bool)
+        and isinstance(payload.get("status"), str)
+        and payload["status"].lower() in {"ok", "planned"}
+    )
+
+
+def _audit_text(value: Any) -> str | None:
+    """Return bounded scalar audit data; manifests must not expand dashboard data."""
+
+    if value is None:
+        return None
+    return str(value)[:2048]
+
+
+def _audit_count(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _number(value: Any) -> float:
@@ -261,6 +579,9 @@ def _html_document(data: dict[str, Any]) -> str:
       <div class="panel"><h2>Experiment Queue</h2><div class="toolbar"><input id="search" aria-label="Search experiments" placeholder="Search targets, IDs, notes"><select id="status" aria-label="Filter experiment status"><option value="">All statuses</option></select></div><div id="experiments"></div></div>
       <aside><div class="panel"><h2>Recommended Profiles</h2><div id="recommendations"></div></div><div class="panel"><h2>Recent Sessions</h2><div id="sessions"></div></div><div class="panel"><h2>Ingestion Diagnostics</h2><div id="diagnostics"></div></div></aside>
     </section>
+    <section class="panel"><h2>Platform Core</h2><div id="platform-core"></div></section>
+    <section class="panel"><h2>Binary Patch Audit</h2><div id="binary-patches"></div></section>
+    <section class="panel"><h2>Evidence Integrity</h2><div id="evidence-manifests"></div></section>
     <section class="panel source-panel"><h2>Source Reconstruction</h2><div id="source-reconstruction"></div></section>
   </main>
   <script id="dashboard-data" type="application/json">{payload}</script>
@@ -272,7 +593,10 @@ def _html_document(data: dict[str, Any]) -> str:
       const summary = data.summary;
       const reconstruction = data.source_reconstruction || {{summary: {{}}, projects: []}};
       const reconstructionSummary = reconstruction.summary || {{}};
-      const kpis = [['Experiments', summary.experiment_total], ['Completed', summary.completed_total], ['Sessions', summary.session_total], ['Source projects', reconstructionSummary.project_total || 0], ['Data warnings', data.diagnostics.malformed_json]];
+      const patches = data.binary_patches || {{count: 0, dry_run_count: 0, applied_count: 0, recent: []}};
+      const evidence = data.evidence_manifests || {{count: 0, valid_count: 0, failed_count: 0, recent: []}};
+      const platformCore = data.platform_core || {{status: "unavailable", cards: [], capabilities: {{}}, artifacts: {{}}}};
+      const kpis = [['Experiments', summary.experiment_total], ['Completed', summary.completed_total], ['Sessions', summary.session_total], ['Verified evidence', evidence.valid_count || 0], ['Applied patches', patches.applied_count || 0], ['Source projects', reconstructionSummary.project_total || 0], ['Data warnings', data.diagnostics.malformed_json], ['Platform core', platformCore.status || 'unavailable']];
       kpis.forEach(([label,value]) => {{ const card=document.createElement('div'); card.className='kpi'; const small=document.createElement('span'); small.textContent=label; const bold=document.createElement('b'); bold.textContent=value; card.append(small,bold); el('kpis').append(card); }});
       const statuses = Object.keys(summary.status_counts).sort(); statuses.forEach(status => {{ const option=document.createElement('option'); option.value=status; option.textContent=status; el('status').append(option); }});
       function renderExperiments() {{
@@ -287,6 +611,54 @@ def _html_document(data: dict[str, Any]) -> str:
       el('recommendations').append(recommendation('Dynamic profile', data.recommendations.dynamic_profile), recommendation('GUI strategy', data.recommendations.gui_strategy));
       const sessions=el('sessions'); if (!data.sessions.length) {{ sessions.innerHTML='<div class="empty">No sessions recorded.</div>'; }} else {{ const list=document.createElement('ul'); data.sessions.forEach(item => {{ const line=document.createElement('li'); line.textContent=[item.session_id || item.id || item.target || item.source_file, item.status || 'unknown', item.updated_at || item.timestamp || item.created_at].filter(Boolean).join(' | '); list.append(line); }}); sessions.append(list); }}
       const diagnostics=el('diagnostics'); diagnostics.textContent='Loaded ' + data.diagnostics.files_loaded + '/' + data.diagnostics.files_scanned + ' JSON files; malformed: ' + data.diagnostics.malformed_json + '; invalid records: ' + data.diagnostics.invalid_records + '.';
+
+      const platformBox=el('platform-core');
+      const platformCards=Array.isArray(platformCore.cards) ? platformCore.cards : [];
+      if (!platformCards.length) {{ const empty=document.createElement('div'); empty.className='empty'; empty.textContent='No platform core report found yet.'; platformBox.append(empty); }} else {{
+        const summary=document.createElement('div'); summary.className='source-summary'; summary.append('Status: ' + text(platformCore.status)); platformBox.append(summary);
+        const cardRow=document.createElement('div'); cardRow.className='kpis'; platformCards.forEach(item => {{ const card=document.createElement('div'); card.className='kpi'; const small=document.createElement('span'); small.textContent=text(item.title); const bold=document.createElement('b'); bold.textContent=text(item.value); const sub=document.createElement('div'); sub.className='meta'; sub.textContent=text(item.subtitle); card.append(small,bold,sub); cardRow.append(card); }}); platformBox.append(cardRow);
+        const caps=document.createElement('div'); caps.className='meta'; caps.textContent='Capabilities: ' + Object.entries(platformCore.capabilities || {{}}).map(([key, providers]) => key + ' (' + (providers || []).join(', ') + ')').join(' | '); platformBox.append(caps);
+        const artifacts=document.createElement('div'); artifacts.className='meta'; artifacts.textContent='Artifacts: semantic_ir=' + text((platformCore.artifacts || {{}}).semantic_ir) + ' | evidence_graph=' + text((platformCore.artifacts || {{}}).evidence_graph); platformBox.append(artifacts);
+        const audit=platformCore.capability_audit || {{record_count: 0, records: [], summary: {{}}}};
+        const auditSummary=audit.summary || {{}};
+        const auditMeta=document.createElement('div'); auditMeta.className='meta';
+        const statusCounts=Object.entries(auditSummary.status_counts || {{}}).map(([key, value]) => key + '=' + text(value)).join(', ');
+        auditMeta.textContent='Capability audit: records=' + text(audit.record_count || 0) + ' | rollback=' + text(auditSummary.rollback_supported_count || 0) + ' | manifests=' + text(auditSummary.manifest_reference_count || 0) + ' | traces=' + text(auditSummary.dashboard_trace_count || 0) + (statusCounts ? ' | statuses=' + statusCounts : '');
+        platformBox.append(auditMeta);
+        const auditRows=Array.isArray(audit.records) ? audit.records : [];
+        if (auditRows.length) {{
+          const details=document.createElement('details');
+          const caption=document.createElement('summary');
+          caption.textContent='Capability audit records (' + auditRows.length + ')';
+          details.append(caption);
+          const list=document.createElement('ul');
+          auditRows.slice(0, 12).forEach(item => {{
+            const target=item.target_identity || {{}};
+            const line=document.createElement('li');
+            line.textContent=[
+              text(item.capability) + ':' + text(item.action),
+              'provider=' + text(item.provider),
+              'status=' + text(item.status),
+              'target=' + text(target.display_name || target.path || target.pid || target.kind)
+            ].join(' | ');
+            list.append(line);
+          }});
+          details.append(list);
+          platformBox.append(details);
+        }}
+      }}
+      const patchBox=el('binary-patches'); const patchRows=Array.isArray(patches.recent) ? patches.recent : [];
+      if (!patchRows.length) {{ const empty=document.createElement('div'); empty.className='empty'; empty.textContent='No binary patch manifests found in sessions or output artifacts.'; patchBox.append(empty); }} else {{
+        const summary=document.createElement('div'); summary.className='meta'; summary.textContent='Audited: ' + text(patches.count) + ' | applied: ' + text(patches.applied_count) + ' | dry runs: ' + text(patches.dry_run_count); patchBox.append(summary);
+        const table=document.createElement('table'), head=document.createElement('tr'); ['Action','Input ? output','Hashes','Operations','Status','Timestamp'].forEach(label => {{ const th=document.createElement('th'); th.textContent=label; head.append(th); }}); const thead=document.createElement('thead'); thead.append(head); const body=document.createElement('tbody');
+        patchRows.forEach(item => {{ const tr=document.createElement('tr'); const values=[item.audit_type || 'patch', [text(item.source_path), text(item.patched_path)].join(' ? '), [text(item.source_sha256), text(item.patched_sha256)].join(' ? '), item.operation_count, item.dry_run ? 'dry run' : (item.status || 'unknown'), item.timestamp]; values.forEach((value,index) => {{ const td=document.createElement('td'); if(index===0 || index===4) {{ const badge=document.createElement('span'); badge.className='badge'; badge.textContent=text(value); td.append(badge); }} else td.textContent=text(value); tr.append(td); }}); body.append(tr); }}); table.append(thead,body); patchBox.append(table);
+      }}
+      const evidenceBox=el('evidence-manifests'); const evidenceRows=Array.isArray(evidence.recent) ? evidence.recent : [];
+      if (!evidenceRows.length) {{ const empty=document.createElement('div'); empty.className='empty'; empty.textContent='No evidence manifests found. Run analyze to create a portable verification package.'; evidenceBox.append(empty); }} else {{
+        const summary=document.createElement('div'); summary.className='meta'; summary.textContent='Packages: ' + text(evidence.count) + ' | valid: ' + text(evidence.valid_count) + ' | failed: ' + text(evidence.failed_count) + ' | verified files: ' + text(evidence.verified_file_count); evidenceBox.append(summary);
+        const table=document.createElement('table'), head=document.createElement('tr'); ['Manifest','Status','Files','Unavailable','Issues'].forEach(label => {{ const th=document.createElement('th'); th.textContent=label; head.append(th); }}); const thead=document.createElement('thead'); thead.append(head); const body=document.createElement('tbody');
+        evidenceRows.forEach(item => {{ const tr=document.createElement('tr'); const values=[item.manifest_path, item.status || 'unknown', text(item.verified_file_count) + '/' + text(item.covered_file_count), item.unavailable_stage_count, item.issue_count ? item.issue_count + ' (' + (item.issue_kinds || []).join(', ') + ')' : '0']; values.forEach((value,index) => {{ const td=document.createElement('td'); if(index===1) {{ const badge=document.createElement('span'); badge.className='badge'; badge.textContent=text(value); td.append(badge); }} else td.textContent=text(value); tr.append(td); }}); body.append(tr); }}); table.append(thead,body); evidenceBox.append(table);
+      }}
       const reconstructionBox=el('source-reconstruction');
       const projects=Array.isArray(reconstruction.projects) ? reconstruction.projects : [];
       if (!projects.length) {{ const empty=document.createElement('div'); empty.className='empty'; empty.textContent='No reconstructed source projects discovered yet. Run analyze with --reconstruct or --reconstruct-gui.'; reconstructionBox.append(empty); }} else {{

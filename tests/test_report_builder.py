@@ -274,6 +274,124 @@ class ReportBuilderTests(unittest.TestCase):
         self.assertIn("## Semantic IR", markdown)
         self.assertIn("## Reconstruction Verification", markdown)
 
+    def test_report_builder_exposes_engine_android_protocol_and_source_sections(self):
+        session = SimpleNamespace(session_id="platform-1", target="sample.apk", status="succeeded", artifacts=[])
+        tool_results = [
+            {
+                "tool_name": "engine_analyze",
+                "result": {
+                    "tool": "engine_analyze",
+                    "status": "ok",
+                    "data": {
+                        "status": "ok",
+                        "platform": "android-apk",
+                        "engine": "unity-il2cpp",
+                        "confidence": 0.91,
+                        "evidence": ["global-metadata.dat", "libunity.so"],
+                        "metadata": {
+                            "managed_assembly_count": 0,
+                            "global_metadata_present": True,
+                            "gameassembly_present": False,
+                        },
+                        "assets": {
+                            "pak_count": 0,
+                            "uasset_count": 0,
+                            "umap_count": 0,
+                            "scene_like_asset_count": 2,
+                        },
+                        "symbols": {"recovered_symbol_count": 3},
+                        "strategy": {"name": "unity_il2cpp_metadata_recovery", "key": "unity-il2cpp:unity_il2cpp_metadata_recovery"},
+                        "artifacts": [{"name": "engine/fingerprint.json", "path": "out/engine/fingerprint.json"}],
+                    },
+                },
+            },
+            {
+                "tool_name": "android_analyze",
+                "result": {
+                    "tool": "android_analyze",
+                    "status": "ok",
+                    "data": {
+                        "status": "ok",
+                        "package_type": "apk",
+                        "framework": {"name": "flutter", "confidence": 0.88, "evidence": ["libflutter.so"]},
+                        "manifest": {"present": True, "package": "com.example.app"},
+                        "resources": {"layout_count": 4, "drawable_count": 7, "values_count": 2, "asset_count": 5},
+                        "dex_summary": {"dex_count": 2},
+                        "native_libs": {"count": 3, "abis": ["arm64-v8a"]},
+                        "strategy": {"name": "flutter_static_unpack", "key": "android:flutter_static_unpack"},
+                        "artifacts": [{"name": "android/framework.json", "path": "out/android/framework.json"}],
+                    },
+                },
+            },
+            {
+                "tool_name": "protocol_analyze",
+                "result": {
+                    "tool": "protocol_analyze",
+                    "status": "ok",
+                    "data": {
+                        "status": "ok",
+                        "protocols": [{"name": "http", "confidence": 0.92, "evidence": ["url:https://api.example.test"]}],
+                        "flows": [{"endpoint": "https://api.example.test", "kind": "url"}],
+                        "field_stats": {"protocol_count": 1, "url_count": 1},
+                        "inference": {
+                            "primary_protocol": "http",
+                            "message_formats": ["json"],
+                            "probable_flow_count": 1,
+                            "confidence": 0.92,
+                        },
+                        "artifacts": [{"name": "protocol/inference.json", "path": "out/protocol/inference.json"}],
+                    },
+                },
+            },
+            {
+                "tool_name": "reconstruct_project",
+                "result": {
+                    "tool": "reconstruct_project",
+                    "status": "ok",
+                    "data": {
+                        "status": "ok",
+                        "project_dir": "out/source/project",
+                        "function_count": 5,
+                        "import_count": 2,
+                        "module_count": 3,
+                        "module_files": ["src/main.c", "src/net.c"],
+                        "dynamic_evidence_count": 4,
+                        "stub_only": True,
+                        "artifacts": [{"name": "source/project", "path": "out/source/project"}],
+                    },
+                },
+            },
+            {
+                "tool_name": "reconstruction_verify",
+                "result": {
+                    "tool": "reconstruction_verify",
+                    "status": "ok",
+                    "data": {
+                        "status": "ok",
+                        "score": 0.84,
+                        "coverage": {"semantic_coverage": 0.8, "module_coverage": 0.75},
+                    },
+                },
+            },
+        ]
+
+        builder = ReportBuilder(session, tool_results)
+        report = builder.build()
+        markdown = builder.to_markdown()
+
+        self.assertEqual(report["engine_analysis"]["engine"], "unity-il2cpp")
+        self.assertEqual(report["android_analysis"]["framework"]["name"], "flutter")
+        self.assertEqual(report["protocol_analysis"]["inference"]["primary_protocol"], "http")
+        self.assertEqual(report["source_reconstruction"]["status"], "ok")
+        self.assertEqual(report["source_reconstruction"]["project_dir"], "out/source/project")
+        self.assertEqual(report["source_reconstruction"]["verification_score"], 0.84)
+        self.assertEqual(report["source_reconstruction"]["language"], "c")
+        self.assertEqual(report["source_reconstruction"]["output_stack"], "c-native")
+        self.assertIn("## Engine Analysis", markdown)
+        self.assertIn("## Android Analysis", markdown)
+        self.assertIn("## Protocol Analysis", markdown)
+        self.assertIn("## Source Reconstruction", markdown)
+
     def test_report_builder_normalizes_malformed_semantic_ir_collections(self):
         session = SimpleNamespace(session_id="semantic-malformed", target="sample.exe", status="succeeded", artifacts=[])
         tool_results = [
@@ -556,5 +674,51 @@ class ReportBuilderTests(unittest.TestCase):
         self.assertIn("## GUI Analysis", markdown)
         self.assertIn("## GUI Reconstruction Strategy", markdown)
         self.assertIn("## GUI Visual Regression", markdown)
+
+
+
+    def test_report_builder_includes_capability_audit_section(self):
+        session = SimpleNamespace(
+            session_id="audit-report-1",
+            target="sample.exe",
+            status="succeeded",
+            artifacts=[],
+            metadata={
+                "capability_audit": {
+                    "records": [
+                        {
+                            "session_id": "audit-report-1",
+                            "capability": "memory_runtime",
+                            "provider": "mock",
+                            "action": "scan",
+                            "status": "mocked",
+                            "target_identity": {"kind": "process", "pid": 4321, "display_name": "sample.exe"},
+                            "rollback_plan": {"supported": True},
+                            "evidence_manifest_entries": [{"path": "memory/memory_runtime_scan.json"}],
+                            "dashboard_trace": [{"kind": "capability_execution"}],
+                        }
+                    ],
+                    "summary": {
+                        "record_count": 1,
+                        "status_counts": {"mocked": 1},
+                        "rollback_supported_count": 1,
+                        "manifest_reference_count": 1,
+                        "dashboard_trace_count": 1,
+                    },
+                }
+            },
+        )
+
+        builder = ReportBuilder(session, [])
+        report = builder.build()
+        markdown = builder.to_markdown()
+
+        self.assertEqual(report["capability_audit"]["record_count"], 1)
+        self.assertEqual(report["capability_audit"]["summary"]["status_counts"]["mocked"], 1)
+        self.assertEqual(report["capability_audit"]["records"][0]["capability"], "memory_runtime")
+        self.assertIn("## Capability Audit", markdown)
+        self.assertIn("Record Count", markdown)
+        self.assertIn("memory_runtime:scan", markdown)
+
 if __name__ == "__main__":
     unittest.main()

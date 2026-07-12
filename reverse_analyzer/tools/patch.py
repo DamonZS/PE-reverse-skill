@@ -22,8 +22,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 import hashlib
 import json
+import os
 from pathlib import Path
+import string
 import struct
+import tempfile
 from typing import Any
 
 from .executor import ToolResult
@@ -36,6 +39,68 @@ _MAX_EMBED_PAYLOAD_BYTES = 128 * 1024 * 1024
 
 class PatchPlanError(ValueError):
     """Raised when a patch plan cannot be validated against a target."""
+
+
+_PATCH_OPERATION_KINDS = {
+    "replace_bytes",
+    "replace_offset",
+    "replace_file_offset",
+    "replace_rva",
+    "replace_aob",
+    "replace_pattern",
+    "aob_replace",
+    "embed_overlay",
+    "append_overlay",
+}
+
+
+def validate_patch_plan(
+    path: str | Path,
+    *,
+    plan: Mapping[str, Any] | str | Path,
+) -> ToolResult:
+    """Validate a patch plan against ``path`` without creating artifacts.
+
+    Validation checks the plan schema, target hash, operation parameters and
+    pre-images.  Payload files are opened/read for overlay operations, but the
+    target and filesystem are never modified.
+    """
+
+    try:
+        source = _require_file(path)
+        plan_payload, plan_dir = _load_json_mapping(plan, label="patch plan")
+        original = source.read_bytes()
+        operations, schema_version = _validate_patch_plan_schema(plan_payload, source_hash=_sha256(original))
+
+        simulated = bytearray(original)
+        applied_operations: list[dict[str, Any]] = []
+        for index, operation in enumerate(operations):
+            applied, _ = _apply_operation(simulated, operation, index=index, plan_dir=plan_dir)
+            applied_operations.append(applied)
+
+        return ToolResult(
+            tool="validate_patch_plan",
+            status="ok",
+            data={
+                "status": "ok",
+                "valid": True,
+                "schema_version": schema_version,
+                "target_path": str(source),
+                "target_sha256": _sha256(original),
+                "planned_sha256": _sha256(bytes(simulated)),
+                "operation_count": len(applied_operations),
+                "operations": applied_operations,
+                "dry_run": True,
+                "artifacts": [],
+            },
+        )
+    except (OSError, PatchPlanError, TypeError, ValueError) as exc:
+        return ToolResult(
+            tool="validate_patch_plan",
+            status="failed",
+            error=f"{type(exc).__name__}: {exc}",
+            data={"status": "failed", "valid": False, "target": str(path), "artifacts": []},
+        )
 
 
 def binary_patch_apply(
@@ -60,20 +125,12 @@ def binary_patch_apply(
         plan_payload, plan_dir = _load_json_mapping(plan, label="patch plan")
         original = source.read_bytes()
         source_hash = _sha256(original)
-        expected_hash = _optional_text(plan_payload.get("target_sha256"))
-        if expected_hash and source_hash.casefold() != expected_hash.casefold():
-            raise PatchPlanError("target_sha256 does not match the supplied target")
-
-        operations = plan_payload.get("operations")
-        if not isinstance(operations, list) or not operations:
-            raise PatchPlanError("patch plan must contain a non-empty operations array")
+        operations, schema_version = _validate_patch_plan_schema(plan_payload, source_hash=source_hash)
 
         patched = bytearray(original)
         applied_operations: list[dict[str, Any]] = []
         rollback_operations: list[dict[str, Any]] = []
         for index, operation in enumerate(operations):
-            if not isinstance(operation, Mapping):
-                raise PatchPlanError(f"operations[{index}] must be an object")
             applied, rollback = _apply_operation(patched, operation, index=index, plan_dir=plan_dir)
             applied_operations.append(applied)
             rollback_operations.append(rollback)
@@ -93,7 +150,7 @@ def binary_patch_apply(
             "patched_sha256": patched_hash,
             "source_size": len(original),
             "patched_size": len(patched_bytes),
-            "plan_schema_version": plan_payload.get("schema_version", 1),
+            "plan_schema_version": schema_version,
             "operations": applied_operations,
             "rollback_path": str(rollback_path),
             "dry_run": bool(dry_run),
@@ -146,25 +203,11 @@ def binary_patch_rollback(
         source = _require_file(path)
         rollback_payload, _ = _load_json_mapping(rollback, label="rollback manifest")
         original = source.read_bytes()
-        patched_hash = _optional_text(rollback_payload.get("patched_sha256"))
-        if patched_hash and _sha256(original).casefold() != patched_hash.casefold():
-            raise PatchPlanError("patched_sha256 does not match the supplied rollback target")
-        operations = rollback_payload.get("operations")
-        if not isinstance(operations, list):
-            raise PatchPlanError("rollback manifest must contain an operations array")
-
-        restored = bytearray(original)
-        restored_operations: list[dict[str, Any]] = []
-        for index, operation in enumerate(reversed(operations)):
-            if not isinstance(operation, Mapping):
-                raise PatchPlanError(f"rollback operations[{index}] must be an object")
-            restored_operations.append(_apply_rollback_operation(restored, operation))
-
-        restored_bytes = bytes(restored)
+        restored_bytes, restored_operations, expected_source_hash = _restore_rollback_bytes(
+            rollback_payload,
+            patched_bytes=original,
+        )
         restored_hash = _sha256(restored_bytes)
-        expected_source_hash = _optional_text(rollback_payload.get("source_sha256"))
-        if expected_source_hash and restored_hash.casefold() != expected_source_hash.casefold():
-            raise PatchPlanError("rollback result hash does not match source_sha256")
 
         destination_dir = Path(out_dir).resolve()
         destination = destination_dir / "rolled_back" / (output_name or _rollback_name(source))
@@ -175,6 +218,7 @@ def binary_patch_rollback(
             "patched_path": str(source),
             "restored_path": str(destination),
             "patched_sha256": _sha256(original),
+            "source_sha256": expected_source_hash,
             "restored_sha256": restored_hash,
             "restored_size": len(restored_bytes),
             "operations": restored_operations,
@@ -225,23 +269,15 @@ def binary_patch_apply_plan(
         source = Path(path).resolve()
         if source == destination:
             raise PatchPlanError("out_path must differ from the source; in-place patching is not supported")
-        plan_payload, _ = _load_json_mapping(plan, label="patch plan")
+        plan_payload, plan_dir = _load_json_mapping(plan, label="patch plan")
         original = source.read_bytes()
         source_hash = _sha256(original)
-        expected_hash = _optional_text(plan_payload.get("target_sha256"))
-        if expected_hash and source_hash.casefold() != expected_hash.casefold():
-            raise PatchPlanError("target_sha256 does not match the supplied target")
-        operations = plan_payload.get("operations")
-        if not isinstance(operations, list) or not operations:
-            raise PatchPlanError("patch plan must contain a non-empty operations array")
+        operations, schema_version = _validate_patch_plan_schema(plan_payload, source_hash=source_hash)
 
         patched = bytearray(original)
         applied_operations: list[dict[str, Any]] = []
         rollback_operations: list[dict[str, Any]] = []
-        plan_dir = Path(plan).resolve().parent if isinstance(plan, (str, Path)) else None
         for index, operation in enumerate(operations):
-            if not isinstance(operation, Mapping):
-                raise PatchPlanError(f"operations[{index}] must be an object")
             applied_item, rollback_item = _apply_operation(patched, operation, index=index, plan_dir=plan_dir)
             applied_operations.append(applied_item)
             rollback_operations.append(rollback_item)
@@ -260,7 +296,7 @@ def binary_patch_apply_plan(
             "patched_sha256": patched_hash,
             "source_size": len(original),
             "patched_size": len(patched_bytes),
-            "plan_schema_version": plan_payload.get("schema_version", 1),
+            "plan_schema_version": schema_version,
             "operations": applied_operations,
             "rollback_path": str(rollback_path),
             "dry_run": not apply,
@@ -298,6 +334,69 @@ def binary_patch_apply_plan(
         return _failure("binary_patch_apply", exc, path)
 
 
+def binary_patch_rollback_plan(
+    path: str | Path,
+    *,
+    rollback: Mapping[str, Any] | str | Path,
+    out_path: str | Path,
+    apply: bool = False,
+    artifact_dir: str | Path | None = None,
+) -> ToolResult:
+    """Restore a patched file to an explicit new output path.
+
+    This CLI-facing adapter reuses :func:`binary_patch_rollback`, defaults to a
+    dry-run, and rejects in-place restoration.
+    """
+
+    try:
+        source = _require_file(path)
+        destination = Path(out_path).resolve()
+        if source == destination:
+            raise PatchPlanError("out_path must differ from the patched input; in-place rollback is not supported")
+        rollback_payload, _ = _load_json_mapping(rollback, label="rollback manifest")
+        original = source.read_bytes()
+        restored_bytes, restored_operations, expected_source_hash = _restore_rollback_bytes(
+            rollback_payload,
+            patched_bytes=original,
+        )
+        restored_hash = _sha256(restored_bytes)
+        artifact_root = Path(artifact_dir).resolve() if artifact_dir is not None else destination.parent / f"{destination.name}.rollback-artifacts"
+        manifest_path = artifact_root / "rollback_manifest.json"
+        manifest = {
+            "status": "ok" if apply else "planned",
+            "schema_version": 1,
+            "patched_path": str(source),
+            "restored_path": str(destination),
+            "patched_sha256": _sha256(original),
+            "source_sha256": expected_source_hash,
+            "restored_sha256": restored_hash,
+            "restored_size": len(restored_bytes),
+            "operations": restored_operations,
+            "dry_run": not apply,
+        }
+        if not apply:
+            return ToolResult(tool="binary_patch_rollback", status="planned", data={**manifest, "artifacts": []})
+        if destination.exists():
+            raise PatchPlanError(f"rollback output already exists: {destination}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        artifact_root.mkdir(parents=True, exist_ok=True)
+        _atomic_write_bytes(destination, restored_bytes)
+        _write_json(manifest_path, manifest)
+        return ToolResult(
+            tool="binary_patch_rollback",
+            status="ok",
+            data={
+                **manifest,
+                "artifacts": [
+                    {"name": destination.name, "path": str(destination), "kind": "restored-binary"},
+                    {"name": "rollback_manifest.json", "path": str(manifest_path), "kind": "patch-rollback-manifest"},
+                ],
+            },
+        )
+    except (OSError, PatchPlanError, TypeError, ValueError) as exc:
+        return _failure("binary_patch_rollback", exc, path)
+
+
 def _apply_operation(
     data: bytearray,
     operation: Mapping[str, Any],
@@ -312,7 +411,8 @@ def _apply_operation(
         return _replace_at_offset(data, operation, operation_id=operation_id, kind="replace_bytes", offset=offset)
     if kind == "replace_rva":
         rva = _nonnegative_int(operation.get("rva"), field=f"{operation_id}.rva")
-        offset = _pe_rva_to_offset(bytes(data), rva)
+        expected = _hex_bytes(operation.get("expected"), field=f"{operation_id}.expected")
+        offset = _pe_rva_to_offset(bytes(data), rva, size=len(expected))
         return _replace_at_offset(data, operation, operation_id=operation_id, kind="replace_rva", offset=offset, rva=rva)
     if kind in {"replace_aob", "replace_pattern", "aob_replace"}:
         return _replace_aob(data, operation, operation_id=operation_id)
@@ -477,6 +577,8 @@ def _overlay_payload(operation: Mapping[str, Any], *, plan_dir: Path | None, ope
     payload_path = payload_path.resolve()
     if not payload_path.is_file():
         raise PatchPlanError(f"{operation_id}: payload file does not exist: {payload_path}")
+    if payload_path.stat().st_size > _MAX_EMBED_PAYLOAD_BYTES:
+        raise PatchPlanError(f"{operation_id}: payload exceeds {_MAX_EMBED_PAYLOAD_BYTES} byte limit")
     return payload_path.read_bytes(), payload_path.name
 
 
@@ -514,7 +616,15 @@ def _format_aob(pattern: list[int | None]) -> str:
     return " ".join("??" if value is None else f"{value:02X}" for value in pattern)
 
 
-def _pe_rva_to_offset(data: bytes, rva: int) -> int:
+def _pe_rva_to_offset(data: bytes, rva: int, *, size: int) -> int:
+    """Map a replacement range from PE RVA to file offset.
+
+    PE section virtual sizes can exceed their on-disk raw sizes.  Those
+    virtual-only bytes do not have a file-backed pre-image and must never be
+    treated as patchable simply because another byte range happens to follow
+    them in the file (for example, an overlay or the next section).
+    """
+
     if len(data) < 0x40 or data[:2] != b"MZ":
         raise PatchPlanError("replace_rva requires a valid PE file beginning with MZ")
     pe_offset = struct.unpack_from("<I", data, 0x3C)[0]
@@ -530,7 +640,7 @@ def _pe_rva_to_offset(data: bytes, rva: int) -> int:
         default=0,
     )
     if rva < first_raw:
-        if rva >= len(data):
+        if rva + size > first_raw or rva + size > len(data):
             raise PatchPlanError(f"RVA 0x{rva:X} is outside PE headers")
         return rva
     for index in range(section_count):
@@ -541,8 +651,15 @@ def _pe_rva_to_offset(data: bytes, rva: int) -> int:
         raw_offset = struct.unpack_from("<I", data, entry + 20)[0]
         span = max(virtual_size, raw_size)
         if virtual_address <= rva < virtual_address + span:
-            result = raw_offset + (rva - virtual_address)
-            if result >= len(data):
+            section_offset = rva - virtual_address
+            if section_offset >= raw_size:
+                raise PatchPlanError(f"RVA 0x{rva:X} is in a section virtual-only tail")
+            if size > raw_size - section_offset:
+                raise PatchPlanError(
+                    f"RVA replacement at 0x{rva:X} exceeds the section raw_size"
+                )
+            result = raw_offset + section_offset
+            if result + size > len(data):
                 raise PatchPlanError(f"RVA 0x{rva:X} resolves outside the file")
             return result
     raise PatchPlanError(f"RVA 0x{rva:X} is not mapped by any PE section")
@@ -563,6 +680,120 @@ def _load_json_mapping(value: Mapping[str, Any] | str | Path, *, label: str) -> 
     if not isinstance(payload, Mapping):
         raise PatchPlanError(f"{label} JSON must be an object")
     return {str(key): item for key, item in payload.items()}, input_path.parent
+
+
+def _validate_patch_plan_schema(
+    plan: Mapping[str, Any],
+    *,
+    source_hash: str,
+) -> tuple[list[dict[str, Any]], int]:
+    """Validate the serializable plan shape before execution/simulation."""
+
+    unknown_required = plan.get("schema_version", 1)
+    if isinstance(unknown_required, bool) or not isinstance(unknown_required, int) or unknown_required != 1:
+        raise PatchPlanError("patch plan schema_version must be the supported integer 1")
+    target_hash = plan.get("target_sha256")
+    if target_hash is not None:
+        if not isinstance(target_hash, str) or len(target_hash) != 64 or any(char not in string.hexdigits for char in target_hash):
+            raise PatchPlanError("target_sha256 must be a 64-character hexadecimal SHA-256 digest")
+        if target_hash.casefold() != source_hash.casefold():
+            raise PatchPlanError("target_sha256 does not match the supplied target")
+    operations_value = plan.get("operations")
+    if not isinstance(operations_value, list) or not operations_value:
+        raise PatchPlanError("patch plan must contain a non-empty operations array")
+
+    operations: list[dict[str, Any]] = []
+    for index, operation in enumerate(operations_value):
+        if not isinstance(operation, Mapping):
+            raise PatchPlanError(f"operations[{index}] must be an object")
+        normalized = {str(key): value for key, value in operation.items()}
+        _validate_operation_schema(normalized, index=index)
+        operations.append(normalized)
+    return operations, unknown_required
+
+
+def _validate_operation_schema(operation: Mapping[str, Any], *, index: int) -> None:
+    operation_id = _optional_text(operation.get("id") or operation.get("name")) or f"operation-{index + 1}"
+    kind_value = operation.get("kind", operation.get("type"))
+    if not isinstance(kind_value, str) or not kind_value.strip():
+        raise PatchPlanError(f"{operation_id}: operation kind must be a non-empty string")
+    kind = kind_value.casefold()
+    if kind not in _PATCH_OPERATION_KINDS:
+        raise PatchPlanError(f"{operation_id}: unsupported operation kind {kind_value!r}")
+
+    if kind in {"replace_bytes", "replace_offset", "replace_file_offset"}:
+        _nonnegative_int(operation.get("offset"), field=f"{operation_id}.offset")
+        expected = _hex_bytes(operation.get("expected"), field=f"{operation_id}.expected")
+        replacement = _hex_bytes(operation.get("replacement"), field=f"{operation_id}.replacement")
+        if len(expected) != len(replacement):
+            raise PatchPlanError(f"{operation_id}: replacement length must equal expected length to preserve file layout")
+        return
+    if kind == "replace_rva":
+        _nonnegative_int(operation.get("rva"), field=f"{operation_id}.rva")
+        expected = _hex_bytes(operation.get("expected"), field=f"{operation_id}.expected")
+        replacement = _hex_bytes(operation.get("replacement"), field=f"{operation_id}.replacement")
+        if len(expected) != len(replacement):
+            raise PatchPlanError(f"{operation_id}: replacement length must equal expected length to preserve file layout")
+        return
+    if kind in {"replace_aob", "replace_pattern", "aob_replace"}:
+        pattern = _aob_pattern(operation.get("pattern"), field=f"{operation_id}.pattern")
+        replacement = _hex_bytes(operation.get("replacement"), field=f"{operation_id}.replacement")
+        if len(pattern) != len(replacement):
+            raise PatchPlanError(f"{operation_id}: replacement length must equal AOB pattern length")
+        _positive_int(operation.get("expected_match_count"), default=1, field=f"{operation_id}.expected_match_count")
+        _nonnegative_int(operation.get("occurrence"), default=0, field=f"{operation_id}.occurrence")
+        return
+    if operation.get("payload_hex") is not None:
+        _hex_bytes(operation.get("payload_hex"), field=f"{operation_id}.payload_hex")
+        return
+    payload_file = operation.get("payload_file") or operation.get("payload_path")
+    if not isinstance(payload_file, str) or not payload_file.strip():
+        raise PatchPlanError(f"{operation_id}: embed_overlay requires payload_file or payload_hex")
+
+
+def _validate_rollback_manifest(rollback: Mapping[str, Any], *, patched_bytes: bytes) -> None:
+    schema_version = rollback.get("schema_version", 1)
+    if isinstance(schema_version, bool) or not isinstance(schema_version, int) or schema_version != 1:
+        raise PatchPlanError("rollback manifest schema_version must be the supported integer 1")
+    patched_hash = rollback.get("patched_sha256")
+    if not isinstance(patched_hash, str) or len(patched_hash) != 64 or any(char not in string.hexdigits for char in patched_hash):
+        raise PatchPlanError("rollback manifest patched_sha256 must be a 64-character hexadecimal SHA-256 digest")
+    if _sha256(patched_bytes).casefold() != patched_hash.casefold():
+        raise PatchPlanError("patched_sha256 does not match the supplied rollback target")
+    source_hash = rollback.get("source_sha256")
+    if not isinstance(source_hash, str) or len(source_hash) != 64 or any(char not in string.hexdigits for char in source_hash):
+        raise PatchPlanError("rollback manifest source_sha256 must be a 64-character hexadecimal SHA-256 digest")
+    operations = rollback.get("operations")
+    if not isinstance(operations, list):
+        raise PatchPlanError("rollback manifest must contain an operations array")
+    for index, operation in enumerate(operations):
+        if not isinstance(operation, Mapping):
+            raise PatchPlanError(f"rollback operations[{index}] must be an object")
+
+
+def _restore_rollback_bytes(
+    rollback: Mapping[str, Any],
+    *,
+    patched_bytes: bytes,
+) -> tuple[bytes, list[dict[str, Any]], str]:
+    """Apply and verify a rollback manifest entirely in memory.
+
+    The returned bytes are safe to commit only after their digest matches the
+    manifest's required source digest.  Keeping this check here ensures both
+    public rollback entry points validate before creating any output artifact.
+    """
+
+    _validate_rollback_manifest(rollback, patched_bytes=patched_bytes)
+    restored = bytearray(patched_bytes)
+    restored_operations = [
+        _apply_rollback_operation(restored, operation)
+        for operation in reversed(rollback["operations"])
+    ]
+    restored_bytes = bytes(restored)
+    expected_source_hash = str(rollback["source_sha256"])
+    if _sha256(restored_bytes).casefold() != expected_source_hash.casefold():
+        raise PatchPlanError("rollback result hash does not match source_sha256")
+    return restored_bytes, restored_operations, expected_source_hash
 
 
 def _hex_bytes(value: Any, *, field: str) -> bytes:
@@ -634,13 +865,31 @@ def _rollback_name(source: Path) -> str:
 
 
 def _atomic_write_bytes(path: Path, data: bytes) -> None:
-    temporary = path.with_name(f".{path.name}.tmp")
-    temporary.write_bytes(data)
-    temporary.replace(path)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            temporary.write(data)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_path, path)
+    except Exception:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+        raise
 
 
 def _write_json(path: Path, value: Mapping[str, Any]) -> None:
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _atomic_write_bytes(
+        path,
+        (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8"),
+    )
 
 
 def _failure(tool: str, exc: Exception, path: str | Path) -> ToolResult:

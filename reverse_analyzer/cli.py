@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib
 import json
 import os
@@ -13,16 +14,25 @@ from typing import Any, Iterable, Mapping, Optional, Sequence
 
 try:
     from .config import AnalyzerConfig, ensure_runtime_dirs, load_config, write_default_knowledge
+    from .core.audit import CapabilityAuditBuilder, summarize_audit_records
+    from .core.capabilities.models import CapabilityRequest, TargetIdentity
+    from .core.integration import finalize_platform_core
     from .dashboard import build_dashboard, serve_dashboard
     from .knowledge import KnowledgeBase
-    from .providers import RuleBasedProvider
+    from .providers import RuleBasedProvider, build_default_registry
     from .runtime import ExperimentStore, SessionStore, TraceLogger
     from .tools import frida_install_guide, ghidra_install_guide, procmon_install_guide, register_builtin_tools
 except ImportError:  # Allows direct script execution while package-level migration is incomplete.
     from config import AnalyzerConfig, ensure_runtime_dirs, load_config, write_default_knowledge
 
+    CapabilityAuditBuilder = None  # type: ignore[assignment]
+    CapabilityRequest = None  # type: ignore[assignment]
+    TargetIdentity = None  # type: ignore[assignment]
+    summarize_audit_records = None  # type: ignore[assignment]
     KnowledgeBase = None  # type: ignore[assignment]
+    finalize_platform_core = None  # type: ignore[assignment]
     RuleBasedProvider = None  # type: ignore[assignment]
+    build_default_registry = None  # type: ignore[assignment]
     ExperimentStore = None  # type: ignore[assignment]
     SessionStore = None  # type: ignore[assignment]
     TraceLogger = None  # type: ignore[assignment]
@@ -91,9 +101,34 @@ _BUILTIN_TOOLS = [
         "description": "Validate and apply a transactional offline binary patch plan to a new output file with audit and rollback artifacts.",
     },
     {
+        "name": "binary_patch_rollback",
+        "status": "available",
+        "description": "Validate and restore a patched binary to a new output file from a rollback manifest.",
+    },
+    {
+        "name": "validate_patch_plan",
+        "status": "available",
+        "description": "Validate a binary patch plan, including hashes and payload references, without writing files.",
+    },
+    {
         "name": "procmon_trace",
         "status": "optional-dependency",
         "description": "Dynamic OS behavior capture with Microsoft Sysinternals Procmon PML/CSV artifacts.",
+    },
+    {
+        "name": "memory_snapshot",
+        "status": "optional-runtime",
+        "description": "Collect bounded, read-only Windows process module and virtual-memory evidence for an explicitly attached PID.",
+    },
+    {
+        "name": "memory_diff",
+        "status": "available",
+        "description": "Compare two memory snapshot JSON documents without interacting with a target process.",
+    },
+    {
+        "name": "memory_address_map",
+        "status": "available",
+        "description": "Map addresses from memory evidence to loaded modules, RVAs, PE sections, and file offsets.",
     },
     {
         "name": "gui_fingerprint",
@@ -159,6 +194,21 @@ _BUILTIN_TOOLS = [
         "name": "gui_visual_regression",
         "status": "available-with-optional-image-metrics",
         "description": "Compare original and reconstructed screenshot pairs and report visual similarity metrics.",
+    },
+    {
+        "name": "engine_analyze",
+        "status": "available",
+        "description": "Fingerprint Unity/Unreal engine signals and persist static engine evidence artifacts.",
+    },
+    {
+        "name": "android_analyze",
+        "status": "available",
+        "description": "Statically summarize APK manifest/resources/DEX/native libraries and framework hints.",
+    },
+    {
+        "name": "protocol_analyze",
+        "status": "available",
+        "description": "Infer passive protocol evidence by fusing strings, dynamic behavior, GUI, and semantic hints.",
     },
     {
         "name": "session-store",
@@ -295,8 +345,69 @@ def binary_patch_command(args: argparse.Namespace) -> int:
     return 0 if getattr(result, "status", "failed") in {"ok", "planned"} else 2
 
 
+def binary_patch_rollback_command(args: argparse.Namespace) -> int:
+    """Dry-run or restore a patched binary to a separate output path."""
+
+    try:
+        from .tools import binary_patch_rollback_plan
+    except ImportError:
+        from reverse_analyzer.tools import binary_patch_rollback_plan
+
+    result = binary_patch_rollback_plan(
+        args.patched,
+        rollback=args.rollback,
+        out_path=args.out,
+        apply=bool(args.apply),
+        artifact_dir=args.artifact_dir,
+    )
+    payload = result.to_dict() if hasattr(result, "to_dict") else result
+    _print_json_payload(payload if isinstance(payload, Mapping) else {"status": "failed", "error": str(payload)})
+    return 0 if getattr(result, "status", "failed") in {"ok", "planned"} else 2
+
+
+def validate_patch_plan_command(args: argparse.Namespace) -> int:
+    """Validate a patch plan without creating a patched binary or artifacts."""
+
+    try:
+        from .tools import validate_patch_plan
+    except ImportError:
+        from reverse_analyzer.tools import validate_patch_plan
+
+    result = validate_patch_plan(args.sample, plan=args.plan)
+    payload = result.to_dict() if hasattr(result, "to_dict") else result
+    _print_json_payload(payload if isinstance(payload, Mapping) else {"status": "failed", "error": str(payload)})
+    return 0 if getattr(result, "status", "failed") == "ok" else 2
+
+
+def evidence_verify_command(args: argparse.Namespace) -> int:
+    """Verify a portable evidence manifest without executing a sample."""
+
+    try:
+        from .evidence import verify_manifest
+    except ImportError:
+        from reverse_analyzer.evidence import verify_manifest
+
+    payload = verify_manifest(args.manifest)
+    _print_json_payload(payload)
+    return 0 if payload.get("status") == "ok" else 2
+
+
 _KNOWN_DYNAMIC_PROFILES = {"quick", "behavior", "unpacking", "network", "persistence"}
 _MAX_GUI_INTERACTION_TRACE_BYTES = 1024 * 1024
+_CAPABILITY_COMMAND_CHOICES = (
+    "memory_runtime",
+    "injector",
+    "hook_runtime",
+    "patch_executor",
+    "android_rebuild",
+)
+_CAPABILITY_REPORT_SECTIONS = {
+    "memory_runtime": "memory_analysis",
+    "injector": "patch_analysis",
+    "hook_runtime": "memory_analysis",
+    "patch_executor": "patch_analysis",
+    "android_rebuild": "android_analysis",
+}
 
 
 def _normalize_dynamic_profile_hint(value: Any) -> Optional[str]:
@@ -596,6 +707,21 @@ def analyze_command(args: argparse.Namespace) -> int:
         if _result_status(ghidra_result) == "unavailable":
             print("Ghidra Headless not configured. Run: python -m reverse_analyzer --install-guide ghidra", file=sys.stderr)
 
+    if getattr(args, "memory_analysis", False) or getattr(args, "memory_plan", None):
+        extra_artifacts.extend(
+            _run_memory_analysis(
+                tool_executor,
+                tool_results,
+                result,
+                session,
+                session_store,
+                sample,
+                out_dir,
+                attach_pid=getattr(args, "attach_pid", None),
+                plan_path=getattr(args, "memory_plan", None),
+            )
+        )
+
     if args.gui or args.reconstruct_gui or getattr(args, "gui_interaction_trace", None):
         extra_artifacts.extend(
             _run_gui_pipeline(
@@ -610,6 +736,40 @@ def analyze_command(args: argparse.Namespace) -> int:
                 config,
             )
         )
+
+    extra_artifacts.extend(
+        _run_engine_analysis(
+            tool_executor,
+            tool_results,
+            result,
+            session,
+            session_store,
+            sample,
+            out_dir,
+        )
+    )
+    extra_artifacts.extend(
+        _run_android_analysis(
+            tool_executor,
+            tool_results,
+            result,
+            session,
+            session_store,
+            sample,
+            out_dir,
+        )
+    )
+    extra_artifacts.extend(
+        _run_protocol_analysis(
+            tool_executor,
+            tool_results,
+            result,
+            session,
+            session_store,
+            sample,
+            out_dir,
+        )
+    )
 
     extra_artifacts.extend(
         _run_behavior_graph(
@@ -695,8 +855,35 @@ def analyze_command(args: argparse.Namespace) -> int:
     if session_store is not None:
         session_store.save(session)
 
+    evidence_manifest = _write_evidence_manifest(
+        session,
+        session_store,
+        sample,
+        out_dir,
+        tool_results,
+    )
+    if evidence_manifest is not None:
+        extra_artifacts.append(str(evidence_manifest))
+    if session_store is not None:
+        session_store.save(session)
+
     report_builder = _instantiate(loaded["ReportBuilder"], session, tool_results, {}, config=config, out_dir=out_dir)
     report_data = _call_first(report_builder, ("build", "render"))
+    _finalize_platform_core_artifacts(
+        report_data,
+        out_dir,
+        sample_path=str(sample) if sample else None,
+    )
+    refreshed_manifest = _write_evidence_manifest(
+        session,
+        session_store,
+        sample,
+        out_dir,
+        tool_results,
+    )
+    if refreshed_manifest is not None and str(refreshed_manifest) not in extra_artifacts:
+        extra_artifacts.append(str(refreshed_manifest))
+    report_data["evidence_integrity"] = _session_evidence_integrity(session)
     _persist_knowledge(config, sample, session, out_dir, report_data, tool_results)
 
     report_json = out_dir / "report.json"
@@ -740,6 +927,18 @@ def analyze_command(args: argparse.Namespace) -> int:
     )
     return 0
 
+
+
+def _finalize_platform_core_artifacts(report_data, out_dir, sample_path=None):
+    if finalize_platform_core is None or build_default_registry is None:
+        return {}
+    registry = build_default_registry()
+    return finalize_platform_core(
+        report_data,
+        out_dir=str(out_dir),
+        sample_path=sample_path,
+        registry=registry,
+    )
 
 def init_knowledge_command(args: argparse.Namespace) -> int:
     config = load_config(args.workspace)
@@ -856,6 +1055,432 @@ def list_tools_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _capability_section_name(capability_name: str) -> str:
+    return _CAPABILITY_REPORT_SECTIONS.get(str(capability_name or "").lower(), "patch_analysis")
+
+
+def _capability_section_payload(
+    *,
+    capability_name: str,
+    action: str,
+    target: Any,
+    provider: Any,
+    validation: Any,
+    result: Any,
+    rollback_result: Any,
+    artifact_paths: Sequence[str],
+) -> dict[str, Any]:
+    target_payload = target.to_dict() if hasattr(target, "to_dict") else dict(target or {})
+    validation_payload = validation.to_dict() if hasattr(validation, "to_dict") else dict(validation or {})
+    result_payload = result.to_dict() if hasattr(result, "to_dict") else dict(result or {})
+    rollback_payload = (
+        rollback_result.to_dict()
+        if rollback_result is not None and hasattr(rollback_result, "to_dict")
+        else (dict(rollback_result or {}) if rollback_result is not None else None)
+    )
+    report_section = result_payload.get("report_section") if isinstance(result_payload, Mapping) else {}
+    if not isinstance(report_section, Mapping):
+        report_section = {}
+    artifacts = [dict(item) for item in (result_payload.get("artifacts") or []) if isinstance(item, Mapping)]
+    dashboard_trace = [dict(item) for item in (result_payload.get("dashboard_trace") or []) if isinstance(item, Mapping)]
+    payload = {
+        "status": result_payload.get("status") or "unknown",
+        "capability": capability_name,
+        "action": action,
+        "provider": result_payload.get("provider") or getattr(provider, "provider_name", None),
+        "session_id": result_payload.get("session_id"),
+        "target": target_payload,
+        "validation": validation_payload,
+        "before_snapshot": dict(result_payload.get("before_snapshot") or {}),
+        "after_snapshot": dict(result_payload.get("after_snapshot") or {}),
+        "rollback_plan": dict(result_payload.get("rollback_plan") or {}),
+        "rollback": rollback_payload,
+        "artifacts": artifacts,
+        "artifact_count": len(artifact_paths),
+        "artifact_paths": [str(item) for item in artifact_paths],
+        "dashboard_trace": dashboard_trace,
+        "report_section": dict(report_section),
+    }
+    merged = dict(report_section)
+    merged.update(payload)
+    return merged
+
+
+def _capability_markdown_section(capability_name: str, section: Mapping[str, Any]) -> str:
+    lines = ["", "## Capability Execution", ""]
+    lines.append(f"- **Capability:** {capability_name}")
+    lines.append(f"- **Action:** {section.get('action') or 'unknown'}")
+    lines.append(f"- **Status:** {section.get('status') or 'unknown'}")
+    lines.append(f"- **Provider:** {section.get('provider') or 'unknown'}")
+    if section.get("session_id"):
+        lines.append(f"- **Session ID:** {section['session_id']}")
+    validation = section.get("validation") if isinstance(section.get("validation"), Mapping) else {}
+    if validation:
+        lines.append(f"- **Validation OK:** {validation.get('ok')}")
+        checks = validation.get("checks") if isinstance(validation.get("checks"), Sequence) else []
+        if checks and not isinstance(checks, (str, bytes, bytearray)):
+            lines.append(f"- **Validation Checks:** {len(checks)}")
+        warnings = validation.get("warnings") if isinstance(validation.get("warnings"), Sequence) else []
+        if warnings and not isinstance(warnings, (str, bytes, bytearray)):
+            lines.append(f"- **Warnings:** {len(warnings)}")
+        errors = validation.get("errors") if isinstance(validation.get("errors"), Sequence) else []
+        if errors and not isinstance(errors, (str, bytes, bytearray)):
+            lines.append(f"- **Errors:** {len(errors)}")
+    target = section.get("target") if isinstance(section.get("target"), Mapping) else {}
+    if target:
+        target_label = target.get("display_name") or target.get("path") or target.get("pid") or target.get("kind")
+        if target_label:
+            lines.append(f"- **Target:** {target_label}")
+    if section.get("artifact_count") is not None:
+        lines.append(f"- **Artifacts:** {section.get('artifact_count', 0)}")
+    rollback = section.get("rollback") if isinstance(section.get("rollback"), Mapping) else {}
+    if rollback:
+        lines.append(f"- **Rollback:** ok={rollback.get('ok')} restored={rollback.get('restored')}")
+    return "\n".join(lines) + "\n"
+
+
+def list_capabilities_command(args: argparse.Namespace) -> int:
+    if build_default_registry is None:
+        print("Capability registry is unavailable because provider modules could not be imported.", file=sys.stderr)
+        return 3
+    registry = build_default_registry()
+    payload = {
+        "capabilities": [
+            {
+                "name": capability_name,
+                "providers": registry.list_providers(capability_name),
+            }
+            for capability_name in registry.list_capabilities()
+        ]
+    }
+    if args.json:
+        _print_json_payload(payload)
+    else:
+        for item in payload["capabilities"]:
+            providers = ", ".join(item["providers"]) if item["providers"] else "none"
+            print(f"{item['name']}: {providers}")
+    return 0
+
+
+def show_capability_audit_command(args: argparse.Namespace) -> int:
+    report_path = Path(args.report).resolve()
+    if not report_path.exists():
+        print(f"error: report does not exist: {report_path}", file=sys.stderr)
+        return 2
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8-sig"))
+    except Exception as exc:  # noqa: BLE001 - CLI must stay machine-readable on malformed input
+        print(f"error: could not read report: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
+    capability_audit = payload.get("capability_audit") if isinstance(payload, Mapping) else {}
+    _print_json_payload(capability_audit if isinstance(capability_audit, Mapping) else {})
+    return 0
+
+
+def capability_run_command(args: argparse.Namespace) -> int:
+    if CapabilityRequest is None or CapabilityAuditBuilder is None or build_default_registry is None:
+        print("Capability execution runtime is unavailable because core modules could not be imported.", file=sys.stderr)
+        return 3
+    if not args.sample and args.pid is None:
+        print("error: capability run requires --sample or --pid", file=sys.stderr)
+        return 2
+
+    config = load_config()
+    ensure_runtime_dirs(config)
+    out_dir = Path(args.out).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    sample_path = Path(args.sample).resolve() if args.sample else None
+    if sample_path is not None and not sample_path.exists():
+        print(f"error: sample does not exist: {sample_path}", file=sys.stderr)
+        return 2
+
+    try:
+        params = _parse_capability_params(args.param)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+    try:
+        target = _capability_target_identity(str(sample_path) if sample_path is not None else None, args.pid)
+        session = _new_capability_session(target, out_dir, args.capability, args.action, args.provider)
+    except Exception as exc:  # noqa: BLE001 - runtime bootstrap must fail clearly
+        print(f"error: capability bootstrap failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 3
+
+    trace_logger = TraceLogger(out_dir / "trace.jsonl") if TraceLogger is not None else None
+    session_store = SessionStore(out_dir, trace_logger=trace_logger) if SessionStore is not None else None
+    if session_store is not None:
+        session_store.save(session)
+
+    tool_results: list[dict[str, Any]] = []
+    request = CapabilityRequest(
+        capability=args.capability,
+        action=args.action,
+        target=target,
+        params=params,
+        session_id=session.session_id,
+        requested_provider=args.provider,
+        provenance={
+            "entrypoint": "cli.capability.run",
+            "out_dir": str(out_dir),
+            "sample_path": str(sample_path) if sample_path is not None else None,
+            "pid": args.pid,
+            "params": dict(params),
+        },
+    )
+    registry = build_default_registry()
+    audit_builder = CapabilityAuditBuilder()
+
+    try:
+        provider, plan, validation, execution_result, rollback_result, artifact_paths = _execute_capability_request(
+            registry=registry,
+            request=request,
+            out_dir=out_dir,
+            session=session,
+            session_store=session_store,
+            audit_builder=audit_builder,
+            rollback=bool(args.rollback),
+        )
+    except LookupError as exc:
+        _mark_flow_task(
+            session,
+            session_store,
+            flow_name="capability-execution",
+            task_name="plan",
+            status="failed",
+            error=str(exc),
+            message="capability_plan_failed",
+        )
+        _finalize_session_status(session, session_store, stopped_reason="repeated_tool")
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:  # noqa: BLE001 - provider errors should surface as CLI failures
+        _mark_flow_task(
+            session,
+            session_store,
+            flow_name="capability-execution",
+            task_name="execute",
+            status="failed",
+            error=f"{type(exc).__name__}: {exc}",
+            message="capability_execution_failed",
+        )
+        _finalize_session_status(session, session_store, stopped_reason="repeated_tool")
+        print(f"error: capability execution failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
+
+    _append_observation(
+        tool_results,
+        None,
+        session,
+        session_store,
+        "capability_plan",
+        {
+            "capability": args.capability,
+            "action": args.action,
+            "provider": getattr(provider, "provider_name", None),
+            "sample": str(sample_path) if sample_path is not None else None,
+            "pid": args.pid,
+            "params": params,
+        },
+        {"tool": "capability_plan", "status": "ok", "data": plan.to_dict() if hasattr(plan, "to_dict") else dict(plan or {})},
+    )
+    _mark_flow_task(
+        session,
+        session_store,
+        flow_name="capability-execution",
+        task_name="plan",
+        status="succeeded",
+        result={"provider": getattr(provider, "provider_name", None), "step_count": len(getattr(plan, "steps", []) or [])},
+        message="capability_plan_completed",
+    )
+
+    _append_observation(
+        tool_results,
+        None,
+        session,
+        session_store,
+        "capability_validate",
+        {
+            "capability": args.capability,
+            "action": args.action,
+            "provider": getattr(provider, "provider_name", None),
+        },
+        {
+            "tool": "capability_validate",
+            "status": "ok" if getattr(validation, "ok", False) else "failed",
+            "data": validation.to_dict() if hasattr(validation, "to_dict") else dict(validation or {}),
+        },
+    )
+    _mark_flow_task(
+        session,
+        session_store,
+        flow_name="capability-execution",
+        task_name="validate",
+        status="succeeded",
+        result={
+            "ok": bool(getattr(validation, "ok", False)),
+            "warning_count": len(getattr(validation, "warnings", []) or []),
+            "error_count": len(getattr(validation, "errors", []) or []),
+        },
+        message="capability_validation_completed",
+    )
+
+    _append_observation(
+        tool_results,
+        None,
+        session,
+        session_store,
+        "capability_execute",
+        {
+            "capability": args.capability,
+            "action": args.action,
+            "provider": getattr(provider, "provider_name", None),
+            "rollback_requested": bool(args.rollback),
+        },
+        execution_result,
+    )
+    _mark_flow_task(
+        session,
+        session_store,
+        flow_name="capability-execution",
+        task_name="execute",
+        status="succeeded",
+        result={
+            "status": getattr(execution_result, "status", "unknown"),
+            "artifact_count": len(artifact_paths),
+        },
+        message="capability_execute_completed",
+    )
+
+    if rollback_result is not None:
+        _append_observation(
+            tool_results,
+            None,
+            session,
+            session_store,
+            "capability_rollback",
+            {
+                "capability": args.capability,
+                "action": args.action,
+                "provider": getattr(provider, "provider_name", None),
+            },
+            {
+                "tool": "capability_rollback",
+                "status": "ok" if getattr(rollback_result, "ok", False) else "failed",
+                "data": rollback_result.to_dict()
+                if hasattr(rollback_result, "to_dict")
+                else dict(rollback_result or {}),
+            },
+        )
+
+    _mark_flow_task(
+        session,
+        session_store,
+        flow_name="capability-execution",
+        task_name="collect-artifacts",
+        status="succeeded",
+        result={"artifact_count": len(artifact_paths), "artifacts": [str(item) for item in artifact_paths]},
+        message="capability_artifacts_collected",
+    )
+
+    evidence_manifest = _write_evidence_manifest(
+        session,
+        session_store,
+        sample_path if sample_path is not None else None,
+        out_dir,
+        tool_results,
+    )
+    if session_store is not None:
+        session_store.save(session)
+
+    report_builder_cls = _load_symbol("ReportBuilder")
+    report_builder = _instantiate(report_builder_cls, session, tool_results, {}, config=config, out_dir=out_dir)
+    report_data = _call_first(report_builder, ("build", "render"))
+    section_name = _capability_section_name(args.capability)
+    section_payload = _capability_section_payload(
+        capability_name=args.capability,
+        action=args.action,
+        target=target,
+        provider=provider,
+        validation=validation,
+        result=execution_result,
+        rollback_result=rollback_result,
+        artifact_paths=artifact_paths,
+    )
+    report_data[section_name] = section_payload
+    metadata = _ensure_session_metadata(session)
+    report_context = metadata.get("report_context")
+    if not isinstance(report_context, dict):
+        report_context = {}
+        metadata["report_context"] = report_context
+    report_context[section_name] = dict(section_payload)
+    _finalize_platform_core_artifacts(
+        report_data,
+        out_dir,
+        sample_path=str(sample_path) if sample_path is not None else None,
+    )
+    refreshed_manifest = _write_evidence_manifest(
+        session,
+        session_store,
+        sample_path if sample_path is not None else None,
+        out_dir,
+        tool_results,
+    )
+    report_data["evidence_integrity"] = _session_evidence_integrity(session)
+
+    report_json = out_dir / "report.json"
+    report_md = out_dir / "report.md"
+    report_json.write_text(json.dumps(report_data, default=str, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    markdown = report_builder.to_markdown() if hasattr(report_builder, "to_markdown") else "# Reverse Analysis Report\n"
+    markdown += _capability_markdown_section(args.capability, section_payload)
+    report_md.write_text(markdown, encoding="utf-8")
+
+    _mark_flow_task(
+        session,
+        session_store,
+        flow_name="capability-execution",
+        task_name="report",
+        status="succeeded",
+        result={"report_json": str(report_json), "report_md": str(report_md)},
+        message="capability_report_generated",
+    )
+    if hasattr(session, "set_status"):
+        session.set_status("succeeded")
+    _finalize_session_status(session, session_store, stopped_reason="final_answer")
+
+    session.artifacts.extend(
+        [
+            {"name": "report.json", "path": str(report_json), "kind": "report"},
+            {"name": "report.md", "path": str(report_md), "kind": "report"},
+        ]
+    )
+    if session_store is not None:
+        session_store.save(session)
+
+    payload = {
+        "session_id": session.session_id,
+        "out_dir": str(out_dir),
+        "capability": args.capability,
+        "action": args.action,
+        "provider": getattr(provider, "provider_name", None),
+        "validation": validation.to_dict() if hasattr(validation, "to_dict") else dict(validation or {}),
+        "result": execution_result.to_dict() if hasattr(execution_result, "to_dict") else dict(execution_result or {}),
+        "rollback": (
+            rollback_result.to_dict()
+            if rollback_result is not None and hasattr(rollback_result, "to_dict")
+            else (dict(rollback_result or {}) if rollback_result is not None else None)
+        ),
+        "artifacts": [str(report_json), str(report_md), *artifact_paths],
+    }
+    if evidence_manifest is not None and str(evidence_manifest) not in payload["artifacts"]:
+        payload["artifacts"].append(str(evidence_manifest))
+    if refreshed_manifest is not None and str(refreshed_manifest) not in payload["artifacts"]:
+        payload["artifacts"].append(str(refreshed_manifest))
+    _print_json_payload(payload)
+    return 0
+
+
 def _experiment_context(args: argparse.Namespace) -> tuple[AnalyzerConfig, Any] | None:
     if ExperimentStore is None:
         print("Experiment control plane is unavailable because runtime modules could not be imported.", file=sys.stderr)
@@ -906,11 +1531,285 @@ def _experiment_options(args: argparse.Namespace) -> Dict[str, Any]:
         )
     if args.reconstruct:
         options["reconstruct"] = True
+    if args.memory_analysis or args.memory_plan:
+        options["memory_analysis"] = True
+        if args.memory_plan:
+            options["memory_plan"] = args.memory_plan
     return {key: value for key, value in options.items() if value is not None and value is not False}
 
 
 def _print_json_payload(payload: Mapping[str, Any]) -> None:
     print(json.dumps(dict(payload), ensure_ascii=False, indent=2, default=str))
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _ensure_session_metadata(session: Any) -> dict[str, Any]:
+    metadata = getattr(session, "metadata", None)
+    if not isinstance(metadata, dict):
+        metadata = dict(metadata) if isinstance(metadata, Mapping) else {}
+        setattr(session, "metadata", metadata)
+    return metadata
+
+
+def _append_capability_audit_record(session: Any, record: Any) -> dict[str, Any]:
+    metadata = _ensure_session_metadata(session)
+    capability_audit = metadata.get("capability_audit")
+    if not isinstance(capability_audit, dict):
+        capability_audit = {}
+        metadata["capability_audit"] = capability_audit
+    records = capability_audit.get("records")
+    if not isinstance(records, list):
+        records = []
+        capability_audit["records"] = records
+    payload = record.to_dict() if hasattr(record, "to_dict") else dict(record or {})
+    records.append(payload)
+    summary = summarize_audit_records(records) if callable(summarize_audit_records) else {"record_count": len(records)}
+    capability_audit["record_count"] = len(records)
+    capability_audit["summary"] = summary
+    report_context = metadata.get("report_context")
+    if not isinstance(report_context, dict):
+        report_context = {}
+        metadata["report_context"] = report_context
+    report_context["capability_audit"] = {
+        "record_count": capability_audit["record_count"],
+        "records": [dict(item) for item in records if isinstance(item, Mapping)],
+        "summary": dict(summary),
+    }
+    return capability_audit
+
+
+def _parse_capability_params(values: Sequence[str] | None) -> dict[str, Any]:
+    params: dict[str, Any] = {}
+    for item in values or []:
+        if "=" not in str(item):
+            raise ValueError(f"invalid capability param '{item}'; expected key=value")
+        key, raw_value = str(item).split("=", 1)
+        key = key.strip()
+        if not key:
+            raise ValueError(f"invalid capability param '{item}'; empty key")
+        value = raw_value.strip()
+        try:
+            params[key] = json.loads(value)
+        except json.JSONDecodeError:
+            lowered = value.lower()
+            if lowered == "true":
+                params[key] = True
+            elif lowered == "false":
+                params[key] = False
+            elif lowered == "null":
+                params[key] = None
+            else:
+                params[key] = value
+    return params
+
+
+def _capability_target_identity(sample: str | None, pid: int | None) -> Any:
+    if TargetIdentity is None:
+        raise RuntimeError("Capability target model is not available.")
+    sample_path = Path(sample).resolve() if sample else None
+    kind = "process" if pid is not None and sample_path is None else "sample"
+    display_name = sample_path.name if sample_path is not None else (f"pid:{pid}" if pid is not None else "capability-target")
+    metadata: dict[str, Any] = {}
+    sha256 = None
+    if sample_path is not None:
+        if sample_path.exists():
+            sha256 = _sha256_file(sample_path)
+            metadata["exists"] = True
+        else:
+            metadata["exists"] = False
+    if pid is not None:
+        metadata["pid"] = pid
+    return TargetIdentity(
+        kind=kind,
+        path=str(sample_path) if sample_path is not None else None,
+        pid=pid,
+        sha256=sha256,
+        display_name=display_name,
+        metadata=metadata,
+    )
+
+
+def _new_capability_session(
+    target: Any,
+    out_dir: Path,
+    capability_name: str,
+    action: str,
+    requested_provider: str | None = None,
+) -> Any:
+    try:
+        from .core.models import Flow, ReverseSession, Task
+    except Exception as exc:
+        raise RuntimeError(f"ReverseSession models are not importable: {exc}") from exc
+
+    session = ReverseSession(
+        target=getattr(target, "path", None) or getattr(target, "display_name", None),
+        metadata={
+            "out_dir": str(out_dir),
+            "capability": capability_name,
+            "action": action,
+            "requested_provider": requested_provider,
+        },
+    )
+    flow = Flow(
+        "capability-execution",
+        "Capability provider execution flow",
+        metadata={"capability": capability_name, "action": action},
+    )
+    flow.add_task(Task("plan", "Plan capability execution"))
+    flow.add_task(Task("validate", "Validate capability execution plan"))
+    flow.add_task(Task("execute", "Execute capability provider"))
+    flow.add_task(Task("collect-artifacts", "Persist capability artifacts"))
+    flow.add_task(Task("report", "Generate capability execution report"))
+    session.add_flow(flow)
+    if hasattr(session, "start"):
+        session.start()
+    if hasattr(flow, "start"):
+        flow.start()
+    return session
+
+
+def _materialize_capability_artifacts(
+    result: Any,
+    bundle: Any,
+    out_dir: Path,
+    session: Any,
+    session_store: Any,
+) -> list[str]:
+    artifacts = list(getattr(bundle, "artifacts", []) or [])
+    manifest_entries = list(getattr(bundle, "manifest_entries", []) or [])
+    materialized_artifacts: list[dict[str, Any]] = []
+    materialized_entries: list[dict[str, Any]] = []
+    paths: list[str] = []
+
+    artifact_lookup: dict[str, dict[str, Any]] = {}
+    for artifact in artifacts:
+        payload = artifact.to_dict() if hasattr(artifact, "to_dict") else dict(artifact or {})
+        path_value = payload.get("path")
+        if not path_value:
+            continue
+        path = Path(path_value)
+        destination = path if path.is_absolute() else out_dir / path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        content = {
+            "capability": getattr(result, "capability", None),
+            "provider": getattr(result, "provider", None),
+            "session_id": getattr(result, "session_id", None),
+            "status": getattr(result, "status", None),
+            "action": getattr(result, "action", None),
+            "before_snapshot": dict(getattr(result, "before_snapshot", {}) or {}),
+            "after_snapshot": dict(getattr(result, "after_snapshot", {}) or {}),
+            "rollback_plan": dict(getattr(result, "rollback_plan", {}) or {}),
+            "artifact": payload,
+            "provenance": dict(getattr(result, "provenance", {}) or {}),
+        }
+        destination.write_text(json.dumps(content, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
+        artifact_record = {
+            **payload,
+            "path": str(destination),
+            "name": payload.get("name") or destination.name,
+            "tool": getattr(result, "capability", None),
+            "status": getattr(result, "status", None),
+            "role": payload.get("role") or "capability_artifact",
+        }
+        materialized_artifacts.append(artifact_record)
+        artifact_lookup[str(path_value)] = artifact_record
+        paths.append(str(destination))
+        if session_store is not None and hasattr(session_store, "record_artifact"):
+            session_store.record_artifact(
+                session,
+                artifact_record["name"],
+                path=str(destination),
+                kind=str(artifact_record.get("kind") or "artifact"),
+                data=artifact_record,
+            )
+        elif session is not None and hasattr(session, "artifacts"):
+            session.artifacts.append(dict(artifact_record))
+
+    for entry in manifest_entries:
+        payload = entry.to_dict() if hasattr(entry, "to_dict") else dict(entry or {})
+        path_value = payload.get("path")
+        if path_value and str(path_value) in artifact_lookup:
+            payload["path"] = artifact_lookup[str(path_value)]["path"]
+        materialized_entries.append(payload)
+
+    if hasattr(result, "artifacts"):
+        result.artifacts = materialized_artifacts
+    if hasattr(result, "evidence_manifest_entries"):
+        result.evidence_manifest_entries = materialized_entries
+    return paths
+
+
+def _write_capability_audit_artifact(record: Any, out_dir: Path, session: Any, session_store: Any) -> str:
+    path = out_dir / "capabilities" / f"{record.capability}_{record.action}_audit.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = record.to_dict() if hasattr(record, "to_dict") else dict(record or {})
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
+    artifact = {
+        "name": path.name,
+        "path": str(path),
+        "kind": "capability_audit",
+        "tool": getattr(record, "capability", None),
+        "status": getattr(record, "status", None),
+        "role": "capability_audit_record",
+    }
+    if session_store is not None and hasattr(session_store, "record_artifact"):
+        session_store.record_artifact(session, path.name, path=str(path), kind="capability_audit", data=artifact)
+    elif session is not None and hasattr(session, "artifacts"):
+        session.artifacts.append(artifact)
+    return str(path)
+
+
+def _execute_capability_request(
+    *,
+    registry: Any,
+    request: Any,
+    out_dir: Path,
+    session: Any,
+    session_store: Any,
+    audit_builder: Any,
+    rollback: bool = False,
+) -> tuple[Any, Any, Any, Any, Any, list[str]]:
+    provider = registry.resolve(request.capability, preferred=request.requested_provider)
+    context = {
+        "out_dir": str(out_dir),
+        "session": session,
+        "session_store": session_store,
+    }
+    if hasattr(provider, "supports") and not provider.supports(request, context=context):
+        raise RuntimeError(
+            f"Provider '{provider.provider_name}' does not support capability '{request.capability}:{request.action}'"
+        )
+    plan = provider.plan(request, context=context)
+    validation = provider.validate(plan, context=context)
+    if not getattr(validation, "ok", False):
+        errors = ", ".join(getattr(validation, "errors", []) or []) or "validation failed"
+        raise RuntimeError(errors)
+    result = provider.execute(plan, context=context)
+    bundle = provider.collect_artifacts(result, str(out_dir), context=context)
+    artifact_paths = _materialize_capability_artifacts(result, bundle, out_dir, session, session_store)
+    record = audit_builder.build_record(plan=plan, result=result, validation=validation)
+    rollback_result = None
+    if rollback:
+        rollback_result = provider.rollback(result, context=context)
+        if rollback_result is not None and hasattr(record, "add_event"):
+            record.add_event(
+                "rollback",
+                "capability rollback completed",
+                ok=getattr(rollback_result, "ok", False),
+                restored=getattr(rollback_result, "restored", False),
+                details=dict(getattr(rollback_result, "details", {}) or {}),
+            )
+    _append_capability_audit_record(session, record)
+    audit_path = _write_capability_audit_artifact(record, out_dir, session, session_store)
+    artifact_paths.append(audit_path)
+    return provider, plan, validation, result, rollback_result, artifact_paths
 
 
 def experiment_create_command(args: argparse.Namespace) -> int:
@@ -1106,6 +2005,8 @@ def _add_experiment_analysis_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--dynamic-backend", choices=("frida", "procmon", "all"), default="frida")
     parser.add_argument("--dynamic-profile", choices=("auto", "behavior", "quick", "unpacking", "network", "persistence"), default="auto")
     parser.add_argument("--dynamic-duration", type=float, default=10.0)
+    parser.add_argument("--memory-analysis", action="store_true", help="Include read-only runtime memory evidence when an existing PID is supplied.")
+    parser.add_argument("--memory-plan", default=None, help="Optional JSON plan containing offline memory snapshot diff and address mapping inputs.")
     parser.add_argument("--gui", action="store_true", help="Include GUI fingerprinting and strategy selection.")
     parser.add_argument("--gui-runtime", action="store_true", help="Include optional runtime UI probing.")
     parser.add_argument("--gui-visual", action="store_true", help="Include GUI visual parsing.")
@@ -1133,6 +2034,8 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--dynamic-duration", type=float, default=10.0, help="Frida tracing duration in seconds.")
     analyze.add_argument("--dynamic-arg", action="append", default=None, help="Argument passed to the dynamically spawned target. Repeatable.")
     analyze.add_argument("--attach-pid", type=int, default=None, help="Attach Frida to an existing PID instead of spawning the sample.")
+    analyze.add_argument("--memory-analysis", action="store_true", help="Collect bounded read-only memory evidence; snapshots require an explicit --attach-pid.")
+    analyze.add_argument("--memory-plan", default=None, help="JSON plan for offline memory snapshot diffs and address mappings.")
     analyze.add_argument("--dynamic-hook-file", default=None, help="JSON hook plan for Frida; defaults to the built-in Windows reverse-analysis hooks.")
     analyze.add_argument("--procmon-path", default=None, help="Path to Procmon64.exe/Procmon.exe for --dynamic-backend procmon/all.")
     analyze.add_argument("--decompile", action="store_true", help="Run Ghidra Headless decompilation when configured.")
@@ -1194,13 +2097,56 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--port", type=int, default=None, help="Dashboard server port; defaults to configuration or 8088.")
     dashboard.set_defaults(func=dashboard_command)
 
-    patch_binary = subparsers.add_parser("patch-binary", help="Validate or apply an offline binary patch plan to a new output file.")
-    patch_binary.add_argument("sample", help="Input binary/file; it is never modified in place.")
-    patch_binary.add_argument("--plan", required=True, help="JSON patch plan containing guarded replace/AOB/append/insert operations.")
-    patch_binary.add_argument("--out", required=True, help="Output path; must differ from the input sample.")
-    patch_binary.add_argument("--apply", action="store_true", help="Write the patched output; without this flag, run a full dry-run only.")
-    patch_binary.add_argument("--artifact-dir", default=None, help="Directory for patch audit and rollback plan artifacts.")
-    patch_binary.set_defaults(func=binary_patch_command)
+    capability = subparsers.add_parser("capability", help="Run registry-backed capability providers with audit/report artifacts.")
+    capability_commands = capability.add_subparsers(dest="capability_command", required=True)
+
+    capability_run = capability_commands.add_parser("run", help="Execute a registered capability provider and persist audit artifacts.")
+    capability_run.add_argument("--capability", required=True, choices=_CAPABILITY_COMMAND_CHOICES)
+    capability_run.add_argument("--action", required=True, help="Capability action passed to the provider, e.g. scan or plan.")
+    capability_run.add_argument("--sample", default=None, help="Optional sample/file target.")
+    capability_run.add_argument("--pid", type=int, default=None, help="Optional process target PID.")
+    capability_run.add_argument("--out", required=True, help="Output directory for capability audit/report artifacts.")
+    capability_run.add_argument("--provider", default=None, help="Preferred provider name when multiple providers are registered.")
+    capability_run.add_argument("--param", action="append", default=None, help="Capability parameter in key=value form. Repeatable.")
+    capability_run.add_argument("--rollback", action="store_true", help="Request provider rollback after execution to validate reversibility.")
+    capability_run.set_defaults(func=capability_run_command)
+
+    capability_list = capability_commands.add_parser("list", help="List registered capabilities and their providers.")
+    capability_list.add_argument("--json", action="store_true", help="Emit JSON instead of text.")
+    capability_list.set_defaults(func=list_capabilities_command)
+
+    capability_show_audit = capability_commands.add_parser("show-audit", help="Print the capability_audit section from a report.json file.")
+    capability_show_audit.add_argument("--report", required=True, help="Path to report.json generated by capability run or analyze.")
+    capability_show_audit.set_defaults(func=show_capability_audit_command)
+
+    patch_binary = subparsers.add_parser("patch-binary", help="Validate/apply a patch plan or restore a patched binary to a new output file.")
+    patch_commands = patch_binary.add_subparsers(dest="patch_command", required=True)
+    apply_binary = patch_commands.add_parser("apply", help="Validate or apply an offline binary patch plan to a new output file.")
+    apply_binary.add_argument("sample", help="Input binary/file; it is never modified in place.")
+    apply_binary.add_argument("--plan", required=True, help="JSON patch plan containing guarded replace/AOB/append operations.")
+    apply_binary.add_argument("--out", required=True, help="Output path; must differ from the input sample.")
+    apply_binary.add_argument("--apply", action="store_true", help="Write the patched output; without this flag, run a full dry-run only.")
+    apply_binary.add_argument("--artifact-dir", default=None, help="Directory for patch audit and rollback plan artifacts.")
+    apply_binary.set_defaults(func=binary_patch_command)
+
+    rollback_binary = patch_commands.add_parser("rollback", help="Dry-run or restore a patched binary to a separate output path.")
+    rollback_binary.add_argument("patched", help="Patched binary/file; it is never modified in place.")
+    rollback_binary.add_argument("--rollback", required=True, help="Rollback JSON manifest emitted by patch-binary --apply.")
+    rollback_binary.add_argument("--out", required=True, help="Restored output path; must differ from the patched input.")
+    rollback_binary.add_argument("--apply", action="store_true", help="Write the restored output; without this flag, run a full dry-run only.")
+    rollback_binary.add_argument("--artifact-dir", default=None, help="Directory for rollback audit artifacts.")
+    rollback_binary.set_defaults(func=binary_patch_rollback_command)
+
+    validate_patch = subparsers.add_parser("validate-patch-plan", help="Validate a patch plan against a target without writing files.")
+    validate_patch.add_argument("sample", help="Input binary/file used for target hash and pre-image validation.")
+    validate_patch.add_argument("--plan", required=True, help="JSON patch plan to validate.")
+    validate_patch.set_defaults(func=validate_patch_plan_command)
+
+    evidence = subparsers.add_parser("evidence", help="Verify portable, hash-backed analysis evidence manifests.")
+    evidence_commands = evidence.add_subparsers(dest="evidence_command", required=True)
+    evidence_verify = evidence_commands.add_parser("verify", help="Verify hashes and relative paths recorded by an evidence manifest.")
+    evidence_verify.add_argument("--manifest", required=True, help="Path to evidence-manifest.json.")
+    evidence_verify.set_defaults(func=evidence_verify_command)
 
     init_knowledge = subparsers.add_parser("init-knowledge", help="Create the local knowledge scaffold.")
     init_knowledge.add_argument("--workspace", default=None, help="Workspace root; defaults to current directory.")
@@ -1218,9 +2164,38 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _normalize_patch_binary_arguments(argv: Sequence[str] | None) -> list[str]:
+    """Preserve legacy and flags-first ``patch-binary`` command spellings.
+
+    ``patch-binary`` originally implied an apply-plan operation, so existing
+    callers can omit the explicit ``apply`` subcommand.  Insert that command
+    even when the old caller placed its options before the input path.  A
+    flags-first rollback invocation is inferred from ``--rollback`` as well.
+    """
+
+    normalized = list(sys.argv[1:] if argv is None else argv)
+    try:
+        patch_index = normalized.index("patch-binary")
+    except ValueError:
+        return normalized
+    next_index = patch_index + 1
+    if next_index >= len(normalized):
+        return normalized
+    next_token = normalized[next_index]
+    if next_token in {"apply", "rollback", "-h", "--help"}:
+        return normalized
+
+    # Keep the old implicit-apply behavior when options precede the input
+    # sample.  ``--rollback`` is unambiguous and makes the equivalent
+    # flags-first restore spelling work too.
+    command = "rollback" if "--rollback" in normalized[next_index:] else "apply"
+    normalized.insert(next_index, command)
+    return normalized
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(_normalize_patch_binary_arguments(argv))
     if getattr(args, "install_guide", None):
         tool = args.install_guide.lower()
         if tool == "ghidra":
@@ -1284,6 +2259,205 @@ def _append_observation(
     elif session is not None and hasattr(session, "tool_calls"):
         session.tool_calls.append(dict(observation))
     return observation
+
+
+def _run_memory_analysis(
+    tool_executor: Any,
+    tool_results: list[dict[str, Any]],
+    result: Any,
+    session: Any,
+    session_store: Any,
+    sample: Path,
+    out_dir: Path,
+    *,
+    attach_pid: int | None,
+    plan_path: str | None,
+) -> list[str]:
+    """Collect optional read-only memory evidence without interrupting analysis.
+
+    A live snapshot is deliberately limited to an explicit PID attachment.  A
+    plan may still drive offline diffs and address mappings when no live target
+    is available.
+    """
+
+    artifacts: list[str] = []
+    plan, plan_error, plan_dir = _load_memory_plan(plan_path)
+    captured_snapshot: Any = None
+
+    def record(tool_name: str, tool_args: Mapping[str, Any], tool_result: Any) -> None:
+        _append_observation(tool_results, result, session, session_store, tool_name, tool_args, tool_result)
+        artifacts.extend(_record_artifacts(session, session_store, tool_result))
+
+    if plan_error:
+        record(
+            "memory_diff",
+            {"memory_plan": plan_path},
+            {"tool": "memory_diff", "status": "failed", "error": plan_error, "data": {}},
+        )
+        return artifacts
+
+    if attach_pid is None:
+        record(
+            "memory_snapshot",
+            {"attach_pid": None, "out_dir": str(out_dir)},
+            {
+                "tool": "memory_snapshot",
+                "status": "unavailable",
+                "error": "memory snapshots require an explicit --attach-pid",
+                "data": {},
+            },
+        )
+    else:
+        capture_options = plan.get("capture") or plan.get("snapshot_options") or {}
+        if not isinstance(capture_options, Mapping):
+            capture_options = {}
+        snapshot_args = {
+            "path": attach_pid,
+            "out_dir": str(out_dir),
+            "module_filter": capture_options.get("module_filter"),
+            "max_bytes": capture_options.get("max_bytes", 64 * 1024),
+        }
+        if "max_regions" in capture_options:
+            snapshot_args["max_regions"] = capture_options.get("max_regions")
+        snapshot_result = tool_executor.execute("memory_snapshot", **snapshot_args)
+        captured_snapshot = _result_payload(snapshot_result) if _result_status(snapshot_result) == "ok" else None
+        record(
+            "memory_snapshot",
+            {
+                "attach_pid": attach_pid,
+                "out_dir": str(out_dir),
+                "module_filter": capture_options.get("module_filter"),
+                "max_bytes": capture_options.get("max_bytes", 64 * 1024),
+                "max_regions": capture_options.get("max_regions"),
+            },
+            snapshot_result,
+        )
+
+    diff_stages = _memory_plan_stages(plan, "diff", "memory_diff")
+    for index, spec in enumerate(diff_stages):
+        before = _memory_plan_source(spec.get("before", spec.get("before_snapshot")), captured_snapshot, plan_dir)
+        after = _memory_plan_source(spec.get("after", spec.get("after_snapshot")), captured_snapshot, plan_dir)
+        if before is None or after is None:
+            record(
+                "memory_diff",
+                {"memory_plan": plan_path, "stage": index},
+                {
+                    "tool": "memory_diff",
+                    "status": "failed",
+                    "error": "memory diff plan entries require before and after snapshots",
+                    "data": {},
+                },
+            )
+            continue
+        artifact_name = _memory_stage_artifact_name("memory_diff", index, len(diff_stages))
+        diff_args = {"before": before, "after": after, "out_dir": str(out_dir)}
+        if artifact_name is not None:
+            diff_args["artifact_name"] = artifact_name
+        diff_result = tool_executor.execute("memory_diff", **diff_args)
+        record(
+            "memory_diff",
+            {"memory_plan": plan_path, "stage": index, "artifact_name": artifact_name},
+            diff_result,
+        )
+
+    address_map_stages = _memory_plan_stages(plan, "address_map", "memory_address_map")
+    for index, spec in enumerate(address_map_stages):
+        snapshot = _memory_plan_source(
+            spec.get("snapshot", spec.get("after", spec.get("after_snapshot", spec.get("before", spec.get("before_snapshot"))))),
+            captured_snapshot,
+            plan_dir,
+        )
+        addresses = spec.get("addresses")
+        if snapshot is None or not isinstance(addresses, Sequence) or isinstance(addresses, (str, bytes, bytearray)):
+            record(
+                "memory_address_map",
+                {"memory_plan": plan_path, "stage": index},
+                {
+                    "tool": "memory_address_map",
+                    "status": "failed",
+                    "error": "memory address-map plan entries require a snapshot and an addresses array",
+                    "data": {},
+                },
+            )
+            continue
+        artifact_name = _memory_stage_artifact_name("memory_address_map", index, len(address_map_stages))
+        map_args = {
+            "path": str(spec.get("path") or sample),
+            "snapshot": snapshot,
+            "addresses": addresses,
+            "out_dir": str(out_dir),
+        }
+        if artifact_name is not None:
+            map_args["artifact_name"] = artifact_name
+        map_result = tool_executor.execute("memory_address_map", **map_args)
+        record(
+            "memory_address_map",
+            {
+                "memory_plan": plan_path,
+                "stage": index,
+                "addresses": list(addresses),
+                "artifact_name": artifact_name,
+            },
+            map_result,
+        )
+
+    return artifacts
+
+
+def _load_memory_plan(plan_path: str | None) -> tuple[Mapping[str, Any], str | None, Path | None]:
+    if not plan_path:
+        return {}, None, None
+    try:
+        path = Path(plan_path).expanduser().resolve()
+        # Accept the UTF-8 BOM emitted by Windows PowerShell's ``Set-Content``
+        # as well as regular UTF-8 JSON produced by the CLI and editors.
+        value = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        return {}, f"invalid memory plan: {exc}", None
+    if not isinstance(value, Mapping):
+        return {}, "invalid memory plan: root must be a JSON object", None
+    return value, None, path.parent
+
+
+def _memory_plan_stages(plan: Mapping[str, Any], name: str, tool_name: str) -> list[Mapping[str, Any]]:
+    value = plan.get(name, plan.get(tool_name, plan.get(f"{name}s")))
+    if value is None:
+        if name == "diff" and {"before", "after", "before_snapshot", "after_snapshot"}.intersection(plan):
+            value = {
+                "before": plan.get("before", plan.get("before_snapshot")),
+                "after": plan.get("after", plan.get("after_snapshot")),
+            }
+        elif name == "address_map" and "addresses" in plan:
+            value = {
+                "snapshot": plan.get("snapshot", plan.get("after", plan.get("after_snapshot", plan.get("before", plan.get("before_snapshot"))))),
+                "addresses": plan.get("addresses"),
+                "path": plan.get("path"),
+            }
+        else:
+            return []
+    if isinstance(value, Mapping):
+        return [value]
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [item for item in value if isinstance(item, Mapping)]
+    return [{}]
+
+
+def _memory_stage_artifact_name(tool_name: str, index: int, stage_count: int) -> str | None:
+    """Keep legacy names for single stages and disambiguate multi-stage plans."""
+
+    if stage_count <= 1:
+        return None
+    return f"{tool_name}_stage_{index + 1}.json"
+
+
+def _memory_plan_source(value: Any, captured_snapshot: Any, plan_dir: Path | None) -> Any:
+    if isinstance(value, str):
+        if value in {"current", "captured", "$snapshot"}:
+            return captured_snapshot
+        if plan_dir is not None:
+            path = Path(value)
+            return str(path if path.is_absolute() else (plan_dir / path).resolve())
+    return value
 
 
 def _register_reconstruction_runtime(session: Any, session_store: Any, reconstruct_result: Any) -> None:
@@ -1482,6 +2656,89 @@ def _run_behavior_graph(
         behavior_result,
     )
     return _record_artifacts(session, session_store, behavior_result)
+
+
+def _run_engine_analysis(
+    tool_executor: Any,
+    tool_results: list[Any],
+    result: Any,
+    session: Any,
+    session_store: Any,
+    sample: Path,
+    out_dir: Path,
+) -> list[str]:
+    engine_result = tool_executor.execute("engine_analyze", path=str(sample), out_dir=str(out_dir))
+    _append_observation(
+        tool_results,
+        result,
+        session,
+        session_store,
+        "engine_analyze",
+        {"path": str(sample), "out_dir": str(out_dir)},
+        engine_result,
+    )
+    return _record_artifacts(session, session_store, engine_result)
+
+
+def _run_android_analysis(
+    tool_executor: Any,
+    tool_results: list[Any],
+    result: Any,
+    session: Any,
+    session_store: Any,
+    sample: Path,
+    out_dir: Path,
+) -> list[str]:
+    android_result = tool_executor.execute("android_analyze", path=str(sample), out_dir=str(out_dir))
+    _append_observation(
+        tool_results,
+        result,
+        session,
+        session_store,
+        "android_analyze",
+        {"path": str(sample), "out_dir": str(out_dir)},
+        android_result,
+    )
+    return _record_artifacts(session, session_store, android_result)
+
+
+def _run_protocol_analysis(
+    tool_executor: Any,
+    tool_results: list[Any],
+    result: Any,
+    session: Any,
+    session_store: Any,
+    sample: Path,
+    out_dir: Path,
+) -> list[str]:
+    protocol_result = tool_executor.execute(
+        "protocol_analyze",
+        path=str(sample),
+        strings=_latest_tool_payload(tool_results, "strings_extract"),
+        dynamic_analysis=_behavior_dynamic_payload(tool_results),
+        behavior_graph=_latest_tool_payload(tool_results, "gui_behavior_graph"),
+        semantic_ir=_latest_tool_payload(tool_results, "semantic_ir_build"),
+        gui_analysis=_behavior_gui_analysis(tool_results),
+        out_dir=str(out_dir),
+    )
+    _append_observation(
+        tool_results,
+        result,
+        session,
+        session_store,
+        "protocol_analyze",
+        {
+            "path": str(sample),
+            "out_dir": str(out_dir),
+            "strings": "strings_extract",
+            "dynamic_analysis": "derived",
+            "behavior_graph": "gui_behavior_graph",
+            "semantic_ir": "semantic_ir_build",
+            "gui_analysis": "derived",
+        },
+        protocol_result,
+    )
+    return _record_artifacts(session, session_store, protocol_result)
 
 
 def _run_semantic_ir(
@@ -1916,6 +3173,173 @@ def _record_artifacts(session: Any, session_store: Any, tool_result: Any) -> lis
     return collected
 
 
+def _write_evidence_manifest(
+    session: Any,
+    session_store: Any,
+    sample: Path,
+    out_dir: Path,
+    tool_results: Sequence[Mapping[str, Any]],
+) -> Path | None:
+    """Write a portable manifest for explicitly declared analysis artifacts.
+
+    Reports and the manifest itself are intentionally excluded from the current
+    manifest.  Including either would create a self-referential hash cycle;
+    the manifest instead covers evidence emitted by analysis tools.
+    """
+
+    manifest_path = out_dir / "evidence-manifest.json"
+    try:
+        from .evidence import build_manifest, write_manifest
+    except ImportError:
+        from reverse_analyzer.evidence import build_manifest, write_manifest
+
+    try:
+        manifest = build_manifest(
+            out_dir,
+            _manifest_artifact_records(session, tool_results),
+            sample=sample,
+            unavailable_stages=_manifest_unavailable_stages(tool_results),
+        )
+        manifest = write_manifest(manifest, manifest_path)
+        summary = {
+            "status": "ok",
+            "manifest_path": manifest_path.name,
+            "manifest_id": manifest.get("manifest_id"),
+            "hash_algorithm": manifest.get("hash_algorithm", "sha256"),
+            "covered_file_count": sum(1 for item in manifest.get("artifacts") or [] if isinstance(item, Mapping) and item.get("sha256")),
+            "unavailable_stage_count": len(manifest.get("unavailable_stages") or []),
+            "verification_command": "python -m reverse_analyzer evidence verify --manifest evidence-manifest.json",
+        }
+        _set_evidence_integrity(session, summary)
+        artifact = {
+            "name": manifest_path.name,
+            "path": str(manifest_path),
+            "kind": "evidence_manifest",
+            "role": "integrity_manifest",
+            "tool": "evidence_manifest",
+            "status": "ok",
+        }
+        if session_store is not None and hasattr(session_store, "record_artifact"):
+            session_store.record_artifact(
+                session,
+                manifest_path.name,
+                path=manifest_path,
+                kind="evidence_manifest",
+                data=artifact,
+            )
+        elif session is not None and hasattr(session, "artifacts"):
+            session.artifacts.append(artifact)
+        return manifest_path
+    except Exception as exc:  # noqa: BLE001 - evidence packaging must not discard an analysis report
+        _set_evidence_integrity(
+            session,
+            {
+                "status": "failed",
+                "manifest_path": manifest_path.name,
+                "covered_file_count": 0,
+                "unavailable_stage_count": 0,
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+        )
+        print(f"evidence_manifest.failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return None
+
+
+def _set_evidence_integrity(session: Any, summary: Mapping[str, Any]) -> None:
+    if session is None:
+        return
+    metadata = getattr(session, "metadata", None)
+    if not isinstance(metadata, dict):
+        metadata = dict(metadata) if isinstance(metadata, Mapping) else {}
+        setattr(session, "metadata", metadata)
+    metadata["evidence_integrity"] = dict(summary)
+
+
+def _session_evidence_integrity(session: Any) -> dict[str, Any]:
+    """Return the latest evidence-integrity summary stored on the session."""
+
+    if session is None:
+        return {}
+    metadata = getattr(session, "metadata", None)
+    if isinstance(metadata, Mapping):
+        summary = metadata.get("evidence_integrity")
+        if isinstance(summary, Mapping):
+            return dict(summary)
+    return {}
+
+
+def _manifest_artifact_records(session: Any, tool_results: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Collect declared artifacts from session storage and trace payloads only."""
+
+    records: list[dict[str, Any]] = []
+    for item in getattr(session, "artifacts", []) or []:
+        if not isinstance(item, Mapping):
+            continue
+        nested = item.get("data") if isinstance(item.get("data"), Mapping) else {}
+        record = dict(nested)
+        for key in ("name", "kind", "path", "flow", "task", "subtask"):
+            if item.get(key) is not None and record.get(key) is None:
+                record[key] = item.get(key)
+        if _is_manifest_record(record):
+            continue
+        if record.get("path"):
+            records.append(record)
+
+    for trace_index, trace in enumerate(tool_results):
+        tool_name = _trace_tool_name(trace)
+        trace_status = _trace_status(trace)
+        payload = _trace_payload(trace)
+        if not isinstance(payload, Mapping):
+            continue
+        artifacts = payload.get("artifacts")
+        if not isinstance(artifacts, Sequence) or isinstance(artifacts, (str, bytes, bytearray)):
+            continue
+        for artifact in artifacts:
+            if not isinstance(artifact, Mapping) or not artifact.get("path"):
+                continue
+            record = dict(artifact)
+            record.setdefault("tool", tool_name)
+            record.setdefault("status", trace_status)
+            record.setdefault("source_trace_index", trace_index)
+            records.append(record)
+    return records
+
+
+
+def _is_manifest_record(record: Mapping[str, Any]) -> bool:
+    """Evidence manifests are self-describing and must not cover themselves."""
+
+    kind = str(record.get("kind") or "").lower()
+    role = str(record.get("role") or "").lower()
+    name = str(record.get("name") or Path(str(record.get("path") or "")).name).lower()
+    return (
+        kind == "evidence_manifest"
+        or role == "integrity_manifest"
+        or name == "evidence-manifest.json"
+    )
+
+
+def _manifest_unavailable_stages(tool_results: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    unavailable: list[dict[str, Any]] = []
+    for trace_index, trace in enumerate(tool_results):
+        status = _trace_status(trace).lower()
+        if status not in {"unavailable", "skipped", "missing", "not_run", "not-run"}:
+            continue
+        payload = _trace_payload(trace)
+        error = trace.get("error")
+        if error is None and isinstance(payload, Mapping):
+            error = payload.get("error") or payload.get("setup_hint")
+        unavailable.append(
+            {
+                "tool": _trace_tool_name(trace) or "unknown",
+                "status": status,
+                "source_trace_index": trace_index,
+                **({"reason": str(error)} if error else {}),
+            }
+        )
+    return unavailable
+
+
 def _build_reconstruction_analysis(tool_results: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     analysis: Dict[str, Any] = {"summary": {"source_tools": []}}
     summary = analysis["summary"]
@@ -2178,6 +3602,9 @@ def _persist_knowledge(
         "out_dir": str(out_dir),
         "status": (report_data.get("sample") or {}).get("status"),
     }
+    evidence_integrity = _evidence_integrity_summary(report_data)
+    if evidence_integrity.get("manifest_id"):
+        metadata["manifest_id"] = evidence_integrity["manifest_id"]
     try:
         knowledge.upsert_sample(str(sample), features=features, metadata=metadata, observations=observations)
     except Exception as exc:
@@ -2205,6 +3632,19 @@ def _persist_knowledge(
         gui_strategy_records = []
         recommended_gui_strategy = {}
 
+    engine_strategy_records = _record_engine_strategy_stats(knowledge, str(sample), report_data)
+    protocol_strategy_records = _record_protocol_strategy_stats(knowledge, str(sample), report_data)
+    source_strategy_records = _record_source_strategy_stats(knowledge, str(sample), report_data)
+    try:
+        recommended_engine_strategy = knowledge.recommend_strategy("engine") if hasattr(knowledge, "recommend_strategy") else {}
+        recommended_protocol_strategy = knowledge.recommend_strategy("protocol") if hasattr(knowledge, "recommend_strategy") else {}
+        recommended_source_strategy = knowledge.recommend_strategy("source") if hasattr(knowledge, "recommend_strategy") else {}
+    except Exception as exc:
+        _knowledge_base_warning("generic_strategy_stats", exc)
+        recommended_engine_strategy = {}
+        recommended_protocol_strategy = {}
+        recommended_source_strategy = {}
+
     try:
         knowledge.append_session_summary(
             {
@@ -2218,9 +3658,17 @@ def _persist_knowledge(
                 "recommended_dynamic_profile": recommended_dynamic_profile,
                 "gui_strategy_records": gui_strategy_records,
                 "recommended_gui_strategy": recommended_gui_strategy,
+                "engine_strategy_records": engine_strategy_records,
+                "recommended_engine_strategy": recommended_engine_strategy,
+                "protocol_strategy_records": protocol_strategy_records,
+                "recommended_protocol_strategy": recommended_protocol_strategy,
+                "source_strategy_records": source_strategy_records,
+                "recommended_source_strategy": recommended_source_strategy,
                 "behavior_graph": _behavior_graph_summary(report_data),
                 "semantic_ir": _semantic_ir_summary(report_data),
                 "reconstruction_verification": _reconstruction_verification_summary(report_data),
+                "evidence_integrity": evidence_integrity,
+                "platform_core": report_data.get("platform_core", {}),
             }
         )
     except Exception as exc:
@@ -2231,6 +3679,19 @@ def _knowledge_base_warning(stage: str, exc: Exception) -> None:
     """Keep optional knowledge persistence observable without failing analysis."""
 
     print(f"knowledge_base.{stage}_failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+
+
+def _evidence_integrity_summary(report_data: Mapping[str, Any]) -> dict[str, Any]:
+    """Keep the session-history evidence reference compact and portable."""
+
+    source = report_data.get("evidence_integrity")
+    if not isinstance(source, Mapping):
+        return {}
+    return {
+        key: source[key]
+        for key in ("manifest_id", "manifest_path", "covered_file_count", "unavailable_stage_count", "status")
+        if source.get(key) is not None
+    }
 
 
 def _record_dynamic_profile_stats(knowledge: Any, sample_id: str, report_data: Mapping[str, Any]) -> list[Dict[str, Any]]:
@@ -2284,6 +3745,65 @@ def _record_gui_strategy_stats(knowledge: Any, sample_id: str, report_data: Mapp
             visual_similarity=_safe_float(regression.get("visual_similarity"), default=0.0),
             control_match_rate=_safe_float(regression.get("control_match_rate"), default=0.0),
             text_match_rate=_safe_float(regression.get("text_match_rate"), default=0.0),
+            sample_id=sample_id,
+        )
+    ]
+
+
+def _record_engine_strategy_stats(knowledge: Any, sample_id: str, report_data: Mapping[str, Any]) -> list[Dict[str, Any]]:
+    engine = report_data.get("engine_analysis")
+    if not isinstance(engine, Mapping) or not hasattr(knowledge, "record_strategy_result"):
+        return []
+    strategy = engine.get("strategy") if isinstance(engine.get("strategy"), Mapping) else {}
+    engine_name = str(engine.get("engine") or "unknown")
+    strategy_name = str(strategy.get("name") or "static_engine_fingerprint")
+    return [
+        knowledge.record_strategy_result(
+            "engine",
+            f"{engine_name}:{strategy_name}",
+            status=str(engine.get("status") or "unknown"),
+            metrics={"confidence": _safe_float(engine.get("confidence"), default=0.0)},
+            sample_id=sample_id,
+        )
+    ]
+
+
+def _record_protocol_strategy_stats(knowledge: Any, sample_id: str, report_data: Mapping[str, Any]) -> list[Dict[str, Any]]:
+    protocol = report_data.get("protocol_analysis")
+    if not isinstance(protocol, Mapping) or not hasattr(knowledge, "record_strategy_result"):
+        return []
+    inference = protocol.get("inference") if isinstance(protocol.get("inference"), Mapping) else {}
+    strategy = inference.get("strategy") if isinstance(inference.get("strategy"), Mapping) else {}
+    key = str(strategy.get("key") or strategy.get("name") or "protocol:protocol_strings_dynamic_fusion")
+    return [
+        knowledge.record_strategy_result(
+            "protocol",
+            key,
+            status=str(protocol.get("status") or "unknown"),
+            metrics={
+                "confidence": _safe_float(inference.get("confidence"), default=0.0),
+                "flow_count": _safe_float((protocol.get("field_stats") or {}).get("protocol_count"), default=0.0),
+            },
+            sample_id=sample_id,
+        )
+    ]
+
+
+def _record_source_strategy_stats(knowledge: Any, sample_id: str, report_data: Mapping[str, Any]) -> list[Dict[str, Any]]:
+    source = report_data.get("source_reconstruction")
+    if not isinstance(source, Mapping) or not hasattr(knowledge, "record_strategy_result"):
+        return []
+    strategy_name = str(source.get("strategy") or source.get("output_stack") or source.get("language") or "source_summary")
+    return [
+        knowledge.record_strategy_result(
+            "source",
+            f"source:{strategy_name}",
+            status=str(source.get("status") or "unknown"),
+            metrics={
+                "source_file_count": _safe_float(source.get("source_file_count"), default=0.0),
+                "function_count": _safe_float(source.get("function_count"), default=0.0),
+                "verification_score": _safe_float(source.get("verification_score"), default=0.0),
+            },
             sample_id=sample_id,
         )
     ]

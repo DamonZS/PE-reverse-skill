@@ -19,7 +19,7 @@ from typing import Any, Dict, Iterable, List
 
 from .executor import ToolExecutor, ToolResult
 from .frida import frida_check, frida_hook_profiles, frida_install_guide, frida_trace
-from .patch import binary_patch_apply_plan
+from .patch import binary_patch_apply_plan, binary_patch_rollback_plan, validate_patch_plan
 from .procmon import procmon_check, procmon_install_guide, procmon_trace
 from .ghidra import ghidra_check, ghidra_decompile, ghidra_install_guide
 from .gui import (
@@ -37,6 +37,10 @@ from .semantic_ir import build_semantic_ir
 from .reconstruction_verify import verify_reconstruction
 from .gui_state import build_gui_state_machine
 from .gui_xaml import extract_xaml_ui_evidence
+from .memory import memory_address_map, memory_diff, memory_snapshot
+from .engine import engine_analyze
+from .android import android_analyze
+from .protocol import protocol_analyze
 from .pe_deep import pe_deep_scan
 from .reconstruct import reconstruct_project
 from .yara_tools import yara_scan
@@ -69,12 +73,17 @@ def register_builtin_tools(executor: ToolExecutor | None = None) -> ToolExecutor
     executor.register("yara_scan", yara_scan)
     executor.register("yara_scan_stub", yara_scan_stub)
     executor.register("reconstruct_project", reconstruct_project)
+    executor.register("memory_snapshot", memory_snapshot)
+    executor.register("memory_diff", memory_diff)
+    executor.register("memory_address_map", memory_address_map)
     executor.register("external_command", external_command)
     executor.register("frida_check", frida_check)
     executor.register("frida_trace", frida_trace)
     executor.register("frida_hook_profiles", frida_hook_profiles)
     executor.register("frida_install_guide", frida_install_guide)
     executor.register("binary_patch_apply", binary_patch_apply_plan)
+    executor.register("binary_patch_rollback", binary_patch_rollback_plan)
+    executor.register("validate_patch_plan", validate_patch_plan)
     executor.register("procmon_check", procmon_check)
     executor.register("procmon_trace", procmon_trace)
     executor.register("procmon_install_guide", procmon_install_guide)
@@ -94,6 +103,9 @@ def register_builtin_tools(executor: ToolExecutor | None = None) -> ToolExecutor
     executor.register("gui_state_machine", build_gui_state_machine)
     executor.register("gui_xaml_extract", extract_xaml_ui_evidence)
     executor.register("reconstruct_gui_project", reconstruct_gui_project)
+    executor.register("engine_analyze", engine_analyze)
+    executor.register("android_analyze", android_analyze)
+    executor.register("protocol_analyze", protocol_analyze)
     return executor
 
 

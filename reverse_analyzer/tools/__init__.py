@@ -2,7 +2,7 @@
 
 from .executor import ToolExecutor, ToolResult
 from .frida import frida_check, frida_hook_profiles, frida_hooks_for_profile, frida_install_guide, frida_trace
-from .patch import PatchPlanError, binary_patch_apply_plan
+from .patch import PatchPlanError, binary_patch_apply_plan, binary_patch_rollback_plan, validate_patch_plan
 from .procmon import procmon_check, procmon_install_guide, procmon_trace
 from .ghidra import ghidra_check, ghidra_decompile, ghidra_install_guide
 from .gui import (
@@ -21,6 +21,10 @@ from .reconstruction_verify import verify_reconstruction
 from .gui_state import build_gui_state_machine
 from .gui_xaml import extract_xaml_ui_evidence, parse_xaml_file
 from .pe_deep import pe_deep_scan
+from .engine import engine_analyze
+from .android import android_analyze
+from .protocol import protocol_analyze
+from .memory import memory_address_map, memory_diff, memory_snapshot
 from .reconstruct import reconstruct_project
 from .static_tools import register_builtin_tools
 from .yara_tools import DEFAULT_RULES_DIR, yara_scan
@@ -36,6 +40,8 @@ __all__ = [
     "frida_install_guide",
     "PatchPlanError",
     "binary_patch_apply_plan",
+    "binary_patch_rollback_plan",
+    "validate_patch_plan",
     "procmon_check",
     "procmon_trace",
     "procmon_install_guide",
@@ -56,6 +62,12 @@ __all__ = [
     "extract_xaml_ui_evidence",
     "parse_xaml_file",
     "pe_deep_scan",
+    "engine_analyze",
+    "android_analyze",
+    "protocol_analyze",
+    "memory_snapshot",
+    "memory_diff",
+    "memory_address_map",
     "reconstruct_gui_project",
     "reconstruct_project",
     "register_builtin_tools",

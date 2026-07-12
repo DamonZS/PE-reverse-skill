@@ -1,0 +1,627 @@
+diff --git a/docs/skill_parity_matrix.md b/docs/skill_parity_matrix.md
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/docs/skill_parity_matrix.md
+@@ -0,0 +1,18 @@
++# Skill Parity Matrix
++
++| capability | current_status | current_modules | target_modules | required_report_fields | required_artifacts | required_tests | phase | acceptance_command |
++|---|---|---|---|---|---|---|---|---|
++| semantic_ir | partial | report/evidence | reverse_analyzer/core/ir/semantic_ir.py | semantic_ir | semantic_ir.json | tests/test_capability_core.py | 1 | python -m reverse_analyzer analyze sample.exe --out out |
++| evidence_graph | partial | evidence manifest | reverse_analyzer/core/ir/evidence_graph.py | evidence_graph | evidence_graph.json | tests/test_capability_core.py | 1 | python -m reverse_analyzer analyze sample.exe --out out |
++| memory_runtime | partial | reverse_analyzer/tools/memory.py | reverse_analyzer/providers/memory_runtime/* | memory_analysis | memory/* | tests/test_memory_runtime.py | 2 | python -m reverse_analyzer memory scan ... |
++| injector | missing | - | reverse_analyzer/providers/injector/* | memory_analysis | memory/injection.json | tests/test_memory_runtime.py | 2 | python -m reverse_analyzer memory inject ... |
++| hook_runtime | missing | - | reverse_analyzer/providers/hook_runtime/* | memory_analysis | memory/hooks.json | tests/test_memory_runtime.py | 2 | python -m reverse_analyzer memory hook-trace ... |
++| patch_executor | partial | reverse_analyzer/tools/patch.py | reverse_analyzer/providers/patch_executor/* | patch_analysis | patch/* | tests/test_patch_planner.py | 3 | python -m reverse_analyzer patch plan sample.exe |
++| engine_analysis | partial | gui/static analysis | reverse_analyzer/engine/* | engine_analysis | engine/* | tests/test_engine_unity.py,tests/test_engine_unreal.py | 4 | python -m reverse_analyzer analyze sample.exe --out out |
++| android_analysis | partial | gui/apk fingerprint | reverse_analyzer/android/* | android_analysis | android/* | tests/test_android_pipeline.py | 5 | python -m reverse_analyzer android analyze sample.apk |
++| android_rebuild | missing | - | reverse_analyzer/providers/android_rebuild/* | android_analysis | android/rebuild_verify.json | tests/test_android_pipeline.py | 5 | python -m reverse_analyzer android rebuild ... |
++| protocol_analysis | missing | - | reverse_analyzer/protocol/* | protocol_analysis | protocol/* | tests/test_protocol_analysis.py | 6 | python -m reverse_analyzer protocol summarize ... |
++| gui_analysis | partial | gui_* modules | reverse_analyzer/gui/* | gui_analysis | gui/* | tests/test_gui_pipeline.py | 7 | python -m reverse_analyzer analyze sample.exe --gui |
++| source_reconstruction | partial | reconstruct_project | reverse_analyzer/source/* | source_reconstruction | source/* | tests/test_source_reconstruction.py | 7 | python -m reverse_analyzer source reconstruct sample.exe |
++| dashboard | partial | reverse_analyzer/dashboard.py | reverse_analyzer/dashboard/* | all sections | dashboard trace | tests/test_dashboard_views.py | 8 | python -m reverse_analyzer dashboard out |
+diff --git a/reverse_analyzer/core/__init__.py b/reverse_analyzer/core/__init__.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/reverse_analyzer/core/__init__.py
+@@ -0,0 +1 @@
++"""Core platform primitives for reverse_analyzer."""
+diff --git a/reverse_analyzer/core/capabilities/__init__.py b/reverse_analyzer/core/capabilities/__init__.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/reverse_analyzer/core/capabilities/__init__.py
+@@ -0,0 +1,18 @@
++from .models import (
++    CapabilityArtifact,
++    CapabilityArtifactBundle,
++    CapabilityExecutionResult,
++    CapabilityPlan,
++    CapabilityRequest,
++    CapabilityRollbackResult,
++    CapabilityValidation,
++    TargetIdentity,
++)
++from .registry import CapabilityRegistry
++
++__all__ = [
++    "CapabilityArtifact",
++    "CapabilityArtifactBundle",
++    "CapabilityExecutionResult",
++    "CapabilityPlan",
++    "CapabilityRegistry",
++    "CapabilityRequest",
++    "CapabilityRollbackResult",
++    "CapabilityValidation",
++    "TargetIdentity",
++]
+diff --git a/reverse_analyzer/core/capabilities/models.py b/reverse_analyzer/core/capabilities/models.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/reverse_analyzer/core/capabilities/models.py
+@@ -0,0 +1,121 @@
++from __future__ import annotations
++
++from dataclasses import asdict, dataclass, field
++from typing import Any, Dict, List, Optional
++
++
++def _prune(value: Any) -> Any:
++    if isinstance(value, dict):
++        return {
++            key: _prune(item)
++            for key, item in value.items()
++            if item not in (None, "", [], {})
++        }
++    if isinstance(value, list):
++        return [_prune(item) for item in value if item not in (None, "", [], {})]
++    return value
++
++
++class JsonMixin:
++    def to_dict(self) -> Dict[str, Any]:
++        return _prune(asdict(self))
++
++
++@dataclass
++class TargetIdentity(JsonMixin):
++    kind: str = "sample"
++    path: Optional[str] = None
++    pid: Optional[int] = None
++    sha256: Optional[str] = None
++    display_name: Optional[str] = None
++    metadata: Dict[str, Any] = field(default_factory=dict)
++
++
++@dataclass
++class CapabilityArtifact(JsonMixin):
++    path: str
++    kind: str = "json"
++    description: Optional[str] = None
++    metadata: Dict[str, Any] = field(default_factory=dict)
++
++
++@dataclass
++class CapabilityRequest(JsonMixin):
++    capability: str
++    action: str
++    target: TargetIdentity
++    params: Dict[str, Any] = field(default_factory=dict)
++    session_id: Optional[str] = None
++    requested_provider: Optional[str] = None
++    provenance: Dict[str, Any] = field(default_factory=dict)
++
++
++@dataclass
++class CapabilityPlan(JsonMixin):
++    capability: str
++    provider: str
++    session_id: str
++    target: TargetIdentity
++    action: str
++    steps: List[Dict[str, Any]] = field(default_factory=list)
++    precondition_hash: Optional[str] = None
++    before_snapshot: Dict[str, Any] = field(default_factory=dict)
++    rollback_plan: Dict[str, Any] = field(default_factory=dict)
++    provenance: Dict[str, Any] = field(default_factory=dict)
++
++
++@dataclass
++class CapabilityValidation(JsonMixin):
++    capability: str
++    provider: str
++    session_id: str
++    ok: bool
++    checks: List[Dict[str, Any]] = field(default_factory=list)
++    warnings: List[str] = field(default_factory=list)
++    errors: List[str] = field(default_factory=list)
++
++
++@dataclass
++class CapabilityExecutionResult(JsonMixin):
++    capability: str
++    provider: str
++    session_id: str
++    status: str
++    action: str
++    target: TargetIdentity
++    before_snapshot: Dict[str, Any] = field(default_factory=dict)
++    after_snapshot: Dict[str, Any] = field(default_factory=dict)
++    rollback_plan: Dict[str, Any] = field(default_factory=dict)
++    artifacts: List[CapabilityArtifact] = field(default_factory=list)
++    evidence_manifest_entries: List[Dict[str, Any]] = field(default_factory=list)
++    report_section: Dict[str, Any] = field(default_factory=dict)
++    dashboard_trace: List[Dict[str, Any]] = field(default_factory=list)
++    provenance: Dict[str, Any] = field(default_factory=dict)
++
++
++@dataclass
++class CapabilityRollbackResult(JsonMixin):
++    capability: str
++    provider: str
++    session_id: str
++    ok: bool
++    restored: bool = False
++    details: Dict[str, Any] = field(default_factory=dict)
++
++
++@dataclass
++class CapabilityArtifactBundle(JsonMixin):
++    capability: str
++    provider: str
++    session_id: str
++    artifacts: List[CapabilityArtifact] = field(default_factory=list)
++    manifest_entries: List[Dict[str, Any]] = field(default_factory=list)
+diff --git a/reverse_analyzer/core/capabilities/registry.py b/reverse_analyzer/core/capabilities/registry.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/reverse_analyzer/core/capabilities/registry.py
+@@ -0,0 +1,35 @@
++from __future__ import annotations
++
++from typing import Dict, List, Optional
++
++from reverse_analyzer.providers.base import CapabilityProvider
++
++
++class CapabilityRegistry:
++    def __init__(self) -> None:
++        self._providers: Dict[str, List[CapabilityProvider]] = {}
++
++    def register(self, provider: CapabilityProvider) -> None:
++        self._providers.setdefault(provider.capability_name, []).append(provider)
++        self._providers[provider.capability_name].sort(key=lambda item: item.priority)
++
++    def list_capabilities(self) -> List[str]:
++        return sorted(self._providers.keys())
++
++    def list_providers(self, capability_name: str) -> List[str]:
++        return [provider.provider_name for provider in self._providers.get(capability_name, [])]
++
++    def resolve(self, capability_name: str, preferred: Optional[str] = None) -> CapabilityProvider:
++        providers = self._providers.get(capability_name, [])
++        if not providers:
++            raise LookupError(f"No provider registered for capability: {capability_name}")
++        if preferred:
++            for provider in providers:
++                if provider.provider_name == preferred:
++                    return provider
++            raise LookupError(
++                f"Preferred provider '{preferred}' not found for capability '{capability_name}'"
++            )
++        return providers[0]
+diff --git a/reverse_analyzer/core/audit/__init__.py b/reverse_analyzer/core/audit/__init__.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/reverse_analyzer/core/audit/__init__.py
+@@ -0,0 +1,3 @@
++from .session import AuditEvent, AuditSessionRecord
++
++__all__ = ["AuditEvent", "AuditSessionRecord"]
+diff --git a/reverse_analyzer/core/audit/session.py b/reverse_analyzer/core/audit/session.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/reverse_analyzer/core/audit/session.py
+@@ -0,0 +1,49 @@
++from __future__ import annotations
++
++import json
++from dataclasses import dataclass, field
++from datetime import datetime, timezone
++from typing import Any, Dict, List, Optional
++
++from reverse_analyzer.core.capabilities.models import JsonMixin, TargetIdentity
++
++
++def _utc_now() -> str:
++    return datetime.now(timezone.utc).isoformat()
++
++
++@dataclass
++class AuditEvent(JsonMixin):
++    ts: str
++    kind: str
++    message: str
++    data: Dict[str, Any] = field(default_factory=dict)
++
++
++@dataclass
++class AuditSessionRecord(JsonMixin):
++    session_id: str
++    capability: str
++    provider: str
++    target_identity: TargetIdentity
++    action: str
++    status: str = "planned"
++    precondition_hash: Optional[str] = None
++    before_snapshot: Dict[str, Any] = field(default_factory=dict)
++    after_snapshot: Dict[str, Any] = field(default_factory=dict)
++    rollback_plan: Dict[str, Any] = field(default_factory=dict)
++    provenance: Dict[str, Any] = field(default_factory=dict)
++    evidence_manifest_entries: List[Dict[str, Any]] = field(default_factory=list)
++    report_section: Dict[str, Any] = field(default_factory=dict)
++    dashboard_trace: List[Dict[str, Any]] = field(default_factory=list)
++    events: List[AuditEvent] = field(default_factory=list)
++
++    def add_event(self, kind: str, message: str, **data: Any) -> None:
++        self.events.append(AuditEvent(ts=_utc_now(), kind=kind, message=message, data=data))
++
++    def write_json(self, path: str) -> None:
++        with open(path, "w", encoding="utf-8") as handle:
++            json.dump(self.to_dict(), handle, indent=2, ensure_ascii=False)
+diff --git a/reverse_analyzer/core/ir/__init__.py b/reverse_analyzer/core/ir/__init__.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/reverse_analyzer/core/ir/__init__.py
+@@ -0,0 +1,4 @@
++from .evidence_graph import EvidenceEdge, EvidenceGraph, EvidenceNode
++from .semantic_ir import SemanticIR
++
++__all__ = ["EvidenceEdge", "EvidenceGraph", "EvidenceNode", "SemanticIR"]
+diff --git a/reverse_analyzer/core/ir/semantic_ir.py b/reverse_analyzer/core/ir/semantic_ir.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/reverse_analyzer/core/ir/semantic_ir.py
+@@ -0,0 +1,31 @@
++from __future__ import annotations
++
++import json
++from dataclasses import dataclass, field
++from typing import Any, Dict, List
++
++from reverse_analyzer.core.capabilities.models import JsonMixin
++
++
++@dataclass
++class SemanticIR(JsonMixin):
++    sample: Dict[str, Any] = field(default_factory=dict)
++    modules: List[Dict[str, Any]] = field(default_factory=list)
++    runtime: List[Dict[str, Any]] = field(default_factory=list)
++    engine: Dict[str, Any] = field(default_factory=dict)
++    android: Dict[str, Any] = field(default_factory=dict)
++    protocol: Dict[str, Any] = field(default_factory=dict)
++    gui: Dict[str, Any] = field(default_factory=dict)
++    source: Dict[str, Any] = field(default_factory=dict)
++    notes: List[Dict[str, Any]] = field(default_factory=list)
++
++    def merge_fragment(self, key: str, value: Any) -> None:
++        setattr(self, key, value)
++
++    def write_json(self, path: str) -> None:
++        with open(path, "w", encoding="utf-8") as handle:
++            json.dump(self.to_dict(), handle, indent=2, ensure_ascii=False)
+diff --git a/reverse_analyzer/core/ir/evidence_graph.py b/reverse_analyzer/core/ir/evidence_graph.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/reverse_analyzer/core/ir/evidence_graph.py
+@@ -0,0 +1,39 @@
++from __future__ import annotations
++
++import json
++from dataclasses import dataclass, field
++from typing import Any, Dict, List
++
++from reverse_analyzer.core.capabilities.models import JsonMixin
++
++
++@dataclass
++class EvidenceNode(JsonMixin):
++    node_id: str
++    node_type: str
++    label: str
++    properties: Dict[str, Any] = field(default_factory=dict)
++
++
++@dataclass
++class EvidenceEdge(JsonMixin):
++    source: str
++    target: str
++    edge_type: str
++    properties: Dict[str, Any] = field(default_factory=dict)
++
++
++@dataclass
++class EvidenceGraph(JsonMixin):
++    nodes: List[EvidenceNode] = field(default_factory=list)
++    edges: List[EvidenceEdge] = field(default_factory=list)
++
++    def add_node(self, node_id: str, node_type: str, label: str, **properties: Any) -> None:
++        self.nodes.append(EvidenceNode(node_id=node_id, node_type=node_type, label=label, properties=properties))
++
++    def add_edge(self, source: str, target: str, edge_type: str, **properties: Any) -> None:
++        self.edges.append(EvidenceEdge(source=source, target=target, edge_type=edge_type, properties=properties))
++
++    def write_json(self, path: str) -> None:
++        with open(path, "w", encoding="utf-8") as handle:
++            json.dump(self.to_dict(), handle, indent=2, ensure_ascii=False)
+diff --git a/reverse_analyzer/providers/__init__.py b/reverse_analyzer/providers/__init__.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/reverse_analyzer/providers/__init__.py
+@@ -0,0 +1,18 @@
++from reverse_analyzer.core.capabilities.registry import CapabilityRegistry
++
++from .mock import MockCapabilityProvider
++
++
++def build_default_registry() -> CapabilityRegistry:
++    registry = CapabilityRegistry()
++    for capability_name in (
++        "memory_runtime",
++        "injector",
++        "hook_runtime",
++        "patch_executor",
++        "android_rebuild",
++    ):
++        registry.register(MockCapabilityProvider(capability_name))
++    return registry
++
++
++__all__ = ["MockCapabilityProvider", "build_default_registry"]
+diff --git a/reverse_analyzer/providers/base.py b/reverse_analyzer/providers/base.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/reverse_analyzer/providers/base.py
+@@ -0,0 +1,47 @@
++from __future__ import annotations
++
++from abc import ABC, abstractmethod
++from typing import Any, Dict, Optional
++
++from reverse_analyzer.core.capabilities.models import (
++    CapabilityArtifactBundle,
++    CapabilityExecutionResult,
++    CapabilityPlan,
++    CapabilityRequest,
++    CapabilityRollbackResult,
++    CapabilityValidation,
++)
++
++
++class CapabilityProvider(ABC):
++    capability_name: str = ""
++    provider_name: str = ""
++    priority: int = 100
++
++    def supports(self, request: CapabilityRequest, context: Optional[Dict[str, Any]] = None) -> bool:
++        return True
++
++    @abstractmethod
++    def plan(self, request: CapabilityRequest, context: Optional[Dict[str, Any]] = None) -> CapabilityPlan:
++        raise NotImplementedError
++
++    @abstractmethod
++    def validate(self, plan: CapabilityPlan, context: Optional[Dict[str, Any]] = None) -> CapabilityValidation:
++        raise NotImplementedError
++
++    @abstractmethod
++    def execute(
++        self,
++        plan: CapabilityPlan,
++        context: Optional[Dict[str, Any]] = None,
++    ) -> CapabilityExecutionResult:
++        raise NotImplementedError
++
++    @abstractmethod
++    def rollback(
++        self,
++        result: CapabilityExecutionResult,
++        context: Optional[Dict[str, Any]] = None,
++    ) -> CapabilityRollbackResult:
++        raise NotImplementedError
++
++    @abstractmethod
++    def collect_artifacts(
++        self,
++        result: CapabilityExecutionResult,
++        out_dir: str,
++        context: Optional[Dict[str, Any]] = None,
++    ) -> CapabilityArtifactBundle:
++        raise NotImplementedError
+diff --git a/reverse_analyzer/providers/mock.py b/reverse_analyzer/providers/mock.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/reverse_analyzer/providers/mock.py
+@@ -0,0 +1,67 @@
++from __future__ import annotations
++
++from reverse_analyzer.core.capabilities.models import (
++    CapabilityArtifactBundle,
++    CapabilityExecutionResult,
++    CapabilityPlan,
++    CapabilityRequest,
++    CapabilityRollbackResult,
++    CapabilityValidation,
++)
++from reverse_analyzer.providers.base import CapabilityProvider
++
++
++class MockCapabilityProvider(CapabilityProvider):
++    def __init__(self, capability_name: str, provider_name: str = "mock", priority: int = 100) -> None:
++        self.capability_name = capability_name
++        self.provider_name = provider_name
++        self.priority = priority
++
++    def plan(self, request: CapabilityRequest, context=None) -> CapabilityPlan:
++        return CapabilityPlan(
++            capability=request.capability,
++            provider=self.provider_name,
++            session_id=request.session_id or f"{request.capability}-session",
++            target=request.target,
++            action=request.action,
++            steps=[{"step": "mock_plan", "status": "ok"}],
++            rollback_plan={"supported": True, "mode": "mock"},
++            provenance=request.provenance,
++        )
++
++    def validate(self, plan: CapabilityPlan, context=None) -> CapabilityValidation:
++        return CapabilityValidation(
++            capability=plan.capability,
++            provider=plan.provider,
++            session_id=plan.session_id,
++            ok=True,
++            checks=[{"name": "mock_validate", "status": "ok"}],
++        )
++
++    def execute(self, plan: CapabilityPlan, context=None) -> CapabilityExecutionResult:
++        return CapabilityExecutionResult(
++            capability=plan.capability,
++            provider=plan.provider,
++            session_id=plan.session_id,
++            status="mocked",
++            action=plan.action,
++            target=plan.target,
++            before_snapshot=plan.before_snapshot,
++            after_snapshot={"mock": True},
++            rollback_plan=plan.rollback_plan,
++            report_section={"status": "mocked", "provider": plan.provider},
++            provenance=plan.provenance,
++        )
++
++    def rollback(self, result: CapabilityExecutionResult, context=None) -> CapabilityRollbackResult:
++        return CapabilityRollbackResult(
++            capability=result.capability,
++            provider=result.provider,
++            session_id=result.session_id,
++            ok=True,
++            restored=True,
++            details={"mode": "mock"},
++        )
++
++    def collect_artifacts(self, result: CapabilityExecutionResult, out_dir: str, context=None) -> CapabilityArtifactBundle:
++        return CapabilityArtifactBundle(
++            capability=result.capability,
++            provider=result.provider,
++            session_id=result.session_id,
++            artifacts=[],
++            manifest_entries=[],
++        )
+diff --git a/tests/test_capability_core.py b/tests/test_capability_core.py
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/tests/test_capability_core.py
+@@ -0,0 +1,83 @@
++import json
++import os
++import tempfile
++import unittest
++
++from reverse_analyzer.core.audit import AuditSessionRecord
++from reverse_analyzer.core.capabilities import CapabilityRequest, TargetIdentity
++from reverse_analyzer.core.ir import EvidenceGraph, SemanticIR
++from reverse_analyzer.providers import build_default_registry
++
++
++class CapabilityCoreTests(unittest.TestCase):
++    def test_default_registry_contains_core_capabilities(self):
++        registry = build_default_registry()
++        self.assertEqual(
++            registry.list_capabilities(),
++            [
++                "android_rebuild",
++                "hook_runtime",
++                "injector",
++                "memory_runtime",
++                "patch_executor",
++            ],
++        )
++        self.assertEqual(registry.list_providers("memory_runtime"), ["mock"])
++
++    def test_mock_provider_plan_validate_execute_rollback(self):
++        registry = build_default_registry()
++        provider = registry.resolve("memory_runtime")
++        request = CapabilityRequest(
++            capability="memory_runtime",
++            action="scan",
++            target=TargetIdentity(kind="process", pid=1337, display_name="demo.exe"),
++            provenance={"source": "unit-test"},
++        )
++        plan = provider.plan(request)
++        self.assertEqual(plan.provider, "mock")
++        validation = provider.validate(plan)
++        self.assertTrue(validation.ok)
++        result = provider.execute(plan)
++        self.assertEqual(result.status, "mocked")
++        rollback = provider.rollback(result)
++        self.assertTrue(rollback.ok)
++        self.assertTrue(rollback.restored)
++
++    def test_semantic_ir_and_evidence_graph_write_json(self):
++        with tempfile.TemporaryDirectory() as temp_dir:
++            ir_path = os.path.join(temp_dir, "semantic_ir.json")
++            graph_path = os.path.join(temp_dir, "evidence_graph.json")
++
++            ir = SemanticIR(sample={"name": "sample.exe"})
++            ir.merge_fragment("protocol", {"status": "unavailable"})
++            ir.write_json(ir_path)
++
++            graph = EvidenceGraph()
++            graph.add_node("sample:1", "sample", "sample.exe", sha256="abc")
++            graph.add_node("module:1", "module", "kernel32.dll")
++            graph.add_edge("sample:1", "module:1", "imports")
++            graph.write_json(graph_path)
++
++            with open(ir_path, "r", encoding="utf-8") as handle:
++                ir_data = json.load(handle)
++            with open(graph_path, "r", encoding="utf-8") as handle:
++                graph_data = json.load(handle)
++
++            self.assertEqual(ir_data["sample"]["name"], "sample.exe")
++            self.assertEqual(graph_data["nodes"][0]["label"], "sample.exe")
++            self.assertEqual(graph_data["edges"][0]["edge_type"], "imports")
++
++    def test_audit_session_record_write_json(self):
++        with tempfile.TemporaryDirectory() as temp_dir:
++            session_path = os.path.join(temp_dir, "session.json")
++            session = AuditSessionRecord(
++                session_id="sess-1",
++                capability="patch_executor",
++                provider="mock",
++                target_identity=TargetIdentity(kind="sample", path="C:/tmp/sample.exe"),
++                action="plan",
++            )
++            session.add_event("plan", "created mock plan", step="mock_plan")
++            session.write_json(session_path)
++
++            with open(session_path, "r", encoding="utf-8") as handle:
++                data = json.load(handle)
++
++            self.assertEqual(data["session_id"], "sess-1")
++            self.assertEqual(data["events"][0]["kind"], "plan")
++
++
++if __name__ == "__main__":
++    unittest.main()

@@ -1,4 +1,4 @@
-﻿"""Knowledge-base persistence for reverse-analysis evolution data."""
+"""Knowledge-base persistence for reverse-analysis evolution data."""
 
 from __future__ import annotations
 
@@ -7,6 +7,11 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from reverse_analyzer.core.models import utc_now
+from reverse_analyzer.knowledge.strategy_stats import (
+    default_strategy_store,
+    record_strategy_result as _record_strategy_result_impl,
+    recommend_strategy as _recommend_strategy_impl,
+)
 
 
 def _int(value: Any, default: int = 0) -> int:
@@ -41,7 +46,18 @@ class KnowledgeBase:
         self.detection_path = self.root / "detection_db.json"
         self.dynamic_profiles_path = self.root / "dynamic_profiles.json"
         self.gui_strategies_path = self.root / "gui_strategies.json"
+        self.patch_strategies_path = self.root / "patch_strategies.json"
+        self.engine_strategies_path = self.root / "engine_strategies.json"
+        self.protocol_formats_path = self.root / "protocol_formats.json"
+        self.source_restoration_path = self.root / "source_restoration.json"
         self.sessions_path = self.root / "sessions.json"
+        self._strategy_namespace_paths = {
+            "gui": self.gui_strategies_path,
+            "patch": self.patch_strategies_path,
+            "engine": self.engine_strategies_path,
+            "protocol": self.protocol_formats_path,
+            "source": self.source_restoration_path,
+        }
         self._ensure_files()
 
     def upsert_sample(
@@ -395,6 +411,59 @@ class KnowledgeBase:
     def save_gui_strategies(self, data: Dict[str, Any]) -> None:
         self._write_json(self.gui_strategies_path, data)
 
+
+    def _load_strategy_namespace(self, namespace):
+        path = self._strategy_namespace_paths[namespace]
+        if not path.exists():
+            return default_strategy_store()
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except Exception:
+            return default_strategy_store()
+        if not isinstance(data, dict):
+            return default_strategy_store()
+        data.setdefault("strategies", {})
+        return data
+
+    def _save_strategy_namespace(self, namespace, data):
+        path = self._strategy_namespace_paths[namespace]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2, ensure_ascii=False)
+            handle.write("\n")
+
+    def record_strategy_result(
+        self,
+        namespace,
+        key,
+        status,
+        metrics=None,
+        sample_id=None,
+        backend=None,
+    ):
+        if namespace not in self._strategy_namespace_paths:
+            raise KeyError(f"Unknown strategy namespace: {namespace}")
+
+        data = self._load_strategy_namespace(namespace)
+        result = _record_strategy_result_impl(
+            data,
+            key=key,
+            status=status,
+            metrics=metrics or {},
+            sample_id=sample_id,
+            backend=backend,
+        )
+        self._save_strategy_namespace(namespace, data)
+        return result
+
+    def recommend_strategy(self, namespace):
+        if namespace not in self._strategy_namespace_paths:
+            raise KeyError(f"Unknown strategy namespace: {namespace}")
+
+        data = self._load_strategy_namespace(namespace)
+        return _recommend_strategy_impl(data)
+
     def _ensure_files(self) -> None:
         if not self.knowledge_path.exists():
             self._write_json(self.knowledge_path, {"version": 1, "samples": {}, "last_updated": utc_now()})
@@ -409,6 +478,14 @@ class KnowledgeBase:
             self._write_json(self.dynamic_profiles_path, {"version": 1, "profiles": {}, "last_updated": utc_now()})
         if not self.gui_strategies_path.exists():
             self._write_json(self.gui_strategies_path, {"version": 1, "strategies": {}, "last_updated": utc_now()})
+        for path in (
+            self.patch_strategies_path,
+            self.engine_strategies_path,
+            self.protocol_formats_path,
+            self.source_restoration_path,
+        ):
+            if not path.exists():
+                self._write_json(path, default_strategy_store())
         if not self.sessions_path.exists():
             self._write_json(self.sessions_path, [])
 

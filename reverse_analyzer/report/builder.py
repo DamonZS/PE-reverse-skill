@@ -7,6 +7,8 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any, Dict, Optional
 
+from reverse_analyzer.core.integration import ensure_platform_sections
+
 
 class ReportBuilder:
     """Build portable reports from sessions, tool results, and knowledge."""
@@ -28,16 +30,23 @@ class ReportBuilder:
 
     def build(self) -> Dict[str, Any]:
         sample = _sample_overview(self.session)
+        evidence_integrity = _evidence_integrity(self.session)
+        capability_audit = _capability_audit(self.session)
         tool_trace = [_normalize_tool_result(item) for item in self.tool_results]
         pe_analysis = _pe_analysis(tool_trace)
         yara = _yara(tool_trace)
         dynamic_analysis = _dynamic_analysis(tool_trace)
+        memory_analysis = _memory_analysis(tool_trace)
+        engine_analysis = _engine_analysis(tool_trace)
+        android_analysis = _android_analysis(tool_trace)
+        protocol_analysis = _protocol_analysis(tool_trace)
         gui_analysis = _gui_analysis(tool_trace)
         behavior_graph = _behavior_graph(tool_trace)
         decompiler = _decompiler(tool_trace)
         reconstruction = _reconstruction(self.session, tool_trace)
         semantic_ir = _semantic_ir(tool_trace)
         reconstruction_verification = _reconstruction_verification(tool_trace)
+        source_reconstruction = _source_reconstruction(reconstruction, gui_analysis, reconstruction_verification)
         findings = _findings(self.knowledge, tool_trace)
         recommendations = _recommendations(
             findings,
@@ -50,22 +59,30 @@ class ReportBuilder:
             reconstruction=reconstruction,
         )
         artifacts = _artifacts(self.session, self.knowledge, tool_trace)
-        return {
+        report_data = {
             "sample": sample,
+            "evidence_integrity": evidence_integrity,
+            "capability_audit": capability_audit,
             "tool_trace": tool_trace,
             "pe_analysis": pe_analysis,
             "yara": yara,
             "dynamic_analysis": dynamic_analysis,
+            "memory_analysis": memory_analysis,
+            "engine_analysis": engine_analysis,
+            "android_analysis": android_analysis,
+            "protocol_analysis": protocol_analysis,
             "gui_analysis": gui_analysis,
             "behavior_graph": behavior_graph,
             "decompiler": decompiler,
             "reconstruction": reconstruction,
             "semantic_ir": semantic_ir,
             "reconstruction_verification": reconstruction_verification,
+            "source_reconstruction": source_reconstruction,
             "findings": findings,
             "recommendations": recommendations,
             "artifacts": artifacts,
         }
+        return ensure_platform_sections(report_data)
 
     def to_json(self, *, indent: int = 2) -> str:
         return json.dumps(self.build(), indent=indent, ensure_ascii=False, sort_keys=True)
@@ -76,6 +93,59 @@ class ReportBuilder:
         lines.extend(["## Sample Overview", ""])
         for key, value in report["sample"].items():
             lines.append(f"- **{_label(key)}:** {value if value is not None else 'unknown'}")
+
+        evidence_integrity = report.get("evidence_integrity") or {}
+        lines.extend(["", "## Evidence Integrity", ""])
+        if isinstance(evidence_integrity, Mapping) and evidence_integrity:
+            lines.append(f"- **Manifest Path:** {evidence_integrity.get('manifest_path') or 'unknown'}")
+            lines.append(f"- **Manifest ID:** {evidence_integrity.get('manifest_id') or 'unknown'}")
+            lines.append(f"- **Hash Algorithm:** {evidence_integrity.get('hash_algorithm') or 'sha256'}")
+            lines.append(f"- **Covered Files:** {evidence_integrity.get('covered_file_count', 0)}")
+            lines.append(f"- **Unavailable Stages:** {evidence_integrity.get('unavailable_stage_count', 0)}")
+            if evidence_integrity.get("status"):
+                lines.append(f"- **Status:** {evidence_integrity['status']}")
+            if evidence_integrity.get("verification_command"):
+                lines.append(f"- **Verification Command:** `{evidence_integrity['verification_command']}`")
+        else:
+            lines.append("No evidence manifest metadata recorded.")
+
+        capability_audit = report.get("capability_audit") or {}
+        lines.extend(["", "## Capability Audit", ""])
+        if isinstance(capability_audit, Mapping) and capability_audit:
+            summary = capability_audit.get("summary") if isinstance(capability_audit.get("summary"), Mapping) else {}
+            records = capability_audit.get("records") if isinstance(capability_audit.get("records"), list) else []
+            lines.append(f"- **Record Count:** {capability_audit.get('record_count', len(records))}")
+            lines.append(f"- **Rollback Supported:** {summary.get('rollback_supported_count', 0)}")
+            lines.append(f"- **Manifest References:** {summary.get('manifest_reference_count', 0)}")
+            lines.append(f"- **Dashboard Traces:** {summary.get('dashboard_trace_count', 0)}")
+            status_counts = summary.get("status_counts") if isinstance(summary.get("status_counts"), Mapping) else {}
+            if status_counts:
+                lines.append(
+                    "- **Status Counts:** "
+                    + ", ".join(f"{name}={value}" for name, value in sorted(status_counts.items()))
+                )
+            if records:
+                lines.append("- **Recent Records:**")
+                for item in records[:8]:
+                    if not isinstance(item, Mapping):
+                        continue
+                    target_identity = item.get("target_identity") if isinstance(item.get("target_identity"), Mapping) else {}
+                    target_label = (
+                        target_identity.get("display_name")
+                        or target_identity.get("path")
+                        or target_identity.get("pid")
+                        or target_identity.get("kind")
+                        or "unknown"
+                    )
+                    lines.append(
+                        "  - "
+                        f"{item.get('capability') or 'unknown'}:{item.get('action') or 'unknown'} "
+                        f"provider={item.get('provider') or 'unknown'} "
+                        f"status={item.get('status') or 'unknown'} "
+                        f"target={target_label}"
+                    )
+        else:
+            lines.append("No capability audit records recorded.")
 
         lines.extend(["", "## Tool Trace", ""])
         if report["tool_trace"]:
@@ -191,6 +261,159 @@ class ReportBuilder:
                     if not preview and event.get("path"):
                         preview = str(event.get("path"))
                     lines.append(f"  - {name} [{event.get('category')}] {preview}".rstrip())
+
+        memory_analysis = report.get("memory_analysis") or {}
+        if memory_analysis:
+            lines.extend(["", "## Runtime Memory Evidence", ""])
+            lines.append(f"- **Status:** {memory_analysis.get('status') or 'unknown'}")
+            snapshot = memory_analysis.get("snapshot") or {}
+            if isinstance(snapshot, Mapping):
+                lines.append(
+                    "- **Snapshot:** "
+                    f"pid={snapshot.get('pid') or 'unknown'} "
+                    f"modules={snapshot.get('module_count', 0)} "
+                    f"regions={snapshot.get('region_count', 0)} "
+                    f"sampled_bytes={snapshot.get('sampled_bytes', 0)}"
+                )
+            diff = memory_analysis.get("diff") or {}
+            if isinstance(diff, Mapping):
+                lines.append(
+                    "- **Diff:** "
+                    f"added={diff.get('added_region_count', 0)} "
+                    f"removed={diff.get('removed_region_count', 0)} "
+                    f"changed={diff.get('changed_region_count', 0)}"
+                )
+            address_map = memory_analysis.get("address_map") or {}
+            if isinstance(address_map, Mapping):
+                lines.append(
+                    "- **Address Mapping:** "
+                    f"mapped={address_map.get('mapped_count', 0)} "
+                    f"unmapped={address_map.get('unmapped_count', 0)}"
+                )
+            memory_stages = memory_analysis.get("stages") or []
+            if isinstance(memory_stages, Sequence) and not isinstance(memory_stages, (str, bytes)):
+                lines.append("- **Stages:**")
+                for stage in memory_stages:
+                    if isinstance(stage, Mapping):
+                        lines.append(_memory_stage_markdown(stage))
+            if memory_analysis.get("artifacts"):
+                lines.append(f"- **Artifacts:** {len(memory_analysis['artifacts'])}")
+
+        engine_analysis = report.get("engine_analysis") or {}
+        if engine_analysis:
+            lines.extend(["", "## Engine Analysis", ""])
+            lines.append(f"- **Status:** {engine_analysis.get('status') or 'unknown'}")
+            if engine_analysis.get("platform"):
+                lines.append(f"- **Platform:** {engine_analysis['platform']}")
+            if engine_analysis.get("engine"):
+                lines.append(f"- **Engine:** {engine_analysis['engine']}")
+            if engine_analysis.get("confidence") is not None:
+                lines.append(f"- **Confidence:** {engine_analysis['confidence']}")
+            if engine_analysis.get("evidence"):
+                lines.append("- **Evidence:**")
+                for item in (engine_analysis.get("evidence") or [])[:8]:
+                    lines.append(f"  - {item}")
+            metadata = engine_analysis.get("metadata") or {}
+            if isinstance(metadata, Mapping):
+                lines.append(
+                    "- **Metadata:** "
+                    f"managed_assemblies={_safe_count(metadata.get('managed_assembly_count'))} "
+                    f"global_metadata={_bool_word(metadata.get('global_metadata_present'))} "
+                    f"gameassembly={_bool_word(metadata.get('gameassembly_present'))}"
+                )
+            assets = engine_analysis.get("assets") or {}
+            if isinstance(assets, Mapping):
+                lines.append(
+                    "- **Assets:** "
+                    f"pak={_safe_count(assets.get('pak_count'))} "
+                    f"uasset={_safe_count(assets.get('uasset_count'))} "
+                    f"umap={_safe_count(assets.get('umap_count'))} "
+                    f"scene_like={_safe_count(assets.get('scene_like_asset_count'))}"
+                )
+            strategy = engine_analysis.get("strategy") or {}
+            if isinstance(strategy, Mapping):
+                lines.append(f"- **Strategy:** {strategy.get('name') or strategy.get('key') or 'unknown'}")
+
+        android_analysis = report.get("android_analysis") or {}
+        if android_analysis:
+            lines.extend(["", "## Android Analysis", ""])
+            lines.append(f"- **Status:** {android_analysis.get('status') or 'unknown'}")
+            if android_analysis.get("package_type"):
+                lines.append(f"- **Package Type:** {android_analysis['package_type']}")
+            framework = android_analysis.get("framework") or {}
+            if isinstance(framework, Mapping):
+                lines.append(f"- **Framework:** {framework.get('name') or 'unknown'}")
+                if framework.get("confidence") is not None:
+                    lines.append(f"- **Framework Confidence:** {framework.get('confidence')}")
+            manifest = android_analysis.get("manifest") or {}
+            if isinstance(manifest, Mapping):
+                if manifest.get("package"):
+                    lines.append(f"- **Manifest Package:** {manifest['package']}")
+                lines.append(f"- **Manifest Present:** {_bool_word(manifest.get('present'))}")
+            resources = android_analysis.get("resources") or {}
+            if isinstance(resources, Mapping):
+                lines.append(
+                    "- **Resources:** "
+                    f"layouts={_safe_count(resources.get('layout_count'))} "
+                    f"drawables={_safe_count(resources.get('drawable_count'))} "
+                    f"values={_safe_count(resources.get('values_count'))} "
+                    f"assets={_safe_count(resources.get('asset_count'))}"
+                )
+            dex_summary = android_analysis.get("dex_summary") or {}
+            if isinstance(dex_summary, Mapping):
+                lines.append(f"- **DEX Files:** {_safe_count(dex_summary.get('dex_count'))}")
+            native_libs = android_analysis.get("native_libs") or {}
+            if isinstance(native_libs, Mapping):
+                lines.append(f"- **Native Libraries:** {_safe_count(native_libs.get('count'))}")
+            strategy = android_analysis.get("strategy") or {}
+            if isinstance(strategy, Mapping):
+                lines.append(f"- **Strategy:** {strategy.get('name') or strategy.get('key') or 'unknown'}")
+
+        protocol_analysis = report.get("protocol_analysis") or {}
+        if protocol_analysis:
+            lines.extend(["", "## Protocol Analysis", ""])
+            lines.append(f"- **Status:** {protocol_analysis.get('status') or 'unknown'}")
+            inference = protocol_analysis.get("inference") or {}
+            if isinstance(inference, Mapping):
+                if inference.get("primary_protocol"):
+                    lines.append(f"- **Primary Protocol:** {inference['primary_protocol']}")
+                if inference.get("message_formats"):
+                    lines.append(f"- **Message Formats:** {', '.join(str(item) for item in inference['message_formats'])}")
+                if inference.get("probable_flow_count") is not None:
+                    lines.append(f"- **Probable Flows:** {inference['probable_flow_count']}")
+            protocols = protocol_analysis.get("protocols") or []
+            if protocols:
+                lines.append("- **Protocols:**")
+                for item in protocols[:6]:
+                    if isinstance(item, Mapping):
+                        lines.append(f"  - {item.get('name')}: confidence={item.get('confidence')}")
+            flows = protocol_analysis.get("flows") or []
+            if flows:
+                lines.append("- **Endpoints:**")
+                for item in flows[:6]:
+                    if isinstance(item, Mapping):
+                        lines.append(f"  - {item.get('kind')}: {item.get('endpoint')}")
+
+        source_reconstruction = report.get("source_reconstruction") or {}
+        if source_reconstruction:
+            lines.extend(["", "## Source Reconstruction", ""])
+            lines.append(f"- **Status:** {source_reconstruction.get('status') or 'unknown'}")
+            if source_reconstruction.get("project_dir"):
+                lines.append(f"- **Project Dir:** {source_reconstruction['project_dir']}")
+            if source_reconstruction.get("language"):
+                lines.append(f"- **Language:** {source_reconstruction['language']}")
+            if source_reconstruction.get("output_stack"):
+                lines.append(f"- **Output Stack:** {source_reconstruction['output_stack']}")
+            if source_reconstruction.get("strategy"):
+                lines.append(f"- **Strategy:** {source_reconstruction['strategy']}")
+            if source_reconstruction.get("function_count") is not None:
+                lines.append(f"- **Function Count:** {source_reconstruction['function_count']}")
+            if source_reconstruction.get("module_count") is not None:
+                lines.append(f"- **Module Count:** {source_reconstruction['module_count']}")
+            if source_reconstruction.get("verification_status"):
+                lines.append(f"- **Verification Status:** {source_reconstruction['verification_status']}")
+            if source_reconstruction.get("verification_score") is not None:
+                lines.append(f"- **Verification Score:** {source_reconstruction['verification_score']}")
 
         behavior_graph = report.get("behavior_graph") or {}
         if isinstance(behavior_graph, Mapping) and behavior_graph:
@@ -737,6 +960,316 @@ def _dynamic_analysis(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]
     return combined
 
 
+def _memory_analysis(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Normalize optional read-only runtime memory evidence.
+
+    Snapshot, diff, and address-map tools can run independently.  Preserve each
+    stage's status so missing platform support does not discard useful offline
+    diff or mapping evidence supplied through a memory plan.
+    """
+
+    stage_names = {
+        "memory_snapshot": "snapshot",
+        "memory_diff": "diff",
+        "memory_address_map": "address_map",
+    }
+    # ``latest_payloads`` feeds the historical compact fields below.  Do not
+    # use it as the complete record: a memory plan can contain several diff or
+    # address-map stages, and collapsing them silently loses analyst evidence.
+    latest_payloads: Dict[str, Dict[str, Any]] = {}
+    stage_records: list[Dict[str, Any]] = []
+    kind_counts: Dict[str, int] = {}
+    statuses: list[str] = []
+    artifacts: list[Dict[str, Any]] = []
+
+    for trace_index, trace in enumerate(tool_trace, start=1):
+        tool_name = str(trace.get("tool_name") or trace.get("tool") or "")
+        kind = stage_names.get(tool_name)
+        if kind is None:
+            continue
+        payload = _tool_payload(trace)
+        normalized = dict(payload) if isinstance(payload, Mapping) else {}
+        status = str(normalized.get("status") or _tool_status(trace) or "unknown").lower()
+        normalized["status"] = status
+        latest_payloads[kind] = normalized
+        statuses.append(status)
+        kind_counts[kind] = kind_counts.get(kind, 0) + 1
+        stage_artifacts = [
+            dict(artifact)
+            for artifact in (normalized.get("artifacts") or [])
+            if isinstance(artifact, Mapping)
+        ]
+        artifacts.extend(stage_artifacts)
+
+        tool_args = trace.get("tool_args")
+        tool_args = tool_args if isinstance(tool_args, Mapping) else {}
+        plan_stage_index = _memory_plan_stage_index(tool_args)
+        stage_name = _memory_stage_name(
+            kind,
+            kind_counts[kind],
+            tool_args,
+        )
+        stage_record: Dict[str, Any] = {
+            "tool": tool_name,
+            "kind": kind,
+            # Global order makes the chronology explicit when snapshot, diff,
+            # and address-map stages are interleaved in a plan.
+            "stage_index": len(stage_records) + 1,
+            # Per-kind order is convenient for a plan with diff-1/diff-2.
+            "kind_index": kind_counts[kind],
+            "stage_name": stage_name,
+            "source_trace_index": _memory_trace_index(trace, trace_index),
+            "status": status,
+            "summary": _memory_stage_summary(kind, normalized),
+            "artifacts": stage_artifacts,
+        }
+        if plan_stage_index is not None:
+            stage_record["plan_stage_index"] = plan_stage_index
+        error = _memory_stage_error(trace)
+        if error:
+            stage_record["error"] = error
+        stage_records.append(stage_record)
+
+    if not stage_records:
+        return {}
+
+    snapshot_payload = latest_payloads.get("snapshot", {})
+    snapshot_summary = _memory_summary(snapshot_payload)
+    snapshot_source = snapshot_payload.get("source") if isinstance(snapshot_payload.get("source"), Mapping) else {}
+    snapshot = {
+        "status": snapshot_payload.get("status", "unavailable"),
+        "pid": snapshot_payload.get("pid") or snapshot_source.get("pid"),
+        "module_count": _memory_count(snapshot_payload, "module_count", "modules"),
+        "region_count": _memory_count(snapshot_payload, "region_count", "regions"),
+        "sampled_bytes": _memory_count(snapshot_payload, "sampled_bytes", "samples", summary=snapshot_summary),
+    }
+
+    diff_payload = latest_payloads.get("diff", {})
+    diff = {
+        "status": diff_payload.get("status", "unavailable"),
+        "added_region_count": _memory_count(diff_payload, "added_region_count", "added_regions"),
+        "removed_region_count": _memory_count(diff_payload, "removed_region_count", "removed_regions"),
+        "changed_region_count": _memory_count(diff_payload, "changed_region_count", "changed_regions"),
+    }
+
+    mapping_payload = latest_payloads.get("address_map", {})
+    mapping_summary = _memory_summary(mapping_payload)
+    mapped_count = _memory_count(mapping_payload, "mapped_count", "mappings", summary=mapping_summary)
+    unmapped_count = _memory_count(mapping_payload, "unmapped_count", "unmapped", summary=mapping_summary)
+    if not unmapped_count and isinstance(mapping_payload.get("addresses"), list):
+        unmapped_count = max(0, len(mapping_payload["addresses"]) - mapped_count)
+    address_map = {
+        "status": mapping_payload.get("status", "unavailable"),
+        "mapped_count": mapped_count,
+        "unmapped_count": unmapped_count,
+    }
+
+    if "failed" in statuses:
+        status = "failed"
+    elif statuses and all(item == "unavailable" for item in statuses):
+        status = "unavailable"
+    elif "ok" in statuses:
+        status = "ok"
+    else:
+        status = statuses[-1] if statuses else "unknown"
+
+    return {
+        "status": status,
+        "snapshot": snapshot,
+        "diff": diff,
+        "address_map": address_map,
+        "stages": stage_records,
+        "artifacts": _dedupe_artifacts(artifacts),
+    }
+
+
+def _memory_plan_stage_index(tool_args: Mapping[str, Any]) -> int | None:
+    """Return a one-based plan-stage index when the CLI supplied one."""
+
+    value = tool_args.get("stage")
+    if isinstance(value, bool):
+        return None
+    try:
+        index = int(value)
+    except (TypeError, ValueError):
+        return None
+    return index + 1 if index >= 0 else None
+
+
+def _memory_stage_name(kind: str, kind_index: int, tool_args: Mapping[str, Any]) -> str:
+    """Build a stable, readable stage name without trusting arbitrary data."""
+
+    for key in ("stage_name", "name", "label"):
+        value = tool_args.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return f"{kind}-{kind_index}"
+
+
+def _memory_trace_index(trace: Mapping[str, Any], fallback: int) -> int:
+    """Keep the original trace position when it was recorded by the CLI."""
+
+    value = trace.get("iteration")
+    if isinstance(value, bool):
+        return fallback
+    try:
+        index = int(value)
+    except (TypeError, ValueError):
+        return fallback
+    return index if index > 0 else fallback
+
+
+def _memory_stage_error(trace: Mapping[str, Any]) -> str | None:
+    error = trace.get("error")
+    if error is None:
+        raw = _raw_result(trace)
+        if isinstance(raw, Mapping):
+            error = raw.get("error")
+    return str(error) if error else None
+
+
+def _memory_stage_summary(kind: str, payload: Mapping[str, Any]) -> Dict[str, Any]:
+    """Expose compact, non-sensitive per-stage metrics for reports/UI."""
+
+    if kind == "snapshot":
+        source = payload.get("source") if isinstance(payload.get("source"), Mapping) else {}
+        summary = _memory_summary(payload)
+        result: Dict[str, Any] = {
+            "pid": payload.get("pid") or source.get("pid"),
+            "module_count": _memory_count(payload, "module_count", "modules", summary=summary),
+            "region_count": _memory_count(payload, "region_count", "regions", summary=summary),
+            "sampled_bytes": _memory_count(payload, "sampled_bytes", "samples", summary=summary),
+        }
+        truncated = payload.get("truncated", summary.get("truncated"))
+        if truncated is not None:
+            result["truncated"] = bool(truncated)
+        return result
+    if kind == "diff":
+        return {
+            "added_region_count": _memory_count(payload, "added_region_count", "added_regions"),
+            "removed_region_count": _memory_count(payload, "removed_region_count", "removed_regions"),
+            "changed_region_count": _memory_count(payload, "changed_region_count", "changed_regions"),
+        }
+
+    summary = _memory_summary(payload)
+    mapped_count = _memory_count(payload, "mapped_count", "mappings", summary=summary)
+    unmapped_count = _memory_count(payload, "unmapped_count", "unmapped", summary=summary)
+    if not unmapped_count and isinstance(payload.get("addresses"), list):
+        unmapped_count = max(0, len(payload["addresses"]) - mapped_count)
+    return {"mapped_count": mapped_count, "unmapped_count": unmapped_count}
+
+
+def _memory_stage_markdown(stage: Mapping[str, Any]) -> str:
+    """Render one retained memory stage as a compact Markdown bullet."""
+
+    kind = str(stage.get("kind") or "unknown")
+    label = {
+        "snapshot": "Snapshot",
+        "diff": "Diff",
+        "address_map": "Address Mapping",
+    }.get(kind, kind.replace("_", " ").title())
+    summary = stage.get("summary") if isinstance(stage.get("summary"), Mapping) else {}
+    if kind == "snapshot":
+        metrics = (
+            f"pid={summary.get('pid') or 'unknown'} "
+            f"modules={summary.get('module_count', 0)} "
+            f"regions={summary.get('region_count', 0)} "
+            f"sampled_bytes={summary.get('sampled_bytes', 0)}"
+        )
+        if summary.get("truncated"):
+            metrics += " truncated=true"
+    elif kind == "diff":
+        metrics = (
+            f"added={summary.get('added_region_count', 0)} "
+            f"removed={summary.get('removed_region_count', 0)} "
+            f"changed={summary.get('changed_region_count', 0)}"
+        )
+    else:
+        metrics = f"mapped={summary.get('mapped_count', 0)} unmapped={summary.get('unmapped_count', 0)}"
+    stage_index = stage.get("stage_index") or "?"
+    stage_name = stage.get("stage_name") or kind
+    return f"  - **Stage {stage_index} / {label} ({stage_name}):** status={stage.get('status') or 'unknown'} {metrics}"
+
+
+def _memory_summary(payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    summary = payload.get("summary")
+    return summary if isinstance(summary, Mapping) else {}
+
+
+def _memory_count(
+    payload: Mapping[str, Any],
+    count_key: str,
+    collection_key: str,
+    *,
+    summary: Mapping[str, Any] | None = None,
+) -> int:
+    """Return a stable non-negative count from scalar or collection evidence."""
+
+    value = payload.get(count_key)
+    if value is None and summary is not None:
+        value = summary.get(count_key)
+    if value is None:
+        value = payload.get(collection_key)
+    if isinstance(value, (list, tuple, set, dict)):
+        return len(value)
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _evidence_integrity(session: Any) -> Dict[str, Any]:
+    """Normalize optional evidence-manifest metadata for portable reports."""
+
+    if session is None:
+        return {}
+
+    if isinstance(session, Mapping):
+        metadata = session.get("metadata")
+        source = session.get("evidence_integrity")
+    else:
+        metadata = getattr(session, "metadata", None)
+        source = getattr(session, "evidence_integrity", None)
+
+    if isinstance(metadata, Mapping):
+        source = metadata.get("evidence_integrity", source)
+        if not isinstance(source, Mapping):
+            report_context = metadata.get("report_context")
+            if isinstance(report_context, Mapping):
+                source = report_context.get("evidence_integrity", source)
+
+    if not isinstance(source, Mapping):
+        return {}
+
+    return {
+        "manifest_path": source.get("manifest_path") or source.get("path"),
+        "manifest_id": source.get("manifest_id") or source.get("id"),
+        "hash_algorithm": "sha256",
+        "covered_file_count": _evidence_count(source, "covered_file_count", "covered_files"),
+        "unavailable_stage_count": _evidence_count(source, "unavailable_stage_count", "unavailable_stages"),
+        **({"status": source["status"]} if source.get("status") is not None else {}),
+        **(
+            {"verification_command": source["verification_command"]}
+            if source.get("verification_command") is not None
+            else {}
+        ),
+    }
+
+
+def _evidence_count(source: Mapping[str, Any], count_key: str, collection_key: str) -> int:
+    """Return a stable non-negative manifest count from a scalar or collection."""
+
+    value = source.get(count_key, source.get(collection_key, 0))
+    if isinstance(value, Mapping) or (
+        isinstance(value, Sequence) and not isinstance(value, (str, bytes))
+    ):
+        return len(value)
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _gui_analysis(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     """Merge GUI pipeline observations into the stable report schema.
 
@@ -906,6 +1439,66 @@ def _behavior_graph(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     return {}
 
 
+def _engine_analysis(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    for trace in reversed(tool_trace):
+        tool_name = str(trace.get("tool_name") or trace.get("tool") or "")
+        if tool_name != "engine_analyze":
+            continue
+        payload = _tool_payload(trace)
+        if not isinstance(payload, Mapping):
+            return {"status": _tool_status(trace)}
+        result = dict(payload)
+        result.setdefault("status", _tool_status(trace))
+        if not isinstance(result.get("candidates"), list):
+            result["candidates"] = []
+        for field in ("metadata", "assets", "symbols", "strategy"):
+            if field in result and not isinstance(result.get(field), Mapping):
+                result[field] = {}
+        if not isinstance(result.get("evidence"), list):
+            result["evidence"] = []
+        return result
+    return {}
+
+
+def _android_analysis(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    for trace in reversed(tool_trace):
+        tool_name = str(trace.get("tool_name") or trace.get("tool") or "")
+        if tool_name != "android_analyze":
+            continue
+        payload = _tool_payload(trace)
+        if not isinstance(payload, Mapping):
+            return {"status": _tool_status(trace)}
+        result = dict(payload)
+        result.setdefault("status", _tool_status(trace))
+        for field in ("framework", "manifest", "resources", "dex_summary", "native_libs", "strategy"):
+            if field in result and not isinstance(result.get(field), Mapping):
+                result[field] = {}
+        return result
+    return {}
+
+
+def _protocol_analysis(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    for trace in reversed(tool_trace):
+        tool_name = str(trace.get("tool_name") or trace.get("tool") or "")
+        if tool_name != "protocol_analyze":
+            continue
+        payload = _tool_payload(trace)
+        if not isinstance(payload, Mapping):
+            return {"status": _tool_status(trace)}
+        result = dict(payload)
+        result.setdefault("status", _tool_status(trace))
+        if not isinstance(result.get("protocols"), list):
+            result["protocols"] = []
+        if not isinstance(result.get("flows"), list):
+            result["flows"] = []
+        if not isinstance(result.get("field_stats"), Mapping):
+            result["field_stats"] = {}
+        if not isinstance(result.get("inference"), Mapping):
+            result["inference"] = {}
+        return result
+    return {}
+
+
 def _semantic_ir(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     """Expose the deterministic semantic intermediate representation stage."""
 
@@ -939,6 +1532,86 @@ def _reconstruction_verification(tool_trace: Sequence[Mapping[str, Any]]) -> Dic
         result.setdefault("status", _tool_status(trace))
         return result
     return {}
+
+
+def _source_reconstruction(
+    reconstruction: Mapping[str, Any],
+    gui_analysis: Mapping[str, Any],
+    reconstruction_verification: Mapping[str, Any],
+) -> Dict[str, Any]:
+    if not reconstruction and not reconstruction_verification:
+        return {}
+
+    strategy_value = reconstruction.get("strategy")
+    if isinstance(strategy_value, Mapping):
+        strategy_name = str(strategy_value.get("name") or strategy_value.get("key") or "native_stub_reconstruction")
+    elif strategy_value:
+        strategy_name = str(strategy_value)
+    else:
+        gui_strategy = gui_analysis.get("strategy") if isinstance(gui_analysis.get("strategy"), Mapping) else {}
+        strategy_name = str(gui_strategy.get("source_strategy") or "native_stub_reconstruction")
+
+    language = reconstruction.get("language") or "c"
+    output_stack = reconstruction.get("output_stack") or "c-native"
+    semantic_fragment = reconstruction.get("semantic_ir")
+    if semantic_fragment is not None and not isinstance(semantic_fragment, Mapping):
+        semantic_fragment = {}
+
+    return {
+        "status": reconstruction.get("status") or reconstruction_verification.get("status") or "unknown",
+        "project_dir": reconstruction.get("project_dir"),
+        "language": language,
+        "output_stack": output_stack,
+        "strategy": strategy_name,
+        "function_count": reconstruction.get("function_count"),
+        "import_count": reconstruction.get("import_count"),
+        "module_count": reconstruction.get("module_count"),
+        "module_files": reconstruction.get("module_files") or [],
+        "dynamic_evidence_count": reconstruction.get("dynamic_evidence_count"),
+        "semantic_ir": semantic_fragment or {},
+        "verification_status": reconstruction_verification.get("status"),
+        "verification_score": reconstruction_verification.get("score"),
+        "artifacts": reconstruction.get("artifacts") or [],
+        "stub_only": reconstruction.get("stub_only"),
+    }
+
+
+def _capability_audit(session: Any) -> Dict[str, Any]:
+    """Normalize optional capability-audit metadata for reports."""
+
+    if session is None:
+        return {}
+
+    if isinstance(session, Mapping):
+        metadata = session.get("metadata")
+        source = session.get("capability_audit")
+    else:
+        metadata = getattr(session, "metadata", None)
+        source = getattr(session, "capability_audit", None)
+
+    if isinstance(metadata, Mapping):
+        source = metadata.get("capability_audit", source)
+        if not isinstance(source, Mapping):
+            report_context = metadata.get("report_context")
+            if isinstance(report_context, Mapping):
+                source = report_context.get("capability_audit", source)
+
+    if not isinstance(source, Mapping):
+        return {}
+
+    records = source.get("records")
+    if not isinstance(records, list):
+        records = []
+    summary = source.get("summary")
+    if not isinstance(summary, Mapping):
+        summary = {}
+
+    normalized_records = [dict(item) for item in records if isinstance(item, Mapping)]
+    return {
+        "record_count": int(source.get("record_count") or len(normalized_records)),
+        "records": normalized_records,
+        "summary": dict(summary),
+    }
 
 
 def _safe_count(value: Any) -> int:

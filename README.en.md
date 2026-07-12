@@ -131,6 +131,22 @@ python -m reverse_analyzer analyze .\sample.exe --out .\out --dynamic --dynamic-
 
 Profile outcomes are persisted in the KnowledgeBase. Later runs can recommend a profile using success rate, event yield, hook overhead, and historical stability.
 
+### Read-only Runtime Memory Evidence
+
+`--memory-analysis` collects bounded runtime-memory evidence. For an already running target, combine it with `--attach-pid <PID>`; `--memory-plan <PATH>` supplies a predefined snapshot, diff, and address-mapping plan.
+
+```powershell
+# Collect a read-only memory snapshot from an already running target
+python -m reverse_analyzer analyze .\sample.exe --out .\out --memory-analysis --attach-pid 4242
+
+# Use a plan to collect snapshots, diffs, and address-to-RVA mappings
+python -m reverse_analyzer analyze .\sample.exe --out .\out --memory-analysis --memory-plan .\memory-plan.json --attach-pid 4242
+```
+
+Session output retains snapshot, diff, and address-mapping artifacts (for example, `memory_snapshot_<pid>.json`, `memory_diff.json`, and `memory_address_map.json`). Snapshots record modules, virtual-memory regions, and byte-capped samples; diffs identify added, removed, and changed regions; mappings resolve process addresses to loaded modules, RVAs, PE sections, and file offsets when possible. `report.json` and `report.md` summarize the runtime-memory evidence.
+
+The memory stage uses query/read access only and does not write to or modify the target process. If Windows read-only memory APIs, the target process, or access rights are unavailable, the stage is reported as `unavailable` without stopping the session; offline diffs and address mapping based on existing snapshots can still produce evidence independently.
+
 ### Offline Binary Patching and Payload Embedding
 
 `patch-binary` applies a verified plan to a new file; it never modifies the input file in place. It supports checked byte replacement, AOB replacement, PE RVA replacement, and appending an inert overlay payload. Successful runs emit audit and rollback manifests.
@@ -167,6 +183,22 @@ Example `patch.json`:
 ```
 
 Supported operations are `replace_offset`, `replace_rva`, `replace_aob`, and `embed_overlay`. Replacements require an exact pre-image match. The output includes `patch_manifest.json` and `rollback.json`, which the built-in patch API can use to restore a new copy.
+
+### Evidence Manifest and Offline Verification
+
+Every completed `analyze` run writes `evidence-manifest.json` into its output directory. The manifest records the relative path, size, SHA-256, and provenance of declared analysis artifacts; a compact summary is also included in `report.json`, `report.md`, and the session summary.
+
+```powershell
+# Generates out\evidence-manifest.json after analysis
+python -m reverse_analyzer analyze .\sample.exe --out .\out
+
+# Verify artifacts in the original or a fully moved output directory
+python -m reverse_analyzer evidence verify --manifest .\out\evidence-manifest.json
+```
+
+Verification detects missing files, size changes, SHA-256 mismatches, manifest-ID tampering, and paths that escape the output directory. Artifact paths are relative, so a complete `out` directory remains verifiable after it is moved. The original sample is recorded as external provenance with its SHA-256; it does not need to be copied into the evidence package. `report.json`, `report.md`, and the manifest itself are excluded from the current manifest to avoid a self-referential hash cycle.
+
+The patch workflow always writes a new file copy, with audit and `rollback.json` records that can validate and produce a restored copy. Runtime memory support produces only bounded read-only snapshots, diffs, and address-mapping evidence; it does not provide process writing, injection, or execution capabilities.
 
 ### GUI Stack Detection and Reconstruction
 

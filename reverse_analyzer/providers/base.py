@@ -5,15 +5,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Mapping, Optional, Protocol
 
+from reverse_analyzer.core.capabilities.models import (
+    CapabilityArtifactBundle,
+    CapabilityExecutionResult,
+    CapabilityPlan,
+    CapabilityRequest,
+    CapabilityRollbackResult,
+    CapabilityValidation,
+)
+
 
 @dataclass(frozen=True)
 class ProviderMessage:
-    """A provider decision returned to :class:`AgentLoop`.
-
-    Exactly one of ``tool_name`` or ``final_answer`` is normally populated.
-    ``barrier`` gives providers a second, PE-like stop signal for cases
-    where the next safe action is to hand control back to the caller.
-    """
+    """A provider decision returned to :class:`AgentLoop`."""
 
     content: str
     tool_name: Optional[str] = None
@@ -61,3 +65,42 @@ class BaseProvider(Protocol):
 
     def analyze(self, context: Mapping[str, Any]) -> ProviderMessage:
         """Return the next tool-call request or a final answer."""
+
+
+class CapabilityProvider(Protocol):
+    """Protocol implemented by capability execution providers."""
+
+    capability_name: str
+    provider_name: str
+    priority: int
+
+    def supports(self, request: CapabilityRequest, context: Optional[Dict[str, Any]] = None) -> bool:
+        return True
+
+    def plan(self, request: CapabilityRequest, context: Optional[Dict[str, Any]] = None) -> CapabilityPlan:
+        raise NotImplementedError
+
+    def validate(self, plan: CapabilityPlan, context: Optional[Dict[str, Any]] = None) -> CapabilityValidation:
+        raise NotImplementedError
+
+    def execute(
+        self,
+        plan: CapabilityPlan,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> CapabilityExecutionResult:
+        raise NotImplementedError
+
+    def rollback(
+        self,
+        result: CapabilityExecutionResult,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> CapabilityRollbackResult:
+        raise NotImplementedError
+
+    def collect_artifacts(
+        self,
+        result: CapabilityExecutionResult,
+        out_dir: str,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> CapabilityArtifactBundle:
+        raise NotImplementedError

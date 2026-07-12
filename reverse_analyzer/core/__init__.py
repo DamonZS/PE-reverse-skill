@@ -1,4 +1,4 @@
-﻿"""Core orchestration primitives."""
+﻿"""Core orchestration and platform primitives."""
 
 from .models import Flow, ReverseSession, Status, Subtask, Task
 

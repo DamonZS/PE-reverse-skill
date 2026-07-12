@@ -43,6 +43,7 @@ class CliTests(unittest.TestCase):
         result = run_cli("--help")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("analyze", result.stdout)
+        self.assertIn("capability", result.stdout)
         self.assertIn("init-knowledge", result.stdout)
         self.assertIn("show-knowledge", result.stdout)
         self.assertIn("list-tools", result.stdout)
@@ -52,8 +53,210 @@ class CliTests(unittest.TestCase):
         self.assertIn("--dynamic-profile", analyze_help.stdout)
         self.assertIn("auto", analyze_help.stdout)
         self.assertIn("--dynamic-backend", analyze_help.stdout)
+        self.assertIn("--memory-analysis", analyze_help.stdout)
+        self.assertIn("--memory-plan", analyze_help.stdout)
         self.assertIn("--gui", analyze_help.stdout)
         self.assertIn("--reconstruct-gui", analyze_help.stdout)
+
+        capability_help = run_cli("capability", "--help")
+        self.assertEqual(capability_help.returncode, 0, capability_help.stderr)
+        self.assertIn("run", capability_help.stdout)
+        self.assertIn("list", capability_help.stdout)
+        self.assertIn("show-audit", capability_help.stdout)
+
+        capability_run_help = run_cli("capability", "run", "--help")
+        self.assertEqual(capability_run_help.returncode, 0, capability_run_help.stderr)
+        self.assertIn("--capability", capability_run_help.stdout)
+        self.assertIn("--action", capability_run_help.stdout)
+        self.assertIn("--sample", capability_run_help.stdout)
+        self.assertIn("--pid", capability_run_help.stdout)
+        self.assertIn("--out", capability_run_help.stdout)
+        self.assertIn("--provider", capability_run_help.stdout)
+        self.assertIn("--param", capability_run_help.stdout)
+        self.assertIn("--rollback", capability_run_help.stdout)
+
+    def test_capability_list_text_and_json(self) -> None:
+        result = run_cli("capability", "list")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("memory_runtime: mock", result.stdout)
+        self.assertIn("injector: mock", result.stdout)
+        self.assertIn("android_rebuild: mock", result.stdout)
+
+        json_result = run_cli("capability", "list", "--json")
+        self.assertEqual(json_result.returncode, 0, json_result.stderr)
+        payload = json.loads(json_result.stdout)
+        capabilities = {item["name"]: item["providers"] for item in payload["capabilities"]}
+        self.assertEqual(capabilities["memory_runtime"], ["mock"])
+        self.assertEqual(capabilities["injector"], ["mock"])
+        self.assertEqual(capabilities["android_rebuild"], ["mock"])
+
+    def test_capability_run_writes_report_manifest_and_audit_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "sample.bin"
+            out_dir = root / "out"
+            sample.write_bytes(b"MZ\x90\x90")
+
+            result = run_cli(
+                "capability",
+                "run",
+                "--capability",
+                "memory_runtime",
+                "--action",
+                "scan",
+                "--sample",
+                str(sample),
+                "--out",
+                str(out_dir),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["capability"], "memory_runtime")
+            self.assertEqual(payload["action"], "scan")
+            self.assertEqual(payload["provider"], "mock")
+            self.assertIsNone(payload["rollback"])
+
+            report_json = out_dir / "report.json"
+            report_md = out_dir / "report.md"
+            manifest = out_dir / "evidence-manifest.json"
+            audit_path = out_dir / "capabilities" / "memory_runtime_scan_audit.json"
+            self.assertTrue(report_json.is_file())
+            self.assertTrue(report_md.is_file())
+            self.assertTrue(manifest.is_file())
+            self.assertTrue(audit_path.is_file())
+
+            report = json.loads(report_json.read_text(encoding="utf-8"))
+            self.assertGreaterEqual(report["capability_audit"]["record_count"], 1)
+            self.assertEqual(report["memory_analysis"]["capability"], "memory_runtime")
+            self.assertEqual(report["memory_analysis"]["action"], "scan")
+            self.assertEqual(report["memory_analysis"]["provider"], "mock")
+            self.assertEqual(report["memory_analysis"]["status"], "mocked")
+            self.assertEqual(report["platform_core"]["status"], "ok")
+            self.assertIn("capability_registry", report["platform_core"])
+            self.assertIn("capability_audit", report["platform_core"])
+            self.assertIn("memory_runtime", report["platform_core"]["capability_registry"]["capabilities"])
+            self.assertGreaterEqual(report["platform_core"]["capability_audit"]["record_count"], 1)
+
+            markdown = report_md.read_text(encoding="utf-8")
+            self.assertIn("## Capability Audit", markdown)
+            self.assertIn("## Capability Execution", markdown)
+
+            artifact_paths = set(payload["artifacts"])
+            self.assertIn(str(report_json), artifact_paths)
+            self.assertIn(str(report_md), artifact_paths)
+            self.assertIn(str(manifest), artifact_paths)
+            self.assertIn(str(audit_path), artifact_paths)
+
+    def test_capability_run_with_rollback_records_rollback_event(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "sample.bin"
+            out_dir = root / "out"
+            sample.write_bytes(b"MZ\x90\x90")
+
+            result = run_cli(
+                "capability",
+                "run",
+                "--capability",
+                "memory_runtime",
+                "--action",
+                "scan",
+                "--sample",
+                str(sample),
+                "--out",
+                str(out_dir),
+                "--rollback",
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertIsNotNone(payload["rollback"])
+            self.assertTrue(payload["rollback"]["ok"])
+            self.assertTrue(payload["rollback"]["restored"])
+
+            report = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
+            record = report["capability_audit"]["records"][0]
+            event_kinds = [item["kind"] for item in record["events"]]
+            self.assertIn("rollback", event_kinds)
+            self.assertTrue(report["memory_analysis"]["rollback"]["ok"])
+
+    def test_capability_run_rejects_invalid_param_format(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "sample.bin"
+            sample.write_bytes(b"MZ\x90\x90")
+
+            result = run_cli(
+                "capability",
+                "run",
+                "--capability",
+                "memory_runtime",
+                "--action",
+                "scan",
+                "--sample",
+                str(sample),
+                "--out",
+                str(root / "out"),
+                "--param",
+                "badvalue",
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("expected key=value", result.stderr)
+
+    def test_capability_run_rejects_unknown_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "sample.bin"
+            sample.write_bytes(b"MZ\x90\x90")
+
+            result = run_cli(
+                "capability",
+                "run",
+                "--capability",
+                "memory_runtime",
+                "--action",
+                "scan",
+                "--sample",
+                str(sample),
+                "--out",
+                str(root / "out"),
+                "--provider",
+                "nope",
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("Preferred provider 'nope' not found", result.stderr)
+
+    def test_capability_show_audit_reads_report_section(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "sample.bin"
+            out_dir = root / "out"
+            sample.write_bytes(b"MZ\x90\x90")
+
+            run_result = run_cli(
+                "capability",
+                "run",
+                "--capability",
+                "memory_runtime",
+                "--action",
+                "scan",
+                "--sample",
+                str(sample),
+                "--out",
+                str(out_dir),
+            )
+            self.assertEqual(run_result.returncode, 0, run_result.stderr)
+
+            result = run_cli("capability", "show-audit", "--report", str(out_dir / "report.json"))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["record_count"], 1)
+            self.assertEqual(payload["records"][0]["capability"], "memory_runtime")
+            self.assertEqual(payload["records"][0]["provider"], "mock")
+            self.assertEqual(payload["records"][0]["action"], "scan")
 
     def test_list_tools_reports_scaffolded_runtime(self) -> None:
         result = run_cli("list-tools")
@@ -64,6 +267,9 @@ class CliTests(unittest.TestCase):
         self.assertIn("frida_trace", result.stdout)
         self.assertIn("binary_patch_apply", result.stdout)
         self.assertIn("procmon_trace", result.stdout)
+        self.assertIn("memory_snapshot", result.stdout)
+        self.assertIn("memory_diff", result.stdout)
+        self.assertIn("memory_address_map", result.stdout)
         self.assertIn("gui_fingerprint", result.stdout)
         self.assertIn("gui_strategy_select", result.stdout)
         self.assertIn("reconstruct_gui_project", result.stdout)
@@ -627,8 +833,181 @@ class CliTests(unittest.TestCase):
             self.assertTrue((out_dir / "report.json").exists())
             self.assertTrue((out_dir / "report.md").exists())
             tool_names = [item["tool_name"] for item in payload["result"]["tool_results"]]
-            self.assertEqual(tool_names, ["file_info", "hash", "strings_extract", "gui_behavior_graph", "semantic_ir_build"])
+            self.assertEqual(
+                tool_names,
+                [
+                    "file_info",
+                    "hash",
+                    "strings_extract",
+                    "engine_analyze",
+                    "android_analyze",
+                    "protocol_analyze",
+                    "gui_behavior_graph",
+                    "semantic_ir_build",
+                ],
+            )
             self.assertNotIn("tool not registered", result.stdout)
+
+    def test_analyze_memory_without_pid_records_unavailable_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "sample.bin"
+            out_dir = root / "analysis"
+            sample.write_bytes(b"MZ")
+
+            result = run_cli("analyze", str(sample), "--out", str(out_dir), "--max-iterations", "1", "--memory-analysis")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            snapshot = next(item for item in payload["result"]["tool_results"] if item["tool_name"] == "memory_snapshot")
+            self.assertEqual(snapshot["status"], "unavailable")
+            self.assertIn("explicit --attach-pid", snapshot["error"])
+            report = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["memory_analysis"]["status"], "unavailable")
+            self.assertEqual(report["memory_analysis"]["snapshot"]["status"], "unavailable")
+
+    def test_analyze_memory_plan_runs_offline_diff_and_address_map(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "sample.bin"
+            out_dir = root / "analysis"
+            before = root / "before.json"
+            after = root / "after.json"
+            plan = root / "memory-plan.json"
+            sample.write_bytes(b"MZ")
+            before.write_text(json.dumps({"kind": "memory_snapshot", "modules": [], "regions": []}), encoding="utf-8")
+            after.write_text(json.dumps({"kind": "memory_snapshot", "modules": [], "regions": [{"base_address": "0x1000", "size": 4096}]}), encoding="utf-8")
+            plan.write_text(
+                json.dumps(
+                    {
+                        "diff": {"before": "before.json", "after": "after.json"},
+                        "address_map": {"snapshot": "after.json", "addresses": ["0x1000"]},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_cli("analyze", str(sample), "--out", str(out_dir), "--max-iterations", "1", "--memory-analysis", "--memory-plan", str(plan))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            statuses = {
+                item["tool_name"]: item.get("status")
+                for item in payload["result"]["tool_results"]
+                if item["tool_name"].startswith("memory_")
+            }
+            self.assertEqual(statuses["memory_snapshot"], "unavailable")
+            self.assertEqual(statuses["memory_diff"], "ok")
+            self.assertEqual(statuses["memory_address_map"], "ok")
+            self.assertTrue((out_dir / "memory_diff.json").is_file())
+            self.assertTrue((out_dir / "memory_address_map.json").is_file())
+
+    def test_analyze_memory_plan_multistage_writes_distinct_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "sample.bin"
+            out_dir = root / "analysis"
+            before = root / "before.json"
+            after = root / "after.json"
+            later = root / "later.json"
+            plan = root / "memory-plan.json"
+            sample.write_bytes(b"MZ")
+            before.write_text(json.dumps({"kind": "memory_snapshot", "modules": [], "regions": []}), encoding="utf-8")
+            after.write_text(
+                json.dumps({"kind": "memory_snapshot", "modules": [], "regions": [{"base_address": "0x1000", "size": 4096}]}),
+                encoding="utf-8",
+            )
+            later.write_text(
+                json.dumps({"kind": "memory_snapshot", "modules": [], "regions": [{"base_address": "0x2000", "size": 4096}]}),
+                encoding="utf-8",
+            )
+            plan.write_text(
+                json.dumps(
+                    {
+                        "diff": [
+                            {"before": "before.json", "after": "after.json"},
+                            {"before": "after.json", "after": "later.json"},
+                        ],
+                        "address_map": [
+                            {"snapshot": "after.json", "addresses": ["0x1000"]},
+                            {"snapshot": "later.json", "addresses": ["0x2000"]},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_cli("analyze", str(sample), "--out", str(out_dir), "--max-iterations", "1", "--memory-plan", str(plan))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            expected_artifacts = {
+                "memory_diff_stage_1.json",
+                "memory_diff_stage_2.json",
+                "memory_address_map_stage_1.json",
+                "memory_address_map_stage_2.json",
+            }
+            self.assertTrue(all((out_dir / name).is_file() for name in expected_artifacts))
+            self.assertEqual(
+                {
+                    json.loads((out_dir / name).read_text(encoding="utf-8"))["artifacts"][0]["name"]
+                    for name in expected_artifacts
+                },
+                expected_artifacts,
+            )
+
+    def test_analyze_memory_plan_accepts_utf8_bom_from_powershell(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "sample.bin"
+            out_dir = root / "analysis"
+            before = root / "before.json"
+            after = root / "after.json"
+            plan = root / "memory-plan.json"
+            sample.write_bytes(b"MZ")
+            before.write_text(json.dumps({"kind": "memory_snapshot", "modules": [], "regions": []}), encoding="utf-8")
+            after.write_text(json.dumps({"kind": "memory_snapshot", "modules": [], "regions": []}), encoding="utf-8")
+            plan.write_text(
+                json.dumps({"diff": {"before": "before.json", "after": "after.json"}}),
+                encoding="utf-8-sig",
+            )
+
+            result = run_cli("analyze", str(sample), "--out", str(out_dir), "--max-iterations", "1", "--memory-plan", str(plan))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            diff = next(item for item in payload["result"]["tool_results"] if item["tool_name"] == "memory_diff")
+            self.assertEqual(diff["status"], "ok")
+            self.assertTrue((out_dir / "memory_diff.json").is_file())
+
+    def test_analyze_invalid_memory_plan_does_not_break_analysis(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "sample.bin"
+            out_dir = root / "analysis"
+            plan = root / "invalid-plan.json"
+            sample.write_bytes(b"MZ")
+            plan.write_text("not json", encoding="utf-8")
+
+            result = run_cli("analyze", str(sample), "--out", str(out_dir), "--max-iterations", "1", "--memory-plan", str(plan))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            memory_trace = next(item for item in payload["result"]["tool_results"] if item["tool_name"] == "memory_diff")
+            self.assertEqual(memory_trace["status"], "failed")
+            self.assertIn("invalid memory plan", memory_trace["error"])
+            self.assertTrue((out_dir / "report.json").is_file())
+
+    def test_experiment_memory_options_are_persisted_in_analysis_command(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = Path(tmp) / "memory-plan.json"
+            result = run_cli("experiment", "create", "sample.exe", "--workspace", tmp, "--memory-analysis", "--memory-plan", str(plan))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertTrue(payload["experiment"]["options"]["memory_analysis"])
+            self.assertEqual(payload["experiment"]["options"]["memory_plan"], str(plan))
+            self.assertIn("--memory-analysis", payload["analysis_command"])
+            self.assertIn("--memory-plan", payload["analysis_command"])
 
     def test_analyze_reconstruct_generates_stub_project(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -741,6 +1120,11 @@ class CliTests(unittest.TestCase):
             self.assertEqual(json.loads(dry_run.stdout)["status"], "planned")
             self.assertFalse(output.exists())
 
+            flags_first = run_cli("patch-binary", "--plan", str(plan), "--out", str(output), str(sample))
+            self.assertEqual(flags_first.returncode, 0, flags_first.stderr)
+            self.assertEqual(json.loads(flags_first.stdout)["status"], "planned")
+            self.assertFalse(output.exists())
+
             applied = run_cli(
                 "patch-binary", str(sample), "--plan", str(plan), "--out", str(output), "--apply", "--artifact-dir", str(artifacts)
             )
@@ -749,6 +1133,47 @@ class CliTests(unittest.TestCase):
             self.assertEqual(sample.read_bytes(), original)
             self.assertEqual(output.read_bytes(), b"MZ\xCC\x90")
             self.assertTrue((artifacts / "patch_manifest.json").is_file())
+
+    def test_validate_patch_plan_and_rollback_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "fixture.bin"
+            plan = root / "patch.json"
+            patched = root / "patched.bin"
+            restored = root / "restored.bin"
+            artifacts = root / "artifacts"
+            original = b"MZ\x90\x90"
+            sample.write_bytes(original)
+            plan.write_text(
+                json.dumps(
+                    {"target_sha256": __import__("hashlib").sha256(original).hexdigest(), "operations": [{"kind": "replace_offset", "offset": 2, "expected": "90", "replacement": "cc"}]}
+                ),
+                encoding="utf-8",
+            )
+
+            validated = run_cli("validate-patch-plan", str(sample), "--plan", str(plan))
+            self.assertEqual(validated.returncode, 0, validated.stderr)
+            self.assertTrue(json.loads(validated.stdout)["data"]["valid"])
+            self.assertFalse(patched.exists())
+
+            applied = run_cli("patch-binary", str(sample), "--plan", str(plan), "--out", str(patched), "--apply", "--artifact-dir", str(artifacts))
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            rollback = artifacts / "rollback.json"
+
+            dry_run = run_cli("patch-binary", "rollback", str(patched), "--rollback", str(rollback), "--out", str(restored))
+            self.assertEqual(dry_run.returncode, 0, dry_run.stderr)
+            self.assertEqual(json.loads(dry_run.stdout)["status"], "planned")
+            self.assertFalse(restored.exists())
+
+            flags_first = run_cli("patch-binary", "--rollback", str(rollback), "--out", str(restored), str(patched))
+            self.assertEqual(flags_first.returncode, 0, flags_first.stderr)
+            self.assertEqual(json.loads(flags_first.stdout)["status"], "planned")
+            self.assertFalse(restored.exists())
+
+            rolled_back = run_cli("patch-binary", "rollback", str(patched), "--rollback", str(rollback), "--out", str(restored), "--apply")
+            self.assertEqual(rolled_back.returncode, 0, rolled_back.stderr)
+            self.assertEqual(restored.read_bytes(), original)
+            self.assertEqual(patched.read_bytes(), b"MZ\xCC\x90")
 
     def test_analyze_decompile_gracefully_degrades_without_ghidra(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
