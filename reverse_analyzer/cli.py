@@ -86,6 +86,11 @@ _BUILTIN_TOOLS = [
         "description": "Dynamic Windows API trace capture with Frida instrumentation and resumable artifacts.",
     },
     {
+        "name": "binary_patch_apply",
+        "status": "available",
+        "description": "Validate and apply a transactional offline binary patch plan to a new output file with audit and rollback artifacts.",
+    },
+    {
         "name": "procmon_trace",
         "status": "optional-dependency",
         "description": "Dynamic OS behavior capture with Microsoft Sysinternals Procmon PML/CSV artifacts.",
@@ -268,6 +273,26 @@ def _load_dynamic_hooks(path: str | Path) -> list[Mapping[str, Any]]:
     if not isinstance(hooks, list) or not all(isinstance(item, Mapping) for item in hooks):
         raise ValueError("dynamic hook file must contain a JSON list or an object with a 'hooks' list")
     return [dict(item) for item in hooks]
+
+
+def binary_patch_command(args: argparse.Namespace) -> int:
+    """Apply a guarded offline patch plan to a copied output binary."""
+
+    try:
+        from .tools import binary_patch_apply_plan
+    except ImportError:
+        from reverse_analyzer.tools import binary_patch_apply_plan
+
+    result = binary_patch_apply_plan(
+        args.sample,
+        plan=args.plan,
+        out_path=args.out,
+        apply=bool(args.apply),
+        artifact_dir=args.artifact_dir,
+    )
+    payload = result.to_dict() if hasattr(result, "to_dict") else result
+    _print_json_payload(payload if isinstance(payload, Mapping) else {"status": "failed", "error": str(payload)})
+    return 0 if getattr(result, "status", "failed") in {"ok", "planned"} else 2
 
 
 _KNOWN_DYNAMIC_PROFILES = {"quick", "behavior", "unpacking", "network", "persistence"}
@@ -1168,6 +1193,14 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--host", default="127.0.0.1", help="Dashboard server host when --serve is used.")
     dashboard.add_argument("--port", type=int, default=None, help="Dashboard server port; defaults to configuration or 8088.")
     dashboard.set_defaults(func=dashboard_command)
+
+    patch_binary = subparsers.add_parser("patch-binary", help="Validate or apply an offline binary patch plan to a new output file.")
+    patch_binary.add_argument("sample", help="Input binary/file; it is never modified in place.")
+    patch_binary.add_argument("--plan", required=True, help="JSON patch plan containing guarded replace/AOB/append/insert operations.")
+    patch_binary.add_argument("--out", required=True, help="Output path; must differ from the input sample.")
+    patch_binary.add_argument("--apply", action="store_true", help="Write the patched output; without this flag, run a full dry-run only.")
+    patch_binary.add_argument("--artifact-dir", default=None, help="Directory for patch audit and rollback plan artifacts.")
+    patch_binary.set_defaults(func=binary_patch_command)
 
     init_knowledge = subparsers.add_parser("init-knowledge", help="Create the local knowledge scaffold.")
     init_knowledge.add_argument("--workspace", default=None, help="Workspace root; defaults to current directory.")

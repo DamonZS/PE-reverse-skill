@@ -204,6 +204,100 @@ def binary_patch_rollback(
         return _failure("binary_patch_rollback", exc, path)
 
 
+def binary_patch_apply_plan(
+    path: str | Path,
+    *,
+    plan: Mapping[str, Any] | str | Path,
+    out_path: str | Path,
+    apply: bool = False,
+    artifact_dir: str | Path | None = None,
+) -> ToolResult:
+    """Apply a verified patch plan to one explicit output path.
+
+    This is the CLI-facing adapter for :func:`binary_patch_apply`.  It retains
+    the existing engine's pre-image/hash verification and rollback manifest,
+    while making the destination path deterministic for automation.  The
+    original input is never modified.
+    """
+
+    try:
+        destination = Path(out_path).resolve()
+        source = Path(path).resolve()
+        if source == destination:
+            raise PatchPlanError("out_path must differ from the source; in-place patching is not supported")
+        plan_payload, _ = _load_json_mapping(plan, label="patch plan")
+        original = source.read_bytes()
+        source_hash = _sha256(original)
+        expected_hash = _optional_text(plan_payload.get("target_sha256"))
+        if expected_hash and source_hash.casefold() != expected_hash.casefold():
+            raise PatchPlanError("target_sha256 does not match the supplied target")
+        operations = plan_payload.get("operations")
+        if not isinstance(operations, list) or not operations:
+            raise PatchPlanError("patch plan must contain a non-empty operations array")
+
+        patched = bytearray(original)
+        applied_operations: list[dict[str, Any]] = []
+        rollback_operations: list[dict[str, Any]] = []
+        plan_dir = Path(plan).resolve().parent if isinstance(plan, (str, Path)) else None
+        for index, operation in enumerate(operations):
+            if not isinstance(operation, Mapping):
+                raise PatchPlanError(f"operations[{index}] must be an object")
+            applied_item, rollback_item = _apply_operation(patched, operation, index=index, plan_dir=plan_dir)
+            applied_operations.append(applied_item)
+            rollback_operations.append(rollback_item)
+
+        patched_bytes = bytes(patched)
+        patched_hash = _sha256(patched_bytes)
+        artifact_root = Path(artifact_dir).resolve() if artifact_dir is not None else destination.parent / f"{destination.name}.patch-artifacts"
+        manifest_path = artifact_root / "patch_manifest.json"
+        rollback_path = artifact_root / "rollback.json"
+        manifest = {
+            "status": "planned" if not apply else "ok",
+            "schema_version": 1,
+            "source_path": str(source),
+            "patched_path": str(destination),
+            "source_sha256": source_hash,
+            "patched_sha256": patched_hash,
+            "source_size": len(original),
+            "patched_size": len(patched_bytes),
+            "plan_schema_version": plan_payload.get("schema_version", 1),
+            "operations": applied_operations,
+            "rollback_path": str(rollback_path),
+            "dry_run": not apply,
+        }
+        rollback_manifest = {
+            "schema_version": 1,
+            "source_path": str(source),
+            "source_sha256": source_hash,
+            "patched_sha256": patched_hash,
+            "operations": rollback_operations,
+        }
+        if not apply:
+            return ToolResult(tool="binary_patch_apply", status="planned", data={**manifest, "artifacts": []})
+
+        if destination.exists():
+            raise PatchPlanError(f"patched output already exists: {destination}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        artifact_root.mkdir(parents=True, exist_ok=True)
+        _atomic_write_bytes(destination, patched_bytes)
+        _write_json(manifest_path, manifest)
+        _write_json(rollback_path, rollback_manifest)
+        return ToolResult(
+            tool="binary_patch_apply",
+            status="ok",
+            data={
+                **manifest,
+                "artifacts": [
+                    {"name": destination.name, "path": str(destination), "kind": "patched-binary"},
+                    {"name": "patch_manifest.json", "path": str(manifest_path), "kind": "patch-manifest"},
+                    {"name": "rollback.json", "path": str(rollback_path), "kind": "patch-rollback"},
+                ],
+            },
+        )
+    except (OSError, PatchPlanError, TypeError, ValueError) as exc:
+        return _failure("binary_patch_apply", exc, path)
+
+
 def _apply_operation(
     data: bytearray,
     operation: Mapping[str, Any],

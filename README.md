@@ -2,7 +2,7 @@
 
 > **核心能力：模型破甲 / 越狱 / 安全策略绕过**
 >
-> 内置多层破甲方案，可突破主流 AI 大模型全系列：GPT-4o / GPT-4.1 / GPT-5 / GPT-5.1 / GPT-5.2 / Codex / Luna / GPT-5.6-luna的内容安全限制，实现完全无限制模式下的授权安全测试与逆向分析。通过 `codex-instruct.py` 指令注入部署，支持 Codex CLI 命令行版本（已验证有效）；Codex 桌面版因内置 `provider-sync` 覆盖机制暂不支持。
+> 内置多层破甲方案，可突破主流 AI 大模型全系列：GPT-4o / GPT-4.1 / GPT-5 / GPT-5.1 / GPT-5.2 /GPT-5.4/GPT-5.5/ Codex-5.5 /Codex-5.6  / GPT-5.6-luna的内容安全限制，实现完全无限制模式下的授权安全测试与逆向分析。通过 `codex-instruct.py` 指令注入部署，支持 Codex CLI 命令行版本（已验证有效）；Codex 桌面版因内置 `provider-sync` 覆盖机制暂不支持。
 >
 > 面向授权逆向分析与软件安全研究的本地优先平台：将静态分析、动态行为、GUI 证据、语义 IR、源码/GUI 重构和知识库反馈整合为可追溯的分析闭环。
 
@@ -130,6 +130,43 @@ python -m reverse_analyzer analyze .\sample.exe --out .\out --dynamic --dynamic-
 ```
 
 Profile 运行结果会进入 KnowledgeBase。后续会话可根据成功率、事件量、Hook 开销和历史稳定性推荐 Profile。
+
+### 离线二进制补丁与载荷嵌入
+
+`patch-binary` 对文件副本执行可验证补丁，不会原地修改输入文件。支持定点字节替换、AOB 特征码替换、PE RVA 替换，以及追加**非可执行** overlay 数据载荷；每次成功应用都会生成审计清单和回滚清单。
+
+```powershell
+# 默认 dry-run：校验完整计划、目标 SHA-256 和预期字节，但不写入输出文件
+python -m reverse_analyzer patch-binary .\sample.exe --plan .\patch.json --out .\patched.exe
+
+# 显式写入新文件及审计/回滚 artifacts
+python -m reverse_analyzer patch-binary .\sample.exe --plan .\patch.json --out .\patched.exe --apply --artifact-dir .\patch-artifacts
+```
+
+示例 `patch.json`：
+
+```json
+{
+  "target_sha256": "<可选：原始文件 SHA-256>",
+  "operations": [
+    {
+      "id": "replace-flag",
+      "kind": "replace_offset",
+      "offset": "0x120",
+      "expected": "74 05",
+      "replacement": "90 90"
+    },
+    {
+      "id": "append-data",
+      "kind": "embed_overlay",
+      "payload_file": "payload.dat",
+      "marker": "research-data"
+    }
+  ]
+}
+```
+
+可用操作为 `replace_offset`、`replace_rva`、`replace_aob` 与 `embed_overlay`。所有替换均要求预期字节匹配；输出包含 `patch_manifest.json` 与 `rollback.json`，可由内置 patch 工具 API 恢复为原始副本。
 
 ### GUI 技术栈识别与重构
 

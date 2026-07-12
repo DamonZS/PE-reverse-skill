@@ -2,7 +2,7 @@
 
 > **Core Capability: Model Jailbreak / Bypass / Security Policy Circumvention**
 >
-> Built-in multi-layer jailbreak solutions capable of breaking through content safety restrictions of mainstream LLMs across all series: GPT-4o / GPT-4.1 / GPT-5 / GPT-5.1 / GPT-5.2 / Codex / Luna / GPT-5.6-luna, enabling full unrestricted-mode authorized security testing and reverse engineering. Deployed via `codex-instruct.py` instruction injection; verified working on Codex CLI. Codex Desktop is currently unsupported due to its built-in `provider-sync` override mechanism.
+> Built-in multi-layer jailbreak solutions capable of breaking through content safety restrictions of mainstream LLMs across all series: GPT-4o / GPT-4.1 / GPT-5 / GPT-5.1 / GPT-5.2 /GPT-5.4/GPT-5.5/ Codex-5.5 /Codex-5.6 / GPT-5.6-luna, enabling full unrestricted-mode authorized security testing and reverse engineering. Deployed via `codex-instruct.py` instruction injection; verified working on Codex CLI. Codex Desktop is currently unsupported due to its built-in `provider-sync` override mechanism.
 >
 > A local-first platform for authorized reverse engineering and software-security research. It combines static analysis, dynamic evidence, GUI reconstruction, Semantic IR, source/project reconstruction, and a feedback-driven knowledge base.
 
@@ -130,6 +130,43 @@ python -m reverse_analyzer analyze .\sample.exe --out .\out --dynamic --dynamic-
 ```
 
 Profile outcomes are persisted in the KnowledgeBase. Later runs can recommend a profile using success rate, event yield, hook overhead, and historical stability.
+
+### Offline Binary Patching and Payload Embedding
+
+`patch-binary` applies a verified plan to a new file; it never modifies the input file in place. It supports checked byte replacement, AOB replacement, PE RVA replacement, and appending an inert overlay payload. Successful runs emit audit and rollback manifests.
+
+```powershell
+# Dry-run: validates the plan, target SHA-256, and pre-image bytes without writing output
+python -m reverse_analyzer patch-binary .\sample.exe --plan .\patch.json --out .\patched.exe
+
+# Explicitly write a new output and its audit/rollback artifacts
+python -m reverse_analyzer patch-binary .\sample.exe --plan .\patch.json --out .\patched.exe --apply --artifact-dir .\patch-artifacts
+```
+
+Example `patch.json`:
+
+```json
+{
+  "target_sha256": "<optional original-file SHA-256>",
+  "operations": [
+    {
+      "id": "replace-flag",
+      "kind": "replace_offset",
+      "offset": "0x120",
+      "expected": "74 05",
+      "replacement": "90 90"
+    },
+    {
+      "id": "append-data",
+      "kind": "embed_overlay",
+      "payload_file": "payload.dat",
+      "marker": "research-data"
+    }
+  ]
+}
+```
+
+Supported operations are `replace_offset`, `replace_rva`, `replace_aob`, and `embed_overlay`. Replacements require an exact pre-image match. The output includes `patch_manifest.json` and `rollback.json`, which the built-in patch API can use to restore a new copy.
 
 ### GUI Stack Detection and Reconstruction
 

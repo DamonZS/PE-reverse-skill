@@ -2,6 +2,7 @@
 
 from .executor import ToolExecutor, ToolResult
 from .frida import frida_check, frida_hook_profiles, frida_hooks_for_profile, frida_install_guide, frida_trace
+from .patch import PatchPlanError, binary_patch_apply_plan
 from .procmon import procmon_check, procmon_install_guide, procmon_trace
 from .ghidra import ghidra_check, ghidra_decompile, ghidra_install_guide
 from .gui import (
@@ -33,6 +34,8 @@ __all__ = [
     "frida_hooks_for_profile",
     "frida_trace",
     "frida_install_guide",
+    "PatchPlanError",
+    "binary_patch_apply_plan",
     "procmon_check",
     "procmon_trace",
     "procmon_install_guide",

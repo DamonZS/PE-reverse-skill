@@ -62,6 +62,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("yara_scan", result.stdout)
         self.assertIn("reconstruct_project", result.stdout)
         self.assertIn("frida_trace", result.stdout)
+        self.assertIn("binary_patch_apply", result.stdout)
         self.assertIn("procmon_trace", result.stdout)
         self.assertIn("gui_fingerprint", result.stdout)
         self.assertIn("gui_strategy_select", result.stdout)
@@ -714,6 +715,40 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Procmon behavioral capture installation guide", result.stdout)
         self.assertIn("dynamic-backend procmon", result.stdout)
+
+    def test_patch_binary_dry_run_and_apply_preserve_original(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "fixture.bin"
+            plan = root / "patch.json"
+            output = root / "patched.bin"
+            artifacts = root / "patch-artifacts"
+            original = b"MZ\x90\x90"
+            sample.write_bytes(original)
+            plan.write_text(
+                json.dumps(
+                    {
+                        "operations": [
+                            {"kind": "replace_offset", "offset": 2, "expected": "90", "replacement": "cc"}
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            dry_run = run_cli("patch-binary", str(sample), "--plan", str(plan), "--out", str(output))
+            self.assertEqual(dry_run.returncode, 0, dry_run.stderr)
+            self.assertEqual(json.loads(dry_run.stdout)["status"], "planned")
+            self.assertFalse(output.exists())
+
+            applied = run_cli(
+                "patch-binary", str(sample), "--plan", str(plan), "--out", str(output), "--apply", "--artifact-dir", str(artifacts)
+            )
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            self.assertEqual(json.loads(applied.stdout)["status"], "ok")
+            self.assertEqual(sample.read_bytes(), original)
+            self.assertEqual(output.read_bytes(), b"MZ\xCC\x90")
+            self.assertTrue((artifacts / "patch_manifest.json").is_file())
 
     def test_analyze_decompile_gracefully_degrades_without_ghidra(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

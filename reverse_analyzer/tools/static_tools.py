@@ -19,6 +19,7 @@ from typing import Any, Dict, Iterable, List
 
 from .executor import ToolExecutor, ToolResult
 from .frida import frida_check, frida_hook_profiles, frida_install_guide, frida_trace
+from .patch import binary_patch_apply_plan
 from .procmon import procmon_check, procmon_install_guide, procmon_trace
 from .ghidra import ghidra_check, ghidra_decompile, ghidra_install_guide
 from .gui import (
@@ -73,6 +74,7 @@ def register_builtin_tools(executor: ToolExecutor | None = None) -> ToolExecutor
     executor.register("frida_trace", frida_trace)
     executor.register("frida_hook_profiles", frida_hook_profiles)
     executor.register("frida_install_guide", frida_install_guide)
+    executor.register("binary_patch_apply", binary_patch_apply_plan)
     executor.register("procmon_check", procmon_check)
     executor.register("procmon_trace", procmon_trace)
     executor.register("procmon_install_guide", procmon_install_guide)

@@ -29,6 +29,7 @@ _TRANSITIONS = {
 }
 _OPTION_FLAGS = {
     "dynamic": "--dynamic",
+    "memory_analysis": "--memory-analysis",
     "gui": "--gui",
     "gui_runtime": "--gui-runtime",
     "gui_visual": "--gui-visual",
@@ -39,6 +40,7 @@ _OPTION_VALUES = {
     "dynamic_backend": "--dynamic-backend",
     "dynamic_profile": "--dynamic-profile",
     "dynamic_duration": "--dynamic-duration",
+    "memory_plan": "--memory-plan",
     "gui_target": "--gui-target",
     "gui_interaction_trace": "--gui-interaction-trace",
 }
