@@ -1,0 +1,7 @@
+{
+  "status": "ok",
+  "verified": true,
+  "restored": true,
+  "target_mutated": false,
+  "strategy": "read_only_noop"
+}

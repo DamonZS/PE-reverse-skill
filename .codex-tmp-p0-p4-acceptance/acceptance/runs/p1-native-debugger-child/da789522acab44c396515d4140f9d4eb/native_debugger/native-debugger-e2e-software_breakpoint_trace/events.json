@@ -1,0 +1,369 @@
+{
+  "action": "software_breakpoint_trace",
+  "capability": "native_debugger",
+  "context_summaries": [
+    {
+      "architecture": "x64",
+      "event_index": 7,
+      "flags": 582,
+      "frame_pointer": 0,
+      "instruction_pointer": 140720415070465,
+      "reason": "exception_observation",
+      "registers": {
+        "r10": 0,
+        "r11": 0,
+        "r12": 0,
+        "r13": 0,
+        "r14": 0,
+        "r15": 0,
+        "r8": 0,
+        "r9": 140720415144176,
+        "rax": 671966781440,
+        "rbx": 0,
+        "rcx": 0,
+        "rdi": 0,
+        "rdx": 140720415144176,
+        "rsi": 0
+      },
+      "stack_pointer": 671973636904,
+      "thread_id": 21480,
+      "trap_flag": false
+    },
+    {
+      "after": {
+        "architecture": "x64",
+        "flags": 514,
+        "frame_pointer": 671969441424,
+        "instruction_pointer": 140698604410720,
+        "registers": {
+          "r10": 0,
+          "r11": 582,
+          "r12": 0,
+          "r13": 0,
+          "r14": 0,
+          "r15": 0,
+          "r8": 671969441176,
+          "r9": 0,
+          "rax": 0,
+          "rbx": 0,
+          "rcx": 140720415321908,
+          "rdi": 0,
+          "rdx": 0,
+          "rsi": 0
+        },
+        "stack_pointer": 671969441368,
+        "thread_id": 41512,
+        "trap_flag": false
+      },
+      "before": {
+        "architecture": "x64",
+        "flags": 514,
+        "frame_pointer": 671969441424,
+        "instruction_pointer": 140698604410721,
+        "registers": {
+          "r10": 0,
+          "r11": 582,
+          "r12": 0,
+          "r13": 0,
+          "r14": 0,
+          "r15": 0,
+          "r8": 671969441176,
+          "r9": 0,
+          "rax": 0,
+          "rbx": 0,
+          "rcx": 140720415321908,
+          "rdi": 0,
+          "rdx": 0,
+          "rsi": 0
+        },
+        "stack_pointer": 671969441368,
+        "thread_id": 41512,
+        "trap_flag": false
+      },
+      "event_index": 9,
+      "ok": true,
+      "reason": "software_breakpoint_hit",
+      "status": "ok"
+    }
+  ],
+  "debug_events": [
+    {
+      "base_address": 140698604404736,
+      "continue_status": 65538,
+      "continued": true,
+      "debug_event_code": 3,
+      "elapsed_ms": 1,
+      "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmprnp2he_5\\native_debugger_fixture.exe",
+      "index": 0,
+      "kind": "process_create",
+      "pid": 11008,
+      "start_address": 0,
+      "thread_id": 41512,
+      "thread_local_base": 671966765056,
+      "timestamp": "2026-07-14T13:10:32.018995+00:00"
+    },
+    {
+      "base_address": 140720413868032,
+      "continue_status": 65538,
+      "continued": true,
+      "debug_event_code": 6,
+      "elapsed_ms": 1,
+      "image_path": "C:\\Windows\\System32\\ntdll.dll",
+      "index": 1,
+      "kind": "module_load",
+      "pid": 11008,
+      "thread_id": 41512,
+      "timestamp": "2026-07-14T13:10:32.019171+00:00"
+    },
+    {
+      "continue_status": 65538,
+      "continued": true,
+      "debug_event_code": 2,
+      "elapsed_ms": 1,
+      "index": 2,
+      "kind": "thread_create",
+      "pid": 11008,
+      "start_address": 140720414466592,
+      "thread_id": 37156,
+      "thread_local_base": 671966773248,
+      "timestamp": "2026-07-14T13:10:32.019328+00:00"
+    },
+    {
+      "base_address": 140720379199488,
+      "continue_status": 65538,
+      "continued": true,
+      "debug_event_code": 6,
+      "elapsed_ms": 1,
+      "image_path": "C:\\Windows\\System32\\kernel32.dll",
+      "index": 3,
+      "kind": "module_load",
+      "pid": 11008,
+      "thread_id": 41512,
+      "timestamp": "2026-07-14T13:10:32.019452+00:00"
+    },
+    {
+      "base_address": 140720371793920,
+      "continue_status": 65538,
+      "continued": true,
+      "debug_event_code": 6,
+      "elapsed_ms": 1,
+      "image_path": "C:\\Windows\\System32\\KernelBase.dll",
+      "index": 4,
+      "kind": "module_load",
+      "pid": 11008,
+      "thread_id": 41512,
+      "timestamp": "2026-07-14T13:10:32.019646+00:00"
+    },
+    {
+      "base_address": 140720367665152,
+      "continue_status": 65538,
+      "continued": true,
+      "debug_event_code": 6,
+      "elapsed_ms": 1,
+      "image_path": "C:\\Windows\\System32\\ucrtbase.dll",
+      "index": 5,
+      "kind": "module_load",
+      "pid": 11008,
+      "thread_id": 41512,
+      "timestamp": "2026-07-14T13:10:32.019835+00:00"
+    },
+    {
+      "continue_status": 65538,
+      "continued": true,
+      "debug_event_code": 2,
+      "elapsed_ms": 2,
+      "index": 6,
+      "kind": "thread_create",
+      "pid": 11008,
+      "start_address": 140720415144176,
+      "thread_id": 21480,
+      "thread_local_base": 671966781440,
+      "timestamp": "2026-07-14T13:10:32.019986+00:00"
+    },
+    {
+      "call_stack": {
+        "architecture": "x64",
+        "capture_method": "bounded_frame_pointer_walk",
+        "complete": true,
+        "event_index": 7,
+        "frames": [
+          {
+            "address": 140720415070465,
+            "address_hex": "0x7ffc065a5901",
+            "index": 0,
+            "module": {
+              "base_address": 140720413868032,
+              "image_path": "C:\\Windows\\System32\\ntdll.dll",
+              "rva": 1202433
+            },
+            "source": "thread_context"
+          }
+        ],
+        "schema_version": 1,
+        "termination_reason": "end_of_chain",
+        "thread_id": 21480
+      },
+      "classification": "debugger_initial_breakpoint",
+      "context": {
+        "architecture": "x64",
+        "event_index": 7,
+        "flags": 582,
+        "frame_pointer": 0,
+        "instruction_pointer": 140720415070465,
+        "reason": "exception_observation",
+        "registers": {
+          "r10": 0,
+          "r11": 0,
+          "r12": 0,
+          "r13": 0,
+          "r14": 0,
+          "r15": 0,
+          "r8": 0,
+          "r9": 140720415144176,
+          "rax": 671966781440,
+          "rbx": 0,
+          "rcx": 0,
+          "rdi": 0,
+          "rdx": 140720415144176,
+          "rsi": 0
+        },
+        "stack_pointer": 671973636904,
+        "thread_id": 21480,
+        "trap_flag": false
+      },
+      "continue_status": 65538,
+      "continued": true,
+      "debug_event_code": 1,
+      "elapsed_ms": 2,
+      "exception_address": 140720415070464,
+      "exception_code": 2147483651,
+      "exception_code_hex": "0x80000003",
+      "exception_flags": 0,
+      "first_chance": true,
+      "index": 7,
+      "information": [
+        0
+      ],
+      "kind": "exception",
+      "pid": 11008,
+      "thread_id": 21480,
+      "timestamp": "2026-07-14T13:10:32.020066+00:00"
+    },
+    {
+      "continue_status": 65538,
+      "continued": true,
+      "debug_event_code": 4,
+      "elapsed_ms": 2,
+      "exit_code": 0,
+      "index": 8,
+      "kind": "thread_exit",
+      "pid": 11008,
+      "thread_id": 21480,
+      "timestamp": "2026-07-14T13:10:32.020337+00:00"
+    },
+    {
+      "breakpoint_hit": 1,
+      "classification": "software_breakpoint_hit",
+      "context": {
+        "after": {
+          "architecture": "x64",
+          "flags": 514,
+          "frame_pointer": 671969441424,
+          "instruction_pointer": 140698604410720,
+          "registers": {
+            "r10": 0,
+            "r11": 582,
+            "r12": 0,
+            "r13": 0,
+            "r14": 0,
+            "r15": 0,
+            "r8": 671969441176,
+            "r9": 0,
+            "rax": 0,
+            "rbx": 0,
+            "rcx": 140720415321908,
+            "rdi": 0,
+            "rdx": 0,
+            "rsi": 0
+          },
+          "stack_pointer": 671969441368,
+          "thread_id": 41512,
+          "trap_flag": false
+        },
+        "before": {
+          "architecture": "x64",
+          "flags": 514,
+          "frame_pointer": 671969441424,
+          "instruction_pointer": 140698604410721,
+          "registers": {
+            "r10": 0,
+            "r11": 582,
+            "r12": 0,
+            "r13": 0,
+            "r14": 0,
+            "r15": 0,
+            "r8": 671969441176,
+            "r9": 0,
+            "rax": 0,
+            "rbx": 0,
+            "rcx": 140720415321908,
+            "rdi": 0,
+            "rdx": 0,
+            "rsi": 0
+          },
+          "stack_pointer": 671969441368,
+          "thread_id": 41512,
+          "trap_flag": false
+        },
+        "event_index": 9,
+        "ok": true,
+        "reason": "software_breakpoint_hit",
+        "status": "ok"
+      },
+      "continue_status": 65538,
+      "continued": true,
+      "debug_event_code": 1,
+      "elapsed_ms": 509,
+      "exception_address": 140698604410720,
+      "exception_code": 2147483651,
+      "exception_code_hex": "0x80000003",
+      "exception_flags": 0,
+      "first_chance": true,
+      "index": 9,
+      "information": [
+        0
+      ],
+      "kind": "exception",
+      "pid": 11008,
+      "thread_id": 41512,
+      "timestamp": "2026-07-14T13:10:32.527705+00:00"
+    }
+  ],
+  "lifecycle_events": [
+    {
+      "action": "software_breakpoint_trace",
+      "kind": "plan",
+      "message": "native debugger plan created",
+      "ts": "2026-07-14T13:10:37.030783+00:00"
+    },
+    {
+      "error_count": 0,
+      "kind": "validate",
+      "message": "native debugger plan validated",
+      "ok": true,
+      "ts": "2026-07-14T13:10:37.030783+00:00",
+      "warning_count": 0
+    },
+    {
+      "kind": "execute",
+      "message": "native debugger execution completed",
+      "status": "ok",
+      "ts": "2026-07-14T13:10:37.030783+00:00"
+    }
+  ],
+  "provider": "windows_native_debugger",
+  "schema_version": 1,
+  "session_id": "native-debugger-e2e-software_breakpoint_trace",
+  "status": "ok",
+  "termination_reason": "duration"
+}

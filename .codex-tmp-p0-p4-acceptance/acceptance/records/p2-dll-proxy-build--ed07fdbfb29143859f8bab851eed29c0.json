@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "fixture_id": "p2-dll-proxy-build",
+  "phase": "P2",
+  "capability": "dll_proxy_generation",
+  "evidence_level": "toolchain",
+  "session_id": "ed07fdbfb29143859f8bab851eed29c0",
+  "target_identity": {},
+  "target_identity_source": "missing",
+  "started_at": "2026-07-14T13:35:58.168454+00:00",
+  "finished_at": "2026-07-14T13:36:02.073541+00:00",
+  "workspace": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance",
+  "run_directory": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-dll-proxy-build\\ed07fdbfb29143859f8bab851eed29c0",
+  "record_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\records\\p2-dll-proxy-build--ed07fdbfb29143859f8bab851eed29c0.json",
+  "command": [
+    "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "-m",
+    "unittest",
+    "tests.test_dll_proxy_generator"
+  ],
+  "command_display": "$env:RUN_DLL_PROXY_BUILD='1'; python -m unittest tests.test_dll_proxy_generator",
+  "contract_sha256": "a9394e85a9ab607a9c14369a663e9825fbc44c21c1d2a1f10f4d2ac92243a02e",
+  "environment_gates": {
+    "status": "ready_to_run",
+    "configured": [
+      "RUN_DLL_PROXY_BUILD"
+    ],
+    "missing": [],
+    "workflow_states": {}
+  },
+  "provider_versions": {
+    "python": "3.13.7",
+    "platform": "Windows-11-10.0.26100-SP0"
+  },
+  "expected_artifacts": [
+    "proxy/CMakeLists.txt",
+    "proxy/proxy.def",
+    "proxy/validation_report.json",
+    "proxy/toolchain-proof.json",
+    "proxy/build/fixture.dll",
+    "proxy/build/fixture_original.dll",
+    "proxy/build_manifest.json",
+    "proxy/rollback.json",
+    "proxy/risk_report.json"
+  ],
+  "observed_artifacts": [
+    {
+      "path": "environment-validation.json",
+      "size": 31030,
+      "sha256": "44f313ad0ab6c3a07751a266b0b7c800cdd86e0955feb687f1165b3d145b1783"
+    },
+    {
+      "path": "proxy/build/fixture.dll",
+      "size": 44659,
+      "sha256": "8a08a7b72124233cadca7b93357b03a52ed0d5a86abffc3398ddc8f918fbdd8b"
+    },
+    {
+      "path": "proxy/build/fixture_original.dll",
+      "size": 2048,
+      "sha256": "c7e8f8f3f62acf8b86ddb7575c3ce99312dec19b9509d28b2fbebd9100f8b8ca"
+    },
+    {
+      "path": "proxy/build_manifest.json",
+      "size": 2503,
+      "sha256": "d21d4a24d56e0a7e0e71e4aa09da9c58244488ead6c429888af636150756bc6e"
+    },
+    {
+      "path": "proxy/CMakeLists.txt",
+      "size": 1299,
+      "sha256": "a2b41cff1da0b361b991f40b8b314cfb257021ecb5f151b3057a5f971caa16aa"
+    },
+    {
+      "path": "proxy/proxy.def",
+      "size": 166,
+      "sha256": "9a7966973e585feb5232d890de0e2f04eb1c2a3b4d4f515875d592d8ba560183"
+    },
+    {
+      "path": "proxy/risk_report.json",
+      "size": 2067,
+      "sha256": "16b964622698b209e2947ec34b66ebb71cd452e7fc916b8fa803a43ecc25a890"
+    },
+    {
+      "path": "proxy/rollback.json",
+      "size": 1732,
+      "sha256": "5f28859c8d0825d14ce03ad0b6aa9a99fc5add8a54e74077ca752de517c309da"
+    },
+    {
+      "path": "proxy/toolchain-proof.json",
+      "size": 2055,
+      "sha256": "59d066506f7942a84e185e072b96e19e501253d4400d347de5fcfd86d1762fe3"
+    },
+    {
+      "path": "proxy/validation_report.json",
+      "size": 1287,
+      "sha256": "ad757cf042721b9575c051db178911c30468a76cfccd279122cd59620b56dae7"
+    },
+    {
+      "path": "stderr.log",
+      "size": 114,
+      "sha256": "64e53fd848b7a3ed43739968a08645d2cabfb7e8aebee14916fd8f56f37ce9ed"
+    },
+    {
+      "path": "stdout.log",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "missing_artifacts": [],
+  "rejected_provenance": [],
+  "execution_proof": {},
+  "execution_proof_errors": [],
+  "execution_proof_artifact": null,
+  "rollback_result": {
+    "status": "not_required",
+    "verified": true,
+    "artifacts": []
+  },
+  "cleanup_result": {
+    "status": "not_required",
+    "verified": true,
+    "artifacts": []
+  },
+  "exit_code": 0,
+  "execution_error": null,
+  "outcome": "passed",
+  "verification_constraints": {
+    "registered_fixture": true,
+    "structured_argv": true,
+    "host_and_dependencies_ready": true,
+    "execution_passed": true,
+    "live_evidence_level": false,
+    "execution_proof_valid": true,
+    "target_identity_present": false,
+    "target_identity_matches_artifact": true,
+    "expected_artifacts_complete": true,
+    "provenance_non_synthetic": true,
+    "rollback_verified": true,
+    "cleanup_verified": true
+  },
+  "live_verified": false
+}

@@ -25,7 +25,7 @@ class PlatformCoreIntegrationTests(unittest.TestCase):
 
     def test_finalize_platform_core_writes_artifacts(self):
         registry = build_default_registry()
-        provider = registry.resolve("memory_runtime")
+        provider = registry.resolve("memory_runtime", preferred="mock")
         request = CapabilityRequest(
             capability="memory_runtime",
             action="scan",
@@ -81,12 +81,92 @@ class PlatformCoreIntegrationTests(unittest.TestCase):
             self.assertGreaterEqual(len(evidence_graph["nodes"]), 2)
             self.assertEqual(
                 result["capability_registry"]["capabilities"]["memory_runtime"],
-                ["mock"],
+                ["windows_memory_runtime", "mock"],
             )
             self.assertEqual(result["capability_audit"]["record_count"], 1)
             self.assertEqual(result["capability_audit"]["summary"]["status_counts"]["mocked"], 1)
             self.assertTrue(any(node["node_type"] == "capability_audit" for node in evidence_graph["nodes"]))
             self.assertTrue(any(note["type"] == "capability_audit" for note in semantic_ir["notes"]))
+
+    def test_finalize_platform_core_preserves_rich_semantic_ir(self):
+        report_data = {
+            "sample_name": "rich.exe",
+            "semantic_ir": {
+                "status": "ok",
+                "schema_version": 1,
+                "entities": [
+                    {
+                        "id": "entity:function:main",
+                        "kind": "function",
+                        "name": "main",
+                    }
+                ],
+                "relations": [
+                    {
+                        "id": "relation:calls:main-api",
+                        "type": "calls",
+                        "source": "entity:function:main",
+                        "target": "entity:api:create-file",
+                    }
+                ],
+                "capabilities": [
+                    {
+                        "id": "capability:file",
+                        "name": "file",
+                    }
+                ],
+                "summary": {
+                    "entity_count": 1,
+                    "relation_count": 1,
+                    "capability_count": 1,
+                },
+            },
+            "engine_analysis": {"status": "ok", "engine": "unity"},
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            finalize_platform_core(report_data, temp_dir, sample_path="C:/tmp/rich.exe")
+
+            with open(os.path.join(temp_dir, "semantic_ir.json"), "r", encoding="utf-8") as handle:
+                semantic_ir = json.load(handle)
+
+        self.assertEqual(semantic_ir["status"], "ok")
+        self.assertEqual(semantic_ir["entities"], report_data["semantic_ir"]["entities"])
+        self.assertEqual(semantic_ir["relations"], report_data["semantic_ir"]["relations"])
+        self.assertEqual(semantic_ir["capabilities"], report_data["semantic_ir"]["capabilities"])
+        self.assertEqual(semantic_ir["summary"]["entity_count"], 1)
+        self.assertEqual(semantic_ir["summary"]["relation_count"], 1)
+        self.assertEqual(semantic_ir["summary"]["capability_count"], 1)
+        self.assertEqual(semantic_ir["summary"]["artifact_count"], 0)
+        self.assertEqual(semantic_ir["summary"]["module_count"], 0)
+        self.assertEqual(semantic_ir["summary"]["runtime_count"], 0)
+        self.assertEqual(semantic_ir["summary"]["domain_statuses"], {"engine": "ok"})
+        self.assertEqual(semantic_ir["engine"], report_data["engine_analysis"])
+
+    def test_finalize_platform_core_derives_status_from_domain_evidence(self):
+        report_data = {
+            "sample_name": "gui.exe",
+            "gui_analysis": {
+                "status": "ok",
+                "framework": "wpf",
+                "confidence": 0.93,
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = finalize_platform_core(
+                report_data,
+                temp_dir,
+                sample_path="C:/tmp/gui.exe",
+            )
+
+            with open(os.path.join(temp_dir, "semantic_ir.json"), "r", encoding="utf-8") as handle:
+                semantic_ir = json.load(handle)
+
+        self.assertEqual(semantic_ir["status"], "ok")
+        self.assertEqual(semantic_ir["summary"]["domain_statuses"], {"gui": "ok"})
+        self.assertEqual(result["semantic_ir"]["status"], "ok")
+        self.assertEqual(result["semantic_ir"]["runtime_count"], 0)
 
 
 if __name__ == "__main__":

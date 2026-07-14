@@ -173,9 +173,14 @@ class GuiToolTests(unittest.TestCase):
 
             screenshots = root / "shots"
             screenshots.mkdir()
-            (screenshots / "one.png").write_bytes(b"same-screenshot")
+            try:
+                from PIL import Image
+            except ImportError:
+                self.skipTest("Pillow is required for successful visual comparison")
+            Image.new("RGB", (16, 16), (24, 96, 160)).save(screenshots / "one.png")
             visual = gui_visual_parse(screenshots, root / "out")
             self.assertEqual(visual["status"], "ok")
+            self.assertEqual(visual["components"]["image_decode"]["status"], "ok")
             regression = gui_visual_regression(screenshots, screenshots, root / "out")
             self.assertEqual(regression["status"], "ok")
             self.assertEqual(regression["visual_similarity"], 1.0)

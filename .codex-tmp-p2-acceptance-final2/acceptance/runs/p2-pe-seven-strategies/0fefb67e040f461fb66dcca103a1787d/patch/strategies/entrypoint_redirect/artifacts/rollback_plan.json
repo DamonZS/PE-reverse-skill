@@ -1,0 +1,29 @@
+{
+  "errors": [],
+  "operations": [
+    {
+      "file_offset": 544,
+      "id": "entrypoint-redirect-target",
+      "kind": "restore_bytes",
+      "original_hex": "90",
+      "patched_hex": "cc",
+      "rva": 4128
+    },
+    {
+      "file_offset": 168,
+      "id": "entrypoint-redirect-header",
+      "kind": "restore_bytes",
+      "original_hex": "00100000",
+      "patched_hex": "20100000",
+      "rva": 168
+    }
+  ],
+  "patched_sha256": "30f086785e0f436042e94e8eafb16ad8bad73370757186d3ebb040eb20606f32",
+  "requires_patched_copy": true,
+  "reversible": true,
+  "schema_version": 1,
+  "source_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p2-acceptance-final2\\acceptance\\runs\\p2-pe-seven-strategies\\0fefb67e040f461fb66dcca103a1787d\\patch\\strategies\\entrypoint_redirect\\fixture.exe",
+  "source_sha256": "626e023d2b3b8baabb21aac86da6ebad4899a36d29ac55c4d98fc83e54b56645",
+  "status": "planned",
+  "strategy": "entrypoint_redirect"
+}

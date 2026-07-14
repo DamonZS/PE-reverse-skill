@@ -45,6 +45,9 @@ class EvidenceCliTests(unittest.TestCase):
             self.assertTrue(json.loads(verified.stdout)["valid"])
 
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            covered_paths = {str(item.get("path")) for item in manifest.get("artifacts") or []}
+            self.assertIn("semantic_ir.json", covered_paths)
+            self.assertIn("evidence_graph.json", covered_paths)
             registered = next(item for item in manifest["artifacts"] if item.get("sha256"))
             artifact_path = out_dir / registered["path"]
             artifact_path.write_bytes(artifact_path.read_bytes() + b"tampered")

@@ -1,0 +1,214 @@
+{
+  "checks": [
+    {
+      "details": {
+        "bits": 32,
+        "machine": "0x014C"
+      },
+      "name": "pe_parse",
+      "status": "passed"
+    },
+    {
+      "expected": "626e023d2b3b8baabb21aac86da6ebad4899a36d29ac55c4d98fc83e54b56645",
+      "name": "target_hash",
+      "observed": "626e023d2b3b8baabb21aac86da6ebad4899a36d29ac55c4d98fc83e54b56645",
+      "status": "passed"
+    },
+    {
+      "error": null,
+      "name": "patch_engine_validation",
+      "status": "passed"
+    },
+    {
+      "name": "section_ranges",
+      "operation_count": 1,
+      "status": "passed"
+    },
+    {
+      "errors": [],
+      "file_alignment": 512,
+      "name": "source_pe_layout",
+      "section_alignment": 4096,
+      "status": "passed"
+    },
+    {
+      "errors": [],
+      "name": "strategy_contract",
+      "status": "warning",
+      "strategy": "code_cave_patch",
+      "warnings": [
+        "code_cave_patch writes executable cave bytes but does not add a control-flow redirect"
+      ]
+    },
+    {
+      "errors": [],
+      "name": "resulting_pe_layout",
+      "size_of_image": 12288,
+      "status": "passed"
+    },
+    {
+      "name": "instruction_boundaries",
+      "operations": [
+        {
+          "basic_block_entries": [
+            {
+              "file_offset": 512,
+              "file_offset_hex": "0x200",
+              "rva": 4096,
+              "rva_hex": "0x1000",
+              "sources": [
+                "address_of_entrypoint",
+                "section_start"
+              ]
+            },
+            {
+              "file_offset": 522,
+              "file_offset_hex": "0x20A",
+              "rva": 4106,
+              "rva_hex": "0x100A",
+              "sources": [
+                "after_control_flow"
+              ]
+            }
+          ],
+          "cfg_status": "preserved",
+          "control_flow_instructions": [],
+          "end_aligned": true,
+          "errors": [],
+          "findings": [],
+          "incoming_interior_branches": [],
+          "invalid_direct_targets": [],
+          "operation_id": "code-cave",
+          "original_instruction_count": 2,
+          "patch_entry_sources": [
+            "after_control_flow"
+          ],
+          "patch_range": {
+            "end_instruction_boundary": true,
+            "file_offset_end": 524,
+            "file_offset_end_hex": "0x20C",
+            "file_offset_start": 522,
+            "file_offset_start_hex": "0x20A",
+            "rva_end": 4108,
+            "rva_end_hex": "0x100C",
+            "rva_start": 4106,
+            "rva_start_hex": "0x100A",
+            "start_instruction_boundary": true
+          },
+          "replacement_decoded_size": 2,
+          "replacement_instruction_count": 2,
+          "resynchronized": true,
+          "start_aligned": true,
+          "status": "passed"
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "entrypoint_redirect": null,
+      "name": "basic_cfg",
+      "operations": [
+        {
+          "basic_block_entries": [
+            {
+              "file_offset": 512,
+              "file_offset_hex": "0x200",
+              "rva": 4096,
+              "rva_hex": "0x1000",
+              "sources": [
+                "address_of_entrypoint",
+                "section_start"
+              ]
+            },
+            {
+              "file_offset": 522,
+              "file_offset_hex": "0x20A",
+              "rva": 4106,
+              "rva_hex": "0x100A",
+              "sources": [
+                "after_control_flow"
+              ]
+            }
+          ],
+          "cfg_status": "preserved",
+          "incoming_interior_branches": [],
+          "invalid_direct_targets": [],
+          "operation_id": "code-cave",
+          "patch_entry_sources": [
+            "after_control_flow"
+          ],
+          "patch_range": {
+            "end_instruction_boundary": true,
+            "file_offset_end": 524,
+            "file_offset_end_hex": "0x20C",
+            "file_offset_start": 522,
+            "file_offset_start_hex": "0x20A",
+            "rva_end": 4108,
+            "rva_end_hex": "0x100C",
+            "rva_start": 4106,
+            "rva_start_hex": "0x100A",
+            "start_instruction_boundary": true
+          }
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "intersection_count": 0,
+      "name": "pe_directories",
+      "status": "passed"
+    },
+    {
+      "certificate_offset": null,
+      "certificate_present": false,
+      "certificate_size": 0,
+      "finding_ids": [],
+      "name": "authenticode_signature",
+      "status": "passed"
+    },
+    {
+      "name": "overlay_preservation",
+      "overlay_size": 0,
+      "status": "passed"
+    },
+    {
+      "intersection_count": 0,
+      "name": "base_relocations",
+      "status": "passed"
+    },
+    {
+      "name": "rollback_recoverability",
+      "status": "passed"
+    }
+  ],
+  "errors": [],
+  "operations": [
+    {
+      "file_offset": 522,
+      "file_offset_hex": "0x20A",
+      "id": "code-cave",
+      "kind": "replace_offset",
+      "original_hex": "9090",
+      "replacement_hex": "cccc",
+      "role": "code_cave_payload",
+      "rva": 4106,
+      "rva_hex": "0x100A",
+      "section": ".text",
+      "section_analysis_end": 1024,
+      "section_executable": true,
+      "section_index": 0,
+      "size": 2
+    }
+  ],
+  "overall_risk": "high",
+  "planned_sha256": "e3e93fdf4c323bf86eebffa8cf7a87e2275e673f4cfcff0eb6bad943bd5dfd1b",
+  "schema_version": 1,
+  "status": "ok",
+  "strategy": "code_cave_patch",
+  "target_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p2-acceptance-final\\acceptance\\runs\\p2-pe-seven-strategies\\87dd5072d40c44d6af5e9abc3a22db15\\patch\\strategies\\code_cave_patch\\fixture.exe",
+  "target_sha256": "626e023d2b3b8baabb21aac86da6ebad4899a36d29ac55c4d98fc83e54b56645",
+  "valid": true,
+  "warnings": [
+    "code_cave_patch writes executable cave bytes but does not add a control-flow redirect"
+  ]
+}

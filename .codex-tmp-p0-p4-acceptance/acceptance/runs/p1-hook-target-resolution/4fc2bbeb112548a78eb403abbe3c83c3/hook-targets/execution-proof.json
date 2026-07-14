@@ -1,0 +1,12 @@
+{
+  "status": "ok",
+  "provider": "deterministic_hook_target_resolver",
+  "evidence_class": "live_host_proof",
+  "executed_tests": 1,
+  "skipped_tests": 0,
+  "live_operations": 1,
+  "actions": [
+    "resolve_live"
+  ],
+  "synthetic": false
+}

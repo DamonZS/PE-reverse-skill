@@ -12,21 +12,24 @@ from reverse_analyzer.providers import build_default_registry
 class CapabilityCoreTests(unittest.TestCase):
     def test_default_registry_contains_core_capabilities(self):
         registry = build_default_registry()
-        self.assertEqual(
-            registry.list_capabilities(),
-            [
+        self.assertTrue(
+            {
                 "android_rebuild",
                 "hook_runtime",
+                "hook_target_resolver",
                 "injector",
                 "memory_runtime",
                 "patch_executor",
-            ],
+            }.issubset(registry.list_capabilities())
         )
-        self.assertEqual(registry.list_providers("memory_runtime"), ["mock"])
+        self.assertEqual(
+            registry.list_providers("memory_runtime"),
+            ["windows_memory_runtime", "mock"],
+        )
 
     def test_mock_provider_plan_validate_execute_rollback(self):
         registry = build_default_registry()
-        provider = registry.resolve("memory_runtime")
+        provider = registry.resolve("memory_runtime", preferred="mock")
         request = CapabilityRequest(
             capability="memory_runtime",
             action="scan",
@@ -45,7 +48,7 @@ class CapabilityCoreTests(unittest.TestCase):
 
     def test_capability_audit_builder_generates_full_record_and_summary(self):
         registry = build_default_registry()
-        provider = registry.resolve("injector")
+        provider = registry.resolve("injector", preferred="mock")
         request = CapabilityRequest(
             capability="injector",
             action="plan",

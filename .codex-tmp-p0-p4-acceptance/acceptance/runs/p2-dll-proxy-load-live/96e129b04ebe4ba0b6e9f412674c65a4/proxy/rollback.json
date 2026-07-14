@@ -1,0 +1,64 @@
+{
+  "actions": [
+    {
+      "action": "remove_project_if_generated_hashes_match",
+      "path": "proxy"
+    },
+    {
+      "action": "remove_empty_parent_directories",
+      "paths": []
+    }
+  ],
+  "generated_files": [
+    {
+      "path": "proxy/CMakeLists.txt",
+      "sha256": "a2b41cff1da0b361b991f40b8b314cfb257021ecb5f151b3057a5f971caa16aa",
+      "size": 1299
+    },
+    {
+      "path": "proxy/backing/fixture_original.dll",
+      "sha256": "ba9a9f17baeca2f4043eb4b7cb4b97e7c78280c2e56cb12ea5f62d39dfe33dae",
+      "size": 44664
+    },
+    {
+      "path": "proxy/build_manifest.json",
+      "sha256": "e93c66c4c05d65201fef19ff9f85a0cbd9b4d334c2a284ba979b028b0469623d",
+      "size": 2523
+    },
+    {
+      "path": "proxy/proxy.c",
+      "sha256": "1779bf5884a1180bfa01f6f52233b79fc01625c8d85c65edff5dc89d3e3bc1bb",
+      "size": 664
+    },
+    {
+      "path": "proxy/proxy.def",
+      "sha256": "94b2f46057b1351618d54b26966c5dc6c5d5f1561b39057c9f973f4852781ace",
+      "size": 174
+    },
+    {
+      "path": "proxy/risk_report.json",
+      "sha256": "16b964622698b209e2947ec34b66ebb71cd452e7fc916b8fa803a43ecc25a890",
+      "size": 2067
+    },
+    {
+      "path": "proxy/validation_report.json",
+      "sha256": "1ae43d81840ea093ae9d50a04cd146ab466b187f6520bd651cb78308e3870dc5",
+      "size": 1287
+    }
+  ],
+  "original_modified": false,
+  "project_directory": "proxy",
+  "requires_hash_verification": true,
+  "reversible": true,
+  "schema_version": 1,
+  "scope": "copy_directory_only",
+  "self": {
+    "action": "delete_last",
+    "path": "proxy/rollback.json"
+  },
+  "source": {
+    "path": "input/fixture.dll",
+    "sha256": "ba9a9f17baeca2f4043eb4b7cb4b97e7c78280c2e56cb12ea5f62d39dfe33dae"
+  },
+  "status": "ready"
+}

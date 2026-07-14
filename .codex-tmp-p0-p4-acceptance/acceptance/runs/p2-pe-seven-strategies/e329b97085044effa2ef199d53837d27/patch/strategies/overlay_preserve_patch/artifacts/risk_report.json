@@ -1,0 +1,26 @@
+{
+  "counts": {
+    "critical": 0,
+    "high": 0,
+    "info": 0,
+    "low": 1,
+    "medium": 0
+  },
+  "findings": [
+    {
+      "category": "overlay",
+      "evidence": {
+        "overlay_offset": 1536,
+        "overlay_size": 21
+      },
+      "id": "overlay_immutability_guard",
+      "message": "existing overlay offset, size, and bytes are pinned by the strategy contract",
+      "operation_id": "overlay-preserve",
+      "severity": "low"
+    }
+  ],
+  "overall_risk": "low",
+  "risk_score": 5,
+  "schema_version": 1,
+  "status": "ok"
+}

@@ -1,0 +1,1365 @@
+{
+  "action": "inline_trampoline",
+  "after_snapshot": {
+    "action": {
+      "after_hex": "ff25000000000001338d52020000",
+      "architecture": "x64",
+      "before_hex": "9090909090909090909090909090",
+      "expected_after_hex": "ff25000000000001338d52020000",
+      "kind": "inline_trampoline",
+      "overwrite_size": 14,
+      "protection_restored": true,
+      "status": "ok",
+      "target_address": 2553579503616,
+      "trampoline": {
+        "address": 2553579569152,
+        "allocation_active": true,
+        "bytes_hex": "9090909090909090909090909090ff25000000000e00338d52020000",
+        "size": 28,
+        "used_size": 28,
+        "verified": true
+      },
+      "write_verified": true
+    },
+    "capture_phase": "execute",
+    "captured_at": "2026-07-14T13:11:31.380551+00:00",
+    "operations": [
+      {
+        "address": 2553579503616,
+        "bytes_hex": "9090909090909090909090909090",
+        "ok": true,
+        "operation": "read_inline_preimage",
+        "size": 14,
+        "status": "ok"
+      },
+      {
+        "address": 2553579569152,
+        "ok": true,
+        "operation": "VirtualAllocEx(trampoline)",
+        "protection": 4,
+        "size": 28,
+        "status": "ok"
+      },
+      {
+        "address": 2553579569152,
+        "bytes_written": 28,
+        "ok": true,
+        "operation": "WriteProcessMemory(trampoline)",
+        "status": "ok"
+      },
+      {
+        "address": 2553579569152,
+        "bytes_hex": "9090909090909090909090909090ff25000000000e00338d52020000",
+        "ok": true,
+        "operation": "verify_trampoline_write",
+        "size": 28,
+        "status": "ok"
+      },
+      {
+        "address": 2553579569152,
+        "new_protection": 32,
+        "ok": true,
+        "old_protection": 4,
+        "operation": "VirtualProtectEx(trampoline,executable)",
+        "size": 28,
+        "status": "ok"
+      },
+      {
+        "address": 2553579569152,
+        "ok": true,
+        "operation": "FlushInstructionCache(trampoline)",
+        "size": 28,
+        "status": "ok"
+      },
+      {
+        "address": 2553579503616,
+        "new_protection": 64,
+        "ok": true,
+        "old_protection": 64,
+        "operation": "VirtualProtectEx(inline,writable)",
+        "size": 14,
+        "status": "ok"
+      },
+      {
+        "address": 2553579503616,
+        "bytes_hex": "9090909090909090909090909090",
+        "ok": true,
+        "operation": "read_locked_inline_preimage",
+        "size": 14,
+        "status": "ok"
+      },
+      {
+        "address": 2553579503616,
+        "bytes_written": 14,
+        "ok": true,
+        "operation": "WriteProcessMemory(inline_target)",
+        "status": "ok"
+      },
+      {
+        "address": 2553579503616,
+        "bytes_hex": "ff25000000000001338d52020000",
+        "ok": true,
+        "operation": "verify_inline_write",
+        "size": 14,
+        "status": "ok"
+      },
+      {
+        "address": 2553579503616,
+        "ok": true,
+        "operation": "FlushInstructionCache(inline_target)",
+        "size": 14,
+        "status": "ok"
+      },
+      {
+        "address": 2553579503616,
+        "new_protection": 64,
+        "ok": true,
+        "old_protection": 64,
+        "operation": "VirtualProtectEx(inline,restore)",
+        "size": 14,
+        "status": "ok"
+      }
+    ],
+    "process_identity": {
+      "architecture": "x64",
+      "creation_time": 134285082913278233,
+      "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "pid": 49912
+    },
+    "rollback": {
+      "actual_hex": "9090909090909090909090909090",
+      "address": 2553579503616,
+      "allocation_released": true,
+      "captured_at": "2026-07-14T13:11:31.385543+00:00",
+      "errors": [],
+      "ok": true,
+      "operations": [
+        {
+          "address": 2553579503616,
+          "new_protection": 64,
+          "ok": true,
+          "old_protection": 64,
+          "operation": "VirtualProtectEx(rollback,writable)",
+          "size": 14,
+          "status": "ok"
+        },
+        {
+          "address": 2553579503616,
+          "bytes_hex": "ff25000000000001338d52020000",
+          "ok": true,
+          "operation": "read_rollback_preimage",
+          "size": 14,
+          "status": "ok"
+        },
+        {
+          "address": 2553579503616,
+          "bytes_written": 14,
+          "ok": true,
+          "operation": "WriteProcessMemory(rollback)",
+          "status": "ok"
+        },
+        {
+          "address": 2553579503616,
+          "bytes_hex": "9090909090909090909090909090",
+          "ok": true,
+          "operation": "verify_rollback_write",
+          "size": 14,
+          "status": "ok"
+        },
+        {
+          "address": 2553579503616,
+          "ok": true,
+          "operation": "FlushInstructionCache(rollback)",
+          "size": 14,
+          "status": "ok"
+        },
+        {
+          "address": 2553579503616,
+          "new_protection": 64,
+          "ok": true,
+          "old_protection": 64,
+          "operation": "VirtualProtectEx(rollback,restore)",
+          "size": 14,
+          "status": "ok"
+        },
+        {
+          "address": 2553579569152,
+          "bytes_hex": "9090909090909090909090909090ff25000000000e00338d52020000",
+          "ok": true,
+          "operation": "verify_trampoline_before_free",
+          "size": 28,
+          "status": "ok"
+        },
+        {
+          "address": 2553579569152,
+          "ok": true,
+          "operation": "VirtualFreeEx(trampoline_rollback)",
+          "released": true,
+          "status": "ok"
+        }
+      ],
+      "pid": 49912,
+      "protection_restored": true,
+      "restored": true,
+      "status": "ok",
+      "target_restored": true
+    },
+    "schema_version": 1,
+    "status": "ok",
+    "target_identity": {
+      "display_name": "smoke-child",
+      "kind": "process",
+      "pid": 49912
+    },
+    "trace_event_count": 0
+  },
+  "before_snapshot": {
+    "capture_phase": "execute_validation",
+    "captured_at": "2026-07-14T13:11:31.379895+00:00",
+    "current": {
+      "memory": {
+        "address": 2553579503616,
+        "bytes_hex": "9090909090909090909090909090",
+        "size": 14
+      },
+      "process": {
+        "accessible": true,
+        "architecture": "x64",
+        "creation_time": 134285082913278233,
+        "exists": true,
+        "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "pid": 49912,
+        "status": "ok"
+      }
+    },
+    "planned": {
+      "action": {
+        "address": 2553579503616,
+        "analysis": {
+          "instructions": [
+            {
+              "address": 2553579503616,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503617,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503618,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503619,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503620,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503621,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503622,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503623,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503624,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503625,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503626,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503627,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503628,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503629,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            }
+          ],
+          "minimum_size": 14,
+          "original_hex": "9090909090909090909090909090",
+          "overwrite_size": 14,
+          "safe": true,
+          "status": "ok"
+        },
+        "caller_expected_hex": "9090909090909090909090909090",
+        "captured_hex": "9090909090909090909090909090",
+        "matches_caller_expected": true,
+        "status": "ok"
+      },
+      "backend": {
+        "available": true,
+        "name": "windows_native_hook",
+        "platform": "win32"
+      },
+      "capture_phase": "plan",
+      "process": {
+        "accessible": true,
+        "architecture": "x64",
+        "creation_time": 134285082913278233,
+        "exists": true,
+        "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "pid": 49912,
+        "status": "ok"
+      },
+      "process_identity": {
+        "architecture": "x64",
+        "creation_time": 134285082913278233,
+        "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "pid": 49912
+      },
+      "schema_version": 1,
+      "target_identity": {
+        "display_name": "smoke-child",
+        "kind": "process",
+        "pid": 49912
+      }
+    },
+    "schema_version": 1,
+    "target_identity": {
+      "display_name": "smoke-child",
+      "kind": "process",
+      "pid": 49912
+    },
+    "validation": {
+      "capability": "native_hook",
+      "checks": [
+        {
+          "capability": "native_hook",
+          "message": "plan capability/provider identity does not match native_hook provider",
+          "name": "capability_identity",
+          "provider": "windows_native_hook",
+          "status": "ok"
+        },
+        {
+          "actual": "c7729017141d4d38b92b0e9a61d42869",
+          "expected": "c7729017141d4d38b92b0e9a61d42869",
+          "message": "native hook plan was not issued by this provider instance",
+          "name": "provider_instance",
+          "status": "ok"
+        },
+        {
+          "message": "native hook session_id must be a non-empty string of at most 256 characters",
+          "name": "session_id",
+          "status": "ok"
+        },
+        {
+          "message": "unsupported or non-canonical native_hook action: inline_trampoline",
+          "name": "supported_action",
+          "status": "ok"
+        },
+        {
+          "authorization_source": "params.authorized",
+          "message": "native hook execution requires explicit authorized=True consent",
+          "name": "explicit_authorization",
+          "status": "ok"
+        },
+        {
+          "message": "target PID must be positive, unambiguous, and match target identity",
+          "name": "target_pid",
+          "pid": 49912,
+          "status": "ok",
+          "target_pid": 49912
+        },
+        {
+          "message": "parameters are valid",
+          "name": "parameters",
+          "status": "ok"
+        },
+        {
+          "actual": "49267b3451afa0d75ad7d073dd27c9e1df7531dfe917baf9e0e6e5d96f3f46df",
+          "expected": "49267b3451afa0d75ad7d073dd27c9e1df7531dfe917baf9e0e6e5d96f3f46df",
+          "message": "native hook plan precondition hash does not match its immutable inputs",
+          "name": "plan_integrity",
+          "status": "ok"
+        },
+        {
+          "message": "native hook plan identity was not issued by this provider instance",
+          "name": "issued_plan",
+          "status": "ok"
+        },
+        {
+          "available": true,
+          "message": "Windows native hook backend is available",
+          "name": "windows_native_hook",
+          "platform": "win32",
+          "status": "ok"
+        },
+        {
+          "message": "target process is not accessible through the native backend",
+          "name": "process_access",
+          "process": {
+            "accessible": true,
+            "architecture": "x64",
+            "creation_time": 134285082913278233,
+            "exists": true,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "pid": 49912,
+            "status": "ok"
+          },
+          "status": "ok"
+        },
+        {
+          "current": {
+            "architecture": "x64",
+            "creation_time": 134285082913278233,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "pid": 49912
+          },
+          "message": "target process identity changed after planning",
+          "name": "process_identity",
+          "planned": {
+            "architecture": "x64",
+            "creation_time": 134285082913278233,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "pid": 49912
+          },
+          "status": "ok"
+        },
+        {
+          "analysis": {
+            "instructions": [
+              {
+                "address": 2553579503616,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503617,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503618,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503619,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503620,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503621,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503622,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503623,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503624,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503625,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503626,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503627,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503628,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503629,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              }
+            ],
+            "minimum_size": 14,
+            "original_hex": "9090909090909090909090909090",
+            "overwrite_size": 14,
+            "safe": true,
+            "status": "ok"
+          },
+          "message": "Capstone verified complete position-independent instructions",
+          "name": "capstone_instruction_boundaries",
+          "status": "ok"
+        },
+        {
+          "expected_hex": "ff25000000000001338d52020000",
+          "message": "inline jump encoding matches the planned bytes",
+          "name": "inline_patch_encoding",
+          "planned_hex": "ff25000000000001338d52020000",
+          "status": "ok"
+        },
+        {
+          "actual_hex": "9090909090909090909090909090",
+          "expected_hex": "9090909090909090909090909090",
+          "message": "inline target bytes match the planned prologue",
+          "name": "inline_preimage",
+          "status": "ok"
+        }
+      ],
+      "ok": true,
+      "provider": "windows_native_hook",
+      "session_id": "windows-native-inline-smoke"
+    }
+  },
+  "capability": "native_hook",
+  "dashboard_trace": [
+    {
+      "action": "inline_trampoline",
+      "capability": "native_hook",
+      "kind": "native_hook_execution",
+      "operation_count": 12,
+      "pid": 49912,
+      "provider": "windows_native_hook",
+      "rollback_status": "ready",
+      "session_id": "windows-native-inline-smoke",
+      "status": "ok",
+      "trace_event_count": 0
+    },
+    {
+      "action": "inline_trampoline",
+      "capability": "native_hook",
+      "kind": "native_hook_rollback",
+      "provider": "windows_native_hook",
+      "restored": true,
+      "session_id": "windows-native-inline-smoke",
+      "status": "ok"
+    }
+  ],
+  "events": [
+    {
+      "action": "inline_trampoline",
+      "kind": "plan",
+      "message": "native hook plan created",
+      "ts": "2026-07-14T13:11:31.380551+00:00"
+    },
+    {
+      "error_count": 0,
+      "kind": "validate",
+      "message": "native hook plan validated",
+      "ok": true,
+      "ts": "2026-07-14T13:11:31.380551+00:00",
+      "warning_count": 0
+    },
+    {
+      "kind": "execute",
+      "message": "native hook execution completed",
+      "status": "ok",
+      "ts": "2026-07-14T13:11:31.380551+00:00"
+    },
+    {
+      "kind": "rollback",
+      "message": "native hook rollback completed",
+      "restored": true,
+      "status": "ok",
+      "ts": "2026-07-14T13:11:31.385543+00:00"
+    }
+  ],
+  "evidence_manifest_entries": [
+    {
+      "description": "Native hook lifecycle audit record",
+      "kind": "native-hook-audit",
+      "path": "native_hook/windows-native-inline-smoke/audit.json",
+      "session_id": "windows-native-inline-smoke",
+      "status": "ok"
+    },
+    {
+      "description": "Native hook lifecycle and bounded trace events",
+      "kind": "native-hook-events",
+      "path": "native_hook/windows-native-inline-smoke/events.json",
+      "session_id": "windows-native-inline-smoke",
+      "status": "ok"
+    },
+    {
+      "description": "Native hook session artifact manifest",
+      "kind": "native-hook-manifest",
+      "path": "native_hook/windows-native-inline-smoke/manifest.json",
+      "session_id": "windows-native-inline-smoke",
+      "status": "ok"
+    }
+  ],
+  "precondition_hash": "49267b3451afa0d75ad7d073dd27c9e1df7531dfe917baf9e0e6e5d96f3f46df",
+  "provenance": {
+    "action": "inline_trampoline",
+    "audit_schema_version": 1,
+    "authorization_source": "params.authorized",
+    "backend": {
+      "available": true,
+      "name": "windows_native_hook",
+      "platform": "win32"
+    },
+    "frida": false,
+    "lifecycle_events": [
+      {
+        "action": "inline_trampoline",
+        "kind": "plan",
+        "message": "native hook plan created",
+        "ts": "2026-07-14T13:11:31.380551+00:00"
+      },
+      {
+        "error_count": 0,
+        "kind": "validate",
+        "message": "native hook plan validated",
+        "ok": true,
+        "ts": "2026-07-14T13:11:31.380551+00:00",
+        "warning_count": 0
+      },
+      {
+        "kind": "execute",
+        "message": "native hook execution completed",
+        "status": "ok",
+        "ts": "2026-07-14T13:11:31.380551+00:00"
+      },
+      {
+        "kind": "rollback",
+        "message": "native hook rollback completed",
+        "restored": true,
+        "status": "ok",
+        "ts": "2026-07-14T13:11:31.385543+00:00"
+      }
+    ],
+    "native_win32": true,
+    "plan": {
+      "action": "inline_trampoline",
+      "before_snapshot": {
+        "action": {
+          "address": 2553579503616,
+          "analysis": {
+            "instructions": [
+              {
+                "address": 2553579503616,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503617,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503618,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503619,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503620,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503621,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503622,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503623,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503624,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503625,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503626,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503627,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503628,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503629,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              }
+            ],
+            "minimum_size": 14,
+            "original_hex": "9090909090909090909090909090",
+            "overwrite_size": 14,
+            "safe": true,
+            "status": "ok"
+          },
+          "caller_expected_hex": "9090909090909090909090909090",
+          "captured_hex": "9090909090909090909090909090",
+          "matches_caller_expected": true,
+          "status": "ok"
+        },
+        "backend": {
+          "available": true,
+          "name": "windows_native_hook",
+          "platform": "win32"
+        },
+        "capture_phase": "plan",
+        "process": {
+          "accessible": true,
+          "architecture": "x64",
+          "creation_time": 134285082913278233,
+          "exists": true,
+          "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "pid": 49912,
+          "status": "ok"
+        },
+        "process_identity": {
+          "architecture": "x64",
+          "creation_time": 134285082913278233,
+          "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "pid": 49912
+        },
+        "schema_version": 1,
+        "target_identity": {
+          "display_name": "smoke-child",
+          "kind": "process",
+          "pid": 49912
+        }
+      },
+      "capability": "native_hook",
+      "parameters": {
+        "architecture": "x64",
+        "authorization_scope": "program repair/diagnostics",
+        "authorization_source": "params.authorized",
+        "authorized": true,
+        "caller_expected_original_hex": "9090909090909090909090909090",
+        "expected_original_hex": "9090909090909090909090909090",
+        "instruction_analysis": {
+          "instructions": [
+            {
+              "address": 2553579503616,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503617,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503618,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503619,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503620,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503621,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503622,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503623,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503624,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503625,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503626,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503627,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503628,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            },
+            {
+              "address": 2553579503629,
+              "bytes_hex": "90",
+              "mnemonic": "nop",
+              "size": 1
+            }
+          ],
+          "minimum_size": 14,
+          "original_hex": "9090909090909090909090909090",
+          "overwrite_size": 14,
+          "safe": true,
+          "status": "ok"
+        },
+        "overwrite_size": 14,
+        "patch_hex": "ff25000000000001338d52020000",
+        "pid": 49912,
+        "pid_conflict": false,
+        "replacement_pointer": 2553579503872,
+        "requested_action": "inline_trampoline",
+        "target_address": 2553579503616
+      },
+      "precondition_hash": "49267b3451afa0d75ad7d073dd27c9e1df7531dfe917baf9e0e6e5d96f3f46df",
+      "provenance": {
+        "action": "inline_trampoline",
+        "audit_schema_version": 1,
+        "authorization_source": "params.authorized",
+        "backend": {
+          "available": true,
+          "name": "windows_native_hook",
+          "platform": "win32"
+        },
+        "frida": false,
+        "native_win32": true,
+        "precondition_hash": "49267b3451afa0d75ad7d073dd27c9e1df7531dfe917baf9e0e6e5d96f3f46df",
+        "process_identity": {
+          "architecture": "x64",
+          "creation_time": 134285082913278233,
+          "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "pid": 49912
+        },
+        "provider": "windows_native_hook",
+        "provider_instance": "c7729017141d4d38b92b0e9a61d42869",
+        "requested_action": "inline_trampoline",
+        "target_identity": {
+          "display_name": "smoke-child",
+          "kind": "process",
+          "pid": 49912
+        }
+      },
+      "provider": "windows_native_hook",
+      "rollback_plan": {
+        "active": false,
+        "address": 2553579503616,
+        "completed": false,
+        "mode": "restore_original_bytes",
+        "original_hex": "9090909090909090909090909090",
+        "patched_hex": "ff25000000000001338d52020000",
+        "pid": 49912,
+        "precondition_hash": "49267b3451afa0d75ad7d073dd27c9e1df7531dfe917baf9e0e6e5d96f3f46df",
+        "restored": false,
+        "schema_version": 1,
+        "supported": true
+      },
+      "session_id": "windows-native-inline-smoke",
+      "steps": [
+        {
+          "index": 1,
+          "operation": "verify process identity and Capstone instruction boundaries"
+        },
+        {
+          "index": 2,
+          "operation": "allocate and materialize the remote trampoline"
+        },
+        {
+          "index": 3,
+          "operation": "change target protection and install the jump"
+        },
+        {
+          "index": 4,
+          "operation": "flush instruction cache and verify both code regions"
+        }
+      ],
+      "target": {
+        "display_name": "smoke-child",
+        "kind": "process",
+        "pid": 49912
+      }
+    },
+    "precondition_hash": "49267b3451afa0d75ad7d073dd27c9e1df7531dfe917baf9e0e6e5d96f3f46df",
+    "process_identity": {
+      "architecture": "x64",
+      "creation_time": 134285082913278233,
+      "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "pid": 49912
+    },
+    "provider": "windows_native_hook",
+    "provider_instance": "c7729017141d4d38b92b0e9a61d42869",
+    "requested_action": "inline_trampoline",
+    "target_identity": {
+      "display_name": "smoke-child",
+      "kind": "process",
+      "pid": 49912
+    },
+    "validation": {
+      "capability": "native_hook",
+      "checks": [
+        {
+          "capability": "native_hook",
+          "message": "plan capability/provider identity does not match native_hook provider",
+          "name": "capability_identity",
+          "provider": "windows_native_hook",
+          "status": "ok"
+        },
+        {
+          "actual": "c7729017141d4d38b92b0e9a61d42869",
+          "expected": "c7729017141d4d38b92b0e9a61d42869",
+          "message": "native hook plan was not issued by this provider instance",
+          "name": "provider_instance",
+          "status": "ok"
+        },
+        {
+          "message": "native hook session_id must be a non-empty string of at most 256 characters",
+          "name": "session_id",
+          "status": "ok"
+        },
+        {
+          "message": "unsupported or non-canonical native_hook action: inline_trampoline",
+          "name": "supported_action",
+          "status": "ok"
+        },
+        {
+          "authorization_source": "params.authorized",
+          "message": "native hook execution requires explicit authorized=True consent",
+          "name": "explicit_authorization",
+          "status": "ok"
+        },
+        {
+          "message": "target PID must be positive, unambiguous, and match target identity",
+          "name": "target_pid",
+          "pid": 49912,
+          "status": "ok",
+          "target_pid": 49912
+        },
+        {
+          "message": "parameters are valid",
+          "name": "parameters",
+          "status": "ok"
+        },
+        {
+          "actual": "49267b3451afa0d75ad7d073dd27c9e1df7531dfe917baf9e0e6e5d96f3f46df",
+          "expected": "49267b3451afa0d75ad7d073dd27c9e1df7531dfe917baf9e0e6e5d96f3f46df",
+          "message": "native hook plan precondition hash does not match its immutable inputs",
+          "name": "plan_integrity",
+          "status": "ok"
+        },
+        {
+          "message": "native hook plan identity was not issued by this provider instance",
+          "name": "issued_plan",
+          "status": "ok"
+        },
+        {
+          "available": true,
+          "message": "Windows native hook backend is available",
+          "name": "windows_native_hook",
+          "platform": "win32",
+          "status": "ok"
+        },
+        {
+          "message": "target process is not accessible through the native backend",
+          "name": "process_access",
+          "process": {
+            "accessible": true,
+            "architecture": "x64",
+            "creation_time": 134285082913278233,
+            "exists": true,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "pid": 49912,
+            "status": "ok"
+          },
+          "status": "ok"
+        },
+        {
+          "current": {
+            "architecture": "x64",
+            "creation_time": 134285082913278233,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "pid": 49912
+          },
+          "message": "target process identity changed after planning",
+          "name": "process_identity",
+          "planned": {
+            "architecture": "x64",
+            "creation_time": 134285082913278233,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "pid": 49912
+          },
+          "status": "ok"
+        },
+        {
+          "analysis": {
+            "instructions": [
+              {
+                "address": 2553579503616,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503617,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503618,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503619,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503620,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503621,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503622,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503623,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503624,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503625,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503626,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503627,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503628,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              },
+              {
+                "address": 2553579503629,
+                "bytes_hex": "90",
+                "mnemonic": "nop",
+                "size": 1
+              }
+            ],
+            "minimum_size": 14,
+            "original_hex": "9090909090909090909090909090",
+            "overwrite_size": 14,
+            "safe": true,
+            "status": "ok"
+          },
+          "message": "Capstone verified complete position-independent instructions",
+          "name": "capstone_instruction_boundaries",
+          "status": "ok"
+        },
+        {
+          "expected_hex": "ff25000000000001338d52020000",
+          "message": "inline jump encoding matches the planned bytes",
+          "name": "inline_patch_encoding",
+          "planned_hex": "ff25000000000001338d52020000",
+          "status": "ok"
+        },
+        {
+          "actual_hex": "9090909090909090909090909090",
+          "expected_hex": "9090909090909090909090909090",
+          "message": "inline target bytes match the planned prologue",
+          "name": "inline_preimage",
+          "status": "ok"
+        }
+      ],
+      "ok": true,
+      "provider": "windows_native_hook",
+      "session_id": "windows-native-inline-smoke"
+    }
+  },
+  "provider": "windows_native_hook",
+  "report_section": {
+    "action": "inline_trampoline",
+    "capability": "native_hook",
+    "frida": false,
+    "native_win32": true,
+    "operation_count": 12,
+    "provider": "windows_native_hook",
+    "restored": true,
+    "rollback_status": "ok",
+    "rollback_supported": true,
+    "session_id": "windows-native-inline-smoke",
+    "status": "ok",
+    "target_identity": {
+      "display_name": "smoke-child",
+      "kind": "process",
+      "pid": 49912
+    },
+    "trace_event_count": 0
+  },
+  "rollback_plan": {
+    "active": false,
+    "address": 2553579503616,
+    "allocation_active": false,
+    "allocation_released": true,
+    "completed": true,
+    "cross_process_supported": false,
+    "idempotent": true,
+    "mode": "restore_original_bytes",
+    "old_protection": 64,
+    "original_hex": "9090909090909090909090909090",
+    "patched_hex": "ff25000000000001338d52020000",
+    "pid": 49912,
+    "precondition_hash": "49267b3451afa0d75ad7d073dd27c9e1df7531dfe917baf9e0e6e5d96f3f46df",
+    "provider_instance": "c7729017141d4d38b92b0e9a61d42869",
+    "restored": true,
+    "rollback_at": "2026-07-14T13:11:31.385543+00:00",
+    "rollback_details": {
+      "actual_hex": "9090909090909090909090909090",
+      "address": 2553579503616,
+      "allocation_released": true,
+      "errors": [],
+      "operations": [
+        {
+          "address": 2553579503616,
+          "new_protection": 64,
+          "ok": true,
+          "old_protection": 64,
+          "operation": "VirtualProtectEx(rollback,writable)",
+          "size": 14,
+          "status": "ok"
+        },
+        {
+          "address": 2553579503616,
+          "bytes_hex": "ff25000000000001338d52020000",
+          "ok": true,
+          "operation": "read_rollback_preimage",
+          "size": 14,
+          "status": "ok"
+        },
+        {
+          "address": 2553579503616,
+          "bytes_written": 14,
+          "ok": true,
+          "operation": "WriteProcessMemory(rollback)",
+          "status": "ok"
+        },
+        {
+          "address": 2553579503616,
+          "bytes_hex": "9090909090909090909090909090",
+          "ok": true,
+          "operation": "verify_rollback_write",
+          "size": 14,
+          "status": "ok"
+        },
+        {
+          "address": 2553579503616,
+          "ok": true,
+          "operation": "FlushInstructionCache(rollback)",
+          "size": 14,
+          "status": "ok"
+        },
+        {
+          "address": 2553579503616,
+          "new_protection": 64,
+          "ok": true,
+          "old_protection": 64,
+          "operation": "VirtualProtectEx(rollback,restore)",
+          "size": 14,
+          "status": "ok"
+        },
+        {
+          "address": 2553579569152,
+          "bytes_hex": "9090909090909090909090909090ff25000000000e00338d52020000",
+          "ok": true,
+          "operation": "verify_trampoline_before_free",
+          "size": 28,
+          "status": "ok"
+        },
+        {
+          "address": 2553579569152,
+          "ok": true,
+          "operation": "VirtualFreeEx(trampoline_rollback)",
+          "released": true,
+          "status": "ok"
+        }
+      ],
+      "pid": 49912,
+      "protection_restored": true,
+      "target_restored": true
+    },
+    "schema_version": 1,
+    "size": 14,
+    "status": "completed",
+    "supported": true,
+    "trampoline_address": 2553579569152,
+    "trampoline_hex": "9090909090909090909090909090ff25000000000e00338d52020000",
+    "trampoline_size": 28
+  },
+  "schema_version": 1,
+  "session_id": "windows-native-inline-smoke",
+  "status": "ok",
+  "target_identity": {
+    "display_name": "smoke-child",
+    "kind": "process",
+    "metadata": {},
+    "path": null,
+    "pid": 49912,
+    "sha256": null
+  }
+}

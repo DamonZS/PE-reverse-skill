@@ -4,9 +4,35 @@ from types import SimpleNamespace
 
 from reverse_analyzer.core import Flow, ReverseSession, Status, Subtask, Task
 from reverse_analyzer.report import ReportBuilder
+from reverse_analyzer.report.builder import (
+    _capability_audit_display_status,
+    _platform_core_display_status,
+    _section_display_status,
+)
 
 
 class ReportBuilderTests(unittest.TestCase):
+    def test_report_display_status_helpers_preserve_failure_and_partial_states(self):
+        self.assertEqual(_section_display_status({}), "unavailable")
+        self.assertEqual(_section_display_status({"status": "succeeded"}), "ok")
+        self.assertEqual(
+            _capability_audit_display_status(
+                {"summary": {"status_counts": {"ok": 2, "mocked": 1}}}
+            ),
+            "partial",
+        )
+        self.assertEqual(
+            _platform_core_display_status(
+                {
+                    "semantic_ir": {"status": "ok"},
+                    "evidence_graph": {"status": "failed"},
+                    "capability_registry": {"status": "ok"},
+                    "capability_audit": {"summary": {"status_counts": {"ok": 1}}},
+                }
+            ),
+            "failed",
+        )
+
     def test_report_builder_outputs_json_and_markdown_sections(self):
         session = SimpleNamespace(
             session_id="s1",
@@ -356,6 +382,12 @@ class ReportBuilderTests(unittest.TestCase):
                         "module_count": 3,
                         "module_files": ["src/main.c", "src/net.c"],
                         "dynamic_evidence_count": 4,
+                        "runtime_validation": {"status": "passed", "summary": {"executed_step_count": 2}},
+                        "runtime_validation_status": "passed",
+                        "runtime_validation_confidence": {"score": 0.91},
+                        "runtime_validation_artifact": "out/source/project/analysis/runtime-validation.json",
+                        "runtime_validation_provenance": {"validator": "source-runtime"},
+                        "behavior_equivalent": False,
                         "stub_only": True,
                         "artifacts": [{"name": "source/project", "path": "out/source/project"}],
                     },
@@ -387,6 +419,19 @@ class ReportBuilderTests(unittest.TestCase):
         self.assertEqual(report["source_reconstruction"]["verification_score"], 0.84)
         self.assertEqual(report["source_reconstruction"]["language"], "c")
         self.assertEqual(report["source_reconstruction"]["output_stack"], "c-native")
+        self.assertEqual(report["source_reconstruction"]["runtime_validation_status"], "passed")
+        self.assertEqual(report["source_reconstruction"]["runtime_validation_confidence"]["score"], 0.91)
+        self.assertEqual(
+            report["source_reconstruction"]["runtime_validation_artifact"],
+            "out/source/project/analysis/runtime-validation.json",
+        )
+        self.assertEqual(
+            report["source_reconstruction"]["runtime_validation_provenance"],
+            {"validator": "source-runtime"},
+        )
+        self.assertIs(report["source_reconstruction"]["behavior_equivalent"], False)
+        self.assertEqual(report["reconstruction"]["runtime_validation"]["status"], "passed")
+        self.assertIn("Runtime Validation Status", markdown)
         self.assertIn("## Engine Analysis", markdown)
         self.assertIn("## Android Analysis", markdown)
         self.assertIn("## Protocol Analysis", markdown)

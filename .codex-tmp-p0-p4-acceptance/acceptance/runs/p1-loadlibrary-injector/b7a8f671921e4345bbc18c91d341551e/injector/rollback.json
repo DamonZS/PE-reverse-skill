@@ -1,0 +1,263 @@
+{
+  "status": "ok",
+  "verified": true,
+  "restored": true,
+  "module_absent_after": true,
+  "temporary_memory_released": false,
+  "details": {
+    "schema_version": 1,
+    "status": "ok",
+    "method": "load_library",
+    "pid": 44232,
+    "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+    "module_handle": 140720235937792,
+    "remote_allocation": 2996460388352,
+    "free_library_attempted": true,
+    "free_library_ok": true,
+    "memory_release_attempted": true,
+    "memory_released": true,
+    "module_absent_after": true,
+    "before_modules": [
+      {
+        "name": "python.exe",
+        "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "base_address": 140697503727616,
+        "size": 106496
+      },
+      {
+        "name": "python313.dll",
+        "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+        "base_address": 140719090892800,
+        "size": 6639616
+      },
+      {
+        "name": "VCRUNTIME140.dll",
+        "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+        "base_address": 140719736815616,
+        "size": 122880
+      },
+      {
+        "name": "ADVAPI32.dll",
+        "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+        "base_address": 140720380116992,
+        "size": 737280
+      },
+      {
+        "name": "bcrypt.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+        "base_address": 140720363667456,
+        "size": 155648
+      },
+      {
+        "name": "bcryptprimitives.dll",
+        "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+        "base_address": 140720369631232,
+        "size": 626688
+      },
+      {
+        "name": "KERNEL32.DLL",
+        "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+        "base_address": 140720379199488,
+        "size": 823296
+      },
+      {
+        "name": "KERNELBASE.dll",
+        "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+        "base_address": 140720371793920,
+        "size": 4128768
+      },
+      {
+        "name": "msvcrt.dll",
+        "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+        "base_address": 140720378281984,
+        "size": 692224
+      },
+      {
+        "name": "ntdll.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+        "base_address": 140720413868032,
+        "size": 2519040
+      },
+      {
+        "name": "RPCRT4.dll",
+        "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+        "base_address": 140720386342912,
+        "size": 1146880
+      },
+      {
+        "name": "sechost.dll",
+        "path": "C:\\WINDOWS\\System32\\sechost.dll",
+        "base_address": 140720395845632,
+        "size": 679936
+      },
+      {
+        "name": "ucrtbase.dll",
+        "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+        "base_address": 140720367665152,
+        "size": 1355776
+      },
+      {
+        "name": "VERSION.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+        "base_address": 140720135405568,
+        "size": 45056
+      },
+      {
+        "name": "winhttp.dll",
+        "path": "C:\\Windows\\System32\\winhttp.dll",
+        "base_address": 140720235937792,
+        "size": 1171456
+      },
+      {
+        "name": "WS2_32.dll",
+        "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+        "base_address": 140720396566528,
+        "size": 475136
+      }
+    ],
+    "after_modules": [
+      {
+        "name": "python.exe",
+        "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "base_address": 140697503727616,
+        "size": 106496
+      },
+      {
+        "name": "python313.dll",
+        "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+        "base_address": 140719090892800,
+        "size": 6639616
+      },
+      {
+        "name": "VCRUNTIME140.dll",
+        "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+        "base_address": 140719736815616,
+        "size": 122880
+      },
+      {
+        "name": "ADVAPI32.dll",
+        "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+        "base_address": 140720380116992,
+        "size": 737280
+      },
+      {
+        "name": "bcrypt.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+        "base_address": 140720363667456,
+        "size": 155648
+      },
+      {
+        "name": "bcryptprimitives.dll",
+        "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+        "base_address": 140720369631232,
+        "size": 626688
+      },
+      {
+        "name": "KERNEL32.DLL",
+        "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+        "base_address": 140720379199488,
+        "size": 823296
+      },
+      {
+        "name": "KERNELBASE.dll",
+        "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+        "base_address": 140720371793920,
+        "size": 4128768
+      },
+      {
+        "name": "msvcrt.dll",
+        "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+        "base_address": 140720378281984,
+        "size": 692224
+      },
+      {
+        "name": "ntdll.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+        "base_address": 140720413868032,
+        "size": 2519040
+      },
+      {
+        "name": "RPCRT4.dll",
+        "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+        "base_address": 140720386342912,
+        "size": 1146880
+      },
+      {
+        "name": "sechost.dll",
+        "path": "C:\\WINDOWS\\System32\\sechost.dll",
+        "base_address": 140720395845632,
+        "size": 679936
+      },
+      {
+        "name": "ucrtbase.dll",
+        "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+        "base_address": 140720367665152,
+        "size": 1355776
+      },
+      {
+        "name": "VERSION.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+        "base_address": 140720135405568,
+        "size": 45056
+      },
+      {
+        "name": "WS2_32.dll",
+        "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+        "base_address": 140720396566528,
+        "size": 475136
+      }
+    ],
+    "operation": {
+      "ok": true,
+      "status": "ok",
+      "pid": 44232,
+      "module_handle": 140720235937792,
+      "remote_allocation": 2996460388352,
+      "free_library_attempted": true,
+      "free_library_ok": true,
+      "memory_release_attempted": true,
+      "memory_released": true,
+      "api_calls": [
+        {
+          "api": "OpenProcess",
+          "status": "ok"
+        },
+        {
+          "api": "GetProcAddress",
+          "status": "ok",
+          "module": "kernel32.dll",
+          "export": "FreeLibrary",
+          "local_module_base": 140720379199488,
+          "export_owner_module": "KERNEL32.DLL",
+          "export_owner_path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+          "local_export_owner_base": 140720379199488,
+          "remote_module_base": 140720379199488,
+          "export_offset": 247328,
+          "remote_export_address": 140720379446816
+        },
+        {
+          "api": "CreateRemoteThread",
+          "status": "ok",
+          "thread_id": 49072,
+          "start_address": 140720379446816
+        },
+        {
+          "api": "WaitForSingleObject",
+          "status": "ok",
+          "wait_status": 0,
+          "timeout_ms": 10000
+        },
+        {
+          "api": "GetExitCodeThread",
+          "status": "ok",
+          "exit_code": 1
+        },
+        {
+          "api": "VirtualFreeEx",
+          "status": "ok",
+          "address": 2996460388352
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "dry_run": false,
+  "operations": [
+    {
+      "expected_hex": "5245534f55524345",
+      "file_offset": "0x4E0",
+      "file_offset_value": 1248,
+      "id": "resource-replace-data",
+      "kind": "replace_bytes",
+      "replacement_hex": "4e45570000000000",
+      "rva": "0x20E0",
+      "rva_value": 8416,
+      "size": 8
+    },
+    {
+      "expected_hex": "08000000",
+      "file_offset": "0x4CC",
+      "file_offset_value": 1228,
+      "id": "resource-replace-size",
+      "kind": "replace_bytes",
+      "replacement_hex": "03000000",
+      "rva": "0x20CC",
+      "rva_value": 8396,
+      "size": 4
+    }
+  ],
+  "patched_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\strategies\\resource_replace\\patched.exe",
+  "patched_sha256": "01cb5b5d13593273a3847b32958ad89fbb80ac17608051a5767259a92d981586",
+  "patched_size": 1536,
+  "plan_schema_version": 1,
+  "rollback_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\strategies\\resource_replace\\apply-artifacts\\rollback.json",
+  "schema_version": 1,
+  "source_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\strategies\\resource_replace\\fixture.exe",
+  "source_sha256": "626e023d2b3b8baabb21aac86da6ebad4899a36d29ac55c4d98fc83e54b56645",
+  "source_size": 1536,
+  "status": "ok",
+  "strategy": "resource_replace"
+}

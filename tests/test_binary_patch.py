@@ -13,9 +13,19 @@ from reverse_analyzer.tools.patch import (
     binary_patch_rollback_plan,
     validate_patch_plan,
 )
+from reverse_analyzer.tools.executor import ToolResult
 
 
 class BinaryPatchTests(unittest.TestCase):
+    @staticmethod
+    def _plan(original: bytes, operations: list[dict], **extra) -> dict:
+        return {
+            "schema_version": 1,
+            "target_sha256": hashlib.sha256(original).hexdigest(),
+            "operations": operations,
+            **extra,
+        }
+
     @staticmethod
     def _pe_fixture_with_virtual_only_tail() -> bytes:
         """Build a PE-like fixture whose section has bytes past raw_size."""
@@ -72,6 +82,79 @@ class BinaryPatchTests(unittest.TestCase):
             restored_path = Path(restored.data["restored_path"])
             self.assertEqual(restored_path.read_bytes(), original)
 
+    def test_offset_and_aob_manifests_keep_exact_file_offsets_and_rvas_through_rollback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "fixture.exe"
+            patched = root / "patched.exe"
+            restored = root / "restored.exe"
+            artifacts = root / "artifacts"
+            original = self._pe_fixture_with_virtual_only_tail()
+            source.write_bytes(original)
+            plan = self._plan(
+                original,
+                [
+                    {
+                        "id": "offset-op",
+                        "kind": "replace_offset",
+                        "offset": 0x200,
+                        "expected": "0001",
+                        "replacement": "A0A1",
+                    },
+                    {
+                        "id": "aob-op",
+                        "kind": "replace_aob",
+                        "pattern": "02 03 04 05",
+                        "expected": "02030405",
+                        "replacement": "A2A30405",
+                        "expected_match_count": 1,
+                    },
+                ],
+            )
+
+            applied = binary_patch_apply_plan(
+                source,
+                plan=plan,
+                out_path=patched,
+                apply=True,
+                artifact_dir=artifacts,
+            )
+
+            self.assertEqual(applied.status, "ok", applied.error)
+            operations = applied.data["operations"]
+            self.assertEqual(
+                [
+                    (
+                        item["file_offset"],
+                        item["file_offset_value"],
+                        item["rva"],
+                        item["rva_value"],
+                    )
+                    for item in operations
+                ],
+                [
+                    ("0x200", 0x200, "0x1000", 0x1000),
+                    ("0x202", 0x202, "0x1002", 0x1002),
+                ],
+            )
+
+            rolled_back = binary_patch_rollback_plan(
+                patched,
+                rollback=artifacts / "rollback.json",
+                out_path=restored,
+                apply=True,
+                artifact_dir=root / "rollback-artifacts",
+            )
+
+            self.assertEqual(rolled_back.status, "ok", rolled_back.error)
+            self.assertEqual(restored.read_bytes(), original)
+            self.assertEqual(rolled_back.data["restored_sha256"], hashlib.sha256(original).hexdigest())
+            restored_by_id = {item["id"]: item for item in rolled_back.data["operations"]}
+            self.assertEqual(restored_by_id["offset-op"]["file_offset_value"], 0x200)
+            self.assertEqual(restored_by_id["offset-op"]["rva_value"], 0x1000)
+            self.assertEqual(restored_by_id["aob-op"]["file_offset_value"], 0x202)
+            self.assertEqual(restored_by_id["aob-op"]["rva_value"], 0x1002)
+
     def test_aob_replace_and_overlay_embedding_are_verified_and_reversible(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -81,8 +164,9 @@ class BinaryPatchTests(unittest.TestCase):
             original = b"prefix\xAA\xBB\xCCsuffix"
             source.write_bytes(original)
             payload.write_bytes(b"embedded-data")
-            plan = {
-                "operations": [
+            plan = self._plan(
+                original,
+                [
                     {
                         "id": "aob",
                         "kind": "replace_aob",
@@ -91,8 +175,8 @@ class BinaryPatchTests(unittest.TestCase):
                         "expected_match_count": 1,
                     },
                     {"id": "embed", "kind": "embed_overlay", "payload_file": "payload.dat", "marker": "test-payload"},
-                ]
-            }
+                ],
+            )
             plan_path = root / "plan.json"
             plan_path.write_text(json.dumps(plan), encoding="utf-8")
 
@@ -112,11 +196,12 @@ class BinaryPatchTests(unittest.TestCase):
             source = root / "fixture.bin"
             output = root / "patched.bin"
             source.write_bytes(b"abcdef")
-            plan = {
-                "operations": [
+            plan = self._plan(
+                source.read_bytes(),
+                [
                     {"kind": "replace_offset", "offset": 1, "expected": "62", "replacement": "42"}
-                ]
-            }
+                ],
+            )
 
             planned = binary_patch_apply_plan(source, plan=plan, out_path=output, apply=False)
 
@@ -126,7 +211,10 @@ class BinaryPatchTests(unittest.TestCase):
 
             failed = binary_patch_apply_plan(
                 source,
-                plan={"operations": [{"kind": "replace_offset", "offset": 1, "expected": "ff", "replacement": "42"}]},
+                plan=self._plan(
+                    source.read_bytes(),
+                    [{"kind": "replace_offset", "offset": 1, "expected": "ff", "replacement": "42"}],
+                ),
                 out_path=output,
                 apply=True,
             )
@@ -177,11 +265,13 @@ class BinaryPatchTests(unittest.TestCase):
                 "expected": "62",
                 "replacement": "42",
             }
+            source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
             invalid_plans = [
-                {"schema_version": 2, "operations": [valid_operation]},
+                {"schema_version": 2, "target_sha256": source_hash, "operations": [valid_operation]},
                 {"target_sha256": "0" * 64, "operations": [valid_operation]},
-                {"operations": [{"kind": "not-supported"}]},
+                {"target_sha256": source_hash, "operations": [{"kind": "not-supported"}]},
                 {
+                    "target_sha256": source_hash,
                     "operations": [
                         {"kind": "replace_offset", "offset": 1, "expected": "ff", "replacement": "42"}
                     ]
@@ -213,7 +303,10 @@ class BinaryPatchTests(unittest.TestCase):
             source.write_bytes(b"abcdef")
             applied = binary_patch_apply_plan(
                 source,
-                plan={"operations": [{"kind": "replace_offset", "offset": 1, "expected": "62", "replacement": "42"}]},
+                plan=self._plan(
+                    source.read_bytes(),
+                    [{"kind": "replace_offset", "offset": 1, "expected": "62", "replacement": "42"}],
+                ),
                 out_path=patched,
                 apply=True,
                 artifact_dir=artifacts,
@@ -264,7 +357,7 @@ class BinaryPatchTests(unittest.TestCase):
                     output = root / f"{name}.exe"
                     result = binary_patch_apply_plan(
                         source,
-                        plan={"operations": [operation]},
+                        plan=self._plan(source.read_bytes(), [operation]),
                         out_path=output,
                         apply=True,
                     )
@@ -293,11 +386,181 @@ class BinaryPatchTests(unittest.TestCase):
             ):
                 result = validate_patch_plan(
                     source,
-                    plan={"operations": [{"kind": "embed_overlay", "payload_file": str(payload)}]},
+                    plan=self._plan(
+                        source.read_bytes(),
+                        [{"kind": "embed_overlay", "payload_file": str(payload)}],
+                    ),
                 )
 
             self.assertEqual(result.status, "failed")
             self.assertIn("payload exceeds 4 byte limit", result.error)
+
+    def test_missing_target_hash_is_rejected_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "fixture.bin"
+            output = root / "patched.bin"
+            source.write_bytes(b"abcdef")
+            plan = {
+                "operations": [
+                    {"kind": "replace_offset", "offset": 1, "expected": "62", "replacement": "42"}
+                ]
+            }
+
+            results = [
+                validate_patch_plan(source, plan=plan),
+                binary_patch_apply(source, plan=plan, out_dir=root / "legacy", dry_run=True),
+                binary_patch_apply_plan(source, plan=plan, out_path=output, apply=True),
+            ]
+
+            for result in results:
+                with self.subTest(tool=result.tool):
+                    self.assertEqual(result.status, "failed")
+                    self.assertIn("target_sha256 is required", result.error)
+            self.assertEqual(source.read_bytes(), b"abcdef")
+            self.assertFalse(output.exists())
+            self.assertFalse((root / "legacy").exists())
+
+    def test_pe_validation_unavailable_never_writes_or_reports_success(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "fixture.bin"
+            output = root / "patched.bin"
+            artifacts = root / "artifacts"
+            original = b"MZ\x90\x90payload"
+            source.write_bytes(original)
+            plan = self._plan(
+                original,
+                [
+                    {
+                        "kind": "replace_offset",
+                        "offset": 2,
+                        "expected": "9090",
+                        "replacement": "CCCC",
+                    }
+                ],
+                planner={"name": "pe_aware_patch_planner"},
+            )
+            unavailable = ToolResult(
+                tool="pe_patch_validate",
+                status="unavailable",
+                error="capstone unavailable",
+                data={"status": "unavailable", "valid": False, "artifacts": []},
+            )
+
+            with patch(
+                "reverse_analyzer.patch.planner.validate_pe_patch_plan",
+                return_value=unavailable,
+            ):
+                validated = validate_patch_plan(source, plan=plan)
+                applied = binary_patch_apply_plan(
+                    source,
+                    plan=plan,
+                    out_path=output,
+                    apply=True,
+                    artifact_dir=artifacts,
+                )
+
+            self.assertEqual(validated.status, "unavailable")
+            self.assertFalse(validated.data["valid"])
+            self.assertEqual(applied.status, "unavailable")
+            self.assertEqual(source.read_bytes(), original)
+            self.assertFalse(output.exists())
+            self.assertFalse(artifacts.exists())
+
+    def test_apply_rejects_sample_plan_output_and_artifact_path_collisions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            original = b"abcdef"
+            operation = {"kind": "replace_offset", "offset": 1, "expected": "62", "replacement": "42"}
+
+            for sample_name in ("patch_manifest.json", "rollback.json"):
+                with self.subTest(sample_name=sample_name):
+                    source = root / sample_name
+                    source.write_bytes(original)
+                    output = root / f"{sample_name}.patched"
+                    result = binary_patch_apply_plan(
+                        source,
+                        plan=self._plan(original, [operation]),
+                        out_path=output,
+                        apply=True,
+                        artifact_dir=root,
+                    )
+                    self.assertEqual(result.status, "failed")
+                    self.assertIn("path collision", result.error)
+                    self.assertEqual(source.read_bytes(), original)
+                    self.assertFalse(output.exists())
+                    source.unlink()
+
+            source = root / "fixture.bin"
+            source.write_bytes(original)
+            plan_path = root / "plan.json"
+            plan_path.write_text(json.dumps(self._plan(original, [operation])), encoding="utf-8")
+            plan_before = plan_path.read_bytes()
+            plan_collision = binary_patch_apply_plan(
+                source,
+                plan=plan_path,
+                out_path=plan_path,
+                apply=True,
+                artifact_dir=root / "plan-artifacts",
+            )
+            self.assertEqual(plan_collision.status, "failed")
+            self.assertIn("path collision", plan_collision.error)
+            self.assertEqual(plan_path.read_bytes(), plan_before)
+
+            manifest_collision = binary_patch_apply_plan(
+                source,
+                plan=self._plan(original, [operation]),
+                out_path=root / "audit" / "patch_manifest.json",
+                apply=True,
+                artifact_dir=root / "audit",
+            )
+            self.assertEqual(manifest_collision.status, "failed")
+            self.assertIn("path collision", manifest_collision.error)
+            self.assertEqual(source.read_bytes(), original)
+
+    def test_bundle_publish_failure_restores_preexisting_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "fixture.bin"
+            out_dir = root / "out"
+            original = b"abcdef"
+            source.write_bytes(original)
+            destinations = [
+                out_dir / "patched" / "fixture.patched.bin",
+                out_dir / "patch_manifest.json",
+                out_dir / "rollback.json",
+            ]
+            prior = [b"old-binary", b"old-manifest", b"old-rollback"]
+            for path, payload in zip(destinations, prior):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(payload)
+
+            real_replace = __import__("os").replace
+            call_count = 0
+
+            def fail_second_commit(source_path, destination_path):
+                nonlocal call_count
+                call_count += 1
+                if call_count == 5:
+                    raise OSError("simulated bundle commit failure")
+                return real_replace(source_path, destination_path)
+
+            with patch("reverse_analyzer.tools.patch.os.replace", side_effect=fail_second_commit):
+                result = binary_patch_apply(
+                    source,
+                    plan=self._plan(
+                        original,
+                        [{"kind": "replace_offset", "offset": 1, "expected": "62", "replacement": "42"}],
+                    ),
+                    out_dir=out_dir,
+                    overwrite=True,
+                )
+
+            self.assertEqual(result.status, "failed")
+            self.assertIn("simulated bundle commit failure", result.error)
+            self.assertEqual([path.read_bytes() for path in destinations], prior)
+            self.assertEqual(source.read_bytes(), original)
 
 
 if __name__ == "__main__":

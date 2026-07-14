@@ -1,86 +1,66 @@
-# PE Reverse Analyzer — Cross-Platform Reverse Engineering + AI Model Jailbreak Engine
+# PE Reverse Analyzer
 
-> **Core Capability: Model Jailbreak / Bypass / Security Policy Circumvention**
->
-> Built-in multi-layer jailbreak solutions capable of breaking through content safety restrictions of mainstream LLMs across all series: GPT-4o / GPT-4.1 / GPT-5 / GPT-5.1 / GPT-5.2 /GPT-5.4/GPT-5.5/ Codex-5.5 /Codex-5.6 / GPT-5.6-luna, enabling full unrestricted-mode authorized security testing and reverse engineering. Deployed via `codex-instruct.py` instruction injection; verified working on Codex CLI. Codex Desktop is currently unsupported due to its built-in `provider-sync` override mechanism.
->
-> A local-first platform for authorized reverse engineering and software-security research. It combines static analysis, dynamic evidence, GUI reconstruction, Semantic IR, source/project reconstruction, and a feedback-driven knowledge base.
+A local-first platform for authorized reverse engineering and software-security research. It organizes static analysis, dynamic evidence, audited runtime capabilities, PE/APK workflows, protocol inference, source/GUI project skeletons, Semantic IR, evidence manifests, and the Dashboard into traceable analysis sessions.
 
 [中文](README.md) · [English](README.en.md) · [Project Knowledge Graph](docs/项目知识图谱.md) · [License](LICENSE)
 
-> **GitHub defaults to the Chinese README.** This file is the complete English edition.
+> The Chinese README is the default GitHub document. This edition describes current CLI and provider behavior only; options accepted by the CLI but not yet connected to a real provider are called out explicitly.
 
 ## Capability Overview
 
-| Area | Implemented capability |
+| Entry point | Current implementation |
 |---|---|
-| Sample analysis | File metadata, hashes, strings, PE header/deep scans, entropy/packer heuristics, and YARA. |
-| Decompilation | Optional Ghidra Headless integration with structured `unavailable` results when the dependency is absent. |
-| Dynamic evidence | Optional Frida and Procmon collection with `quick`, `behavior`, `unpacking`, `network`, `persistence`, and `auto` profiles. |
-| GUI reconstruction | Stack fingerprinting, resource cataloging, GUI evidence graphs, state machines, optional UI trees, visual parsing, strategy selection, and project skeletons. |
-| Evidence fusion | Behavior evidence graphs and deterministic Semantic IR across static, dynamic, decompiler, and GUI observations. |
-| Reconstruction validation | Static checks for native/GUI reconstruction projects: README, source, build entry, IR, plan, and coverage. Generated projects are never built or executed. |
-| Knowledge evolution | Historical dynamic-profile and GUI-strategy outcomes, recommendations, session summaries, and Dashboard aggregation. |
-| Workflow | Reproducible experiment plans, offline Dashboard output, and Session/Flow/Task tracing. |
+| `analyze` | File metadata, hashes, strings, PE/APK/IPA static evidence, entropy/packer heuristics, YARA, optional Ghidra/Frida/Procmon, GUI evidence, Semantic IR, and reports. |
+| `capability` | A common `supports -> plan -> validate -> execute -> rollback -> collect_artifacts` provider lifecycle, audit records, and mock providers. |
+| `memory` | Windows process-memory scan/read, precondition-bound writes, protection changes, allocation, free, controlled DLL injection, and a Frida hook-trace interface. |
+| `patch` | PE patch planning, fail-closed verification, writing a new patched copy, and rolling back to another new copy. `inline_patch` is the currently reliable end-to-end CLI path. |
+| `android` | APK static analysis, bounded unpacking, local ZIP verification/copy, and optional apktool + apksigner rebuilding. |
+| `protocol` | Import passive PCAP/PCAPNG/JSON/JSONL/raw evidence, reassemble flows, infer framing and fields, and generate summaries. It is not a live packet capture tool. |
+| `source reconstruct` | Generate an editable project skeleton with provenance/confidence from the sample and available evidence. It does not claim complete original-source recovery. |
+| `dashboard` | Generate a static Dashboard or use the built-in HTTP server to inspect sessions, capability audits, platform analyses, trends, and artifacts. |
+| `environment validate` | Discover optional dependencies and optionally execute bounded import, version, or capability probes, writing `environment-validation.json`. |
 
-The design covers Windows PE/EXE/DLL, Android APK, iOS IPA, and common desktop GUI stacks. Actual availability depends on sample type, local tooling, and optional dependencies.
-
-## Analysis Loop
-
-```mermaid
-flowchart LR
-    A[Sample] --> B[Static / Dynamic / GUI Evidence]
-    B --> C[Behavior Evidence Graph]
-    C --> D[Semantic IR]
-    D --> E[Source / GUI Reconstruction]
-    E --> F[Static Validation / Visual Regression]
-    F --> G[Reports and Artifacts]
-    G --> H[KnowledgeBase]
-    H --> I[Dynamic Profile / GUI Strategy Recommendation]
-    I --> B
-```
-
-For the architecture, file relationships, and guided tour, see [`docs/项目知识图谱.md`](docs/项目知识图谱.md).
+The platform does not automatically upload samples, reports, keys, or traces. Analysis depth depends on the sample type, operating system, target permissions, and locally available optional tooling.
 
 ## Quick Start
 
-### 1. Requirements
+### Environment
 
 - Python 3.10+
-- PowerShell is recommended on Windows; baseline static features also work on Linux/macOS
-- Optional tooling: Ghidra, Frida, Procmon, ADB, and the YARA Python binding
+- Core dependencies in `requirements.txt`: `pefile`, `capstone`, and `requests`
+- PowerShell is recommended on Windows; Linux/macOS can run local workflows that do not depend on Win32 providers
 
 ```powershell
 python -m pip install -r requirements.txt
 python -m reverse_analyzer --help
 python -m reverse_analyzer list-tools
+python -m reverse_analyzer capability list
 ```
 
-Core Python dependencies are listed in [`requirements.txt`](requirements.txt). Missing optional tooling produces an explanatory `unavailable` stage instead of stopping the session.
+Discover optional dependencies, or explicitly execute bounded probes:
 
-### 2. Initialize Local Knowledge Storage
+```powershell
+# Discover dependencies without executing probes
+python -m reverse_analyzer environment validate --out .\out
+
+# Execute bounded import, version, or capability probes for discovered dependencies
+python -m reverse_analyzer environment validate --execute-probes --out .\out
+```
+
+`environment-validation.json` records dependency discovery separately from probe verification:
+
+- `discovered`: the dependency was found, but no successful executed probe is available.
+- `verified`: a bounded probe executed successfully. This is not complete E2E validation against a real sample, device, or live target.
+- `dependency-gated`: the display form of the JSON machine value `dependency_gated`. A production path exists, but probe, external runtime/toolchain, or live-target E2E evidence remains open.
+
+Initialize local knowledge storage and run a baseline analysis:
 
 ```powershell
 python -m reverse_analyzer init-knowledge
-python -m reverse_analyzer show-knowledge
-```
-
-Default runtime directories:
-
-```text
-.reverse_analyzer/
-  knowledge/
-  sessions/
-reports/
-```
-
-### 3. Run Baseline Analysis
-
-```powershell
 python -m reverse_analyzer analyze .\sample.exe --out .\out --max-iterations 3
 ```
 
-Typical artifacts:
+Typical top-level artifacts:
 
 ```text
 out/
@@ -89,200 +69,391 @@ out/
   trace.jsonl
   analysis_graph.json
   semantic_ir.json
+  evidence-manifest.json
   sessions/
 ```
 
-## Common Workflows
+### Result Status
 
-### Static Analysis, Decompilation, and C/C++ Reconstruction
+| Status | Meaning |
+|---|---|
+| `unavailable` | The current platform or an optional tool cannot satisfy execution requirements. The affected stage normally stops before side effects while preserving structured audit and report output. |
+| `partial` | Valid results exist, but a deep parser or optional dependency was unavailable. |
+| `failed` | Parameters, permissions, hashes, preconditions, or verification actually failed. These errors are not disguised as graceful `unavailable` results. |
+
+## Main Analysis Pipeline
+
+Baseline static analysis, local rules, and optional Ghidra:
 
 ```powershell
-# Baseline static analysis with bundled YARA rules
 python -m reverse_analyzer analyze .\sample.exe --out .\out
-
-# Enable Ghidra Headless when it is configured locally
 python -m reverse_analyzer analyze .\sample.exe --out .\out --decompile --ghidra-home C:\ghidra
-
-# Generate a native reconstruction project plus Semantic IR and static validation
-python -m reverse_analyzer analyze .\sample.exe --out .\out --reconstruct
 ```
 
-Native reconstruction is written to `out/reconstructed_<sample>/`, including:
-
-```text
-analysis/semantic_ir.json
-analysis/reconstruction_plan.json
-analysis/reconstruction_verification.json
-```
-
-### Dynamic Behavior Collection
+Optional dynamic evidence and GUI analysis:
 
 ```powershell
-# Show local setup guidance for optional tools
-python -m reverse_analyzer --install-guide frida
-python -m reverse_analyzer --install-guide procmon
+python -m reverse_analyzer analyze .\sample.exe --out .\out `
+  --dynamic --dynamic-backend frida --dynamic-profile auto
 
-# Select a Frida profile from static signals
-python -m reverse_analyzer analyze .\sample.exe --out .\out --dynamic --dynamic-backend frida --dynamic-profile auto
-
-# Collect Frida and Procmon evidence in one session
-python -m reverse_analyzer analyze .\sample.exe --out .\out --dynamic --dynamic-backend all --dynamic-profile behavior
+python -m reverse_analyzer analyze .\sample.exe --out .\out `
+  --gui --gui-runtime --gui-visual --reconstruct-gui
 ```
 
-Profile outcomes are persisted in the KnowledgeBase. Later runs can recommend a profile using success rate, event yield, hook overhead, and historical stability.
+- Dynamic profiles include `quick`, `behavior`, `unpacking`, `network`, `persistence`, and `auto`; missing Frida/Procmon dependencies produce an explanatory result for the affected stage.
+- GUI paths cover WPF, WinForms, Win32, MFC, Qt, Electron, PyInstaller with PyQt/PySide, Delphi/VCL, Android XML/Compose, Flutter, React Native, UIKit/SwiftUI, Unity, WebView Hybrid, and a conservative fallback.
+- `--memory-analysis` is the analysis pipeline's bounded, read-only snapshot/diff/RVA-mapping feature. It is separate from the side-effecting `memory` capability CLI documented below.
+- `--reconstruct` and `--reconstruct-gui` validate only generated text, structure, and metadata; they do not build or launch a generated project.
 
-### Read-only Runtime Memory Evidence
-
-`--memory-analysis` collects bounded runtime-memory evidence. For an already running target, combine it with `--attach-pid <PID>`; `--memory-plan <PATH>` supplies a predefined snapshot, diff, and address-mapping plan.
+Verify an evidence manifest offline:
 
 ```powershell
-# Collect a read-only memory snapshot from an already running target
-python -m reverse_analyzer analyze .\sample.exe --out .\out --memory-analysis --attach-pid 4242
-
-# Use a plan to collect snapshots, diffs, and address-to-RVA mappings
-python -m reverse_analyzer analyze .\sample.exe --out .\out --memory-analysis --memory-plan .\memory-plan.json --attach-pid 4242
-```
-
-Session output retains snapshot, diff, and address-mapping artifacts (for example, `memory_snapshot_<pid>.json`, `memory_diff.json`, and `memory_address_map.json`). Snapshots record modules, virtual-memory regions, and byte-capped samples; diffs identify added, removed, and changed regions; mappings resolve process addresses to loaded modules, RVAs, PE sections, and file offsets when possible. `report.json` and `report.md` summarize the runtime-memory evidence.
-
-The memory stage uses query/read access only and does not write to or modify the target process. If Windows read-only memory APIs, the target process, or access rights are unavailable, the stage is reported as `unavailable` without stopping the session; offline diffs and address mapping based on existing snapshots can still produce evidence independently.
-
-### Offline Binary Patching and Payload Embedding
-
-`patch-binary` applies a verified plan to a new file; it never modifies the input file in place. It supports checked byte replacement, AOB replacement, PE RVA replacement, and appending an inert overlay payload. Successful runs emit audit and rollback manifests.
-
-```powershell
-# Dry-run: validates the plan, target SHA-256, and pre-image bytes without writing output
-python -m reverse_analyzer patch-binary .\sample.exe --plan .\patch.json --out .\patched.exe
-
-# Explicitly write a new output and its audit/rollback artifacts
-python -m reverse_analyzer patch-binary .\sample.exe --plan .\patch.json --out .\patched.exe --apply --artifact-dir .\patch-artifacts
-```
-
-Example `patch.json`:
-
-```json
-{
-  "target_sha256": "<optional original-file SHA-256>",
-  "operations": [
-    {
-      "id": "replace-flag",
-      "kind": "replace_offset",
-      "offset": "0x120",
-      "expected": "74 05",
-      "replacement": "90 90"
-    },
-    {
-      "id": "append-data",
-      "kind": "embed_overlay",
-      "payload_file": "payload.dat",
-      "marker": "research-data"
-    }
-  ]
-}
-```
-
-Supported operations are `replace_offset`, `replace_rva`, `replace_aob`, and `embed_overlay`. Replacements require an exact pre-image match. The output includes `patch_manifest.json` and `rollback.json`, which the built-in patch API can use to restore a new copy.
-
-### Evidence Manifest and Offline Verification
-
-Every completed `analyze` run writes `evidence-manifest.json` into its output directory. The manifest records the relative path, size, SHA-256, and provenance of declared analysis artifacts; a compact summary is also included in `report.json`, `report.md`, and the session summary.
-
-```powershell
-# Generates out\evidence-manifest.json after analysis
-python -m reverse_analyzer analyze .\sample.exe --out .\out
-
-# Verify artifacts in the original or a fully moved output directory
 python -m reverse_analyzer evidence verify --manifest .\out\evidence-manifest.json
 ```
 
-Verification detects missing files, size changes, SHA-256 mismatches, manifest-ID tampering, and paths that escape the output directory. Artifact paths are relative, so a complete `out` directory remains verifiable after it is moved. The original sample is recorded as external provenance with its SHA-256; it does not need to be copied into the evidence package. `report.json`, `report.md`, and the manifest itself are excluded from the current manifest to avoid a self-referential hash cycle.
+The manifest uses relative artifact paths and records size, SHA-256, and provenance so missing, modified, or escaping paths can be detected.
 
-The patch workflow always writes a new file copy, with audit and `rollback.json` records that can validate and produce a restored copy. Runtime memory support produces only bounded read-only snapshots, diffs, and address-mapping evidence; it does not provide process writing, injection, or execution capabilities.
+## Capability Provider Framework
 
-### GUI Stack Detection and Reconstruction
-
-```powershell
-# Fingerprint, resource catalog, and strategy selection
-python -m reverse_analyzer analyze .\sample.exe --out .\out --gui
-
-# Add optional UI-tree/screenshot evidence and generate a GUI project
-python -m reverse_analyzer analyze .\sample.exe --out .\out --gui --gui-runtime --gui-visual --reconstruct-gui
-
-# Preserve the detected stack where possible (the default is auto)
-python -m reverse_analyzer analyze .\sample.exe --out .\out --gui --reconstruct-gui --gui-target auto
-```
-
-GUI output is written to `out/reconstructed_gui/`. With `--reconstruct-gui`, the project also receives:
+Every capability provider follows this lifecycle:
 
 ```text
-analysis/semantic_ir.json
-analysis/reconstruction_plan.json
-analysis/reconstruction_verification.json
+supports -> plan -> validate -> execute -> rollback -> collect_artifacts
 ```
 
-Recognition/reconstruction paths include WPF, WinForms, Win32, MFC, Qt, Electron, PyInstaller with PyQt/PySide, Delphi/VCL, Android XML/Compose, Flutter, React Native, UIKit/SwiftUI, Unity, WebView Hybrid, and a self-drawn-GUI fallback. Missing runtime environments or external tools degrade to explainable static evidence.
+Current registry:
 
-### Experiments and Dashboard
+| Capability | Real provider | Mock |
+|---|---|---|
+| `memory_runtime` | `windows_memory_runtime` | `mock` |
+| `injector` | `windows_controlled_injector` | `mock` |
+| `hook_runtime` | `frida_hook_runtime` | `mock` |
+| `patch_executor` | `local_verified_patch` | `mock` |
+| `android_rebuild` | `local_android_rebuild` | `mock` |
 
 ```powershell
-# Inspect experiment subcommands
-python -m reverse_analyzer experiment --help
+# Show the registry
+python -m reverse_analyzer capability list
 
-# Build an offline Dashboard; --serve binds to loopback only
-python -m reverse_analyzer dashboard --workspace . --out .\dashboard
-python -m reverse_analyzer dashboard --workspace . --out .\dashboard --serve
+# Generic execution entry point
+python -m reverse_analyzer capability run `
+  --capability memory_runtime `
+  --action read `
+  --pid 4242 `
+  --out .\capability-out `
+  --provider mock `
+  --param address=0x7FF600001000 `
+  --param size=64
+
+# Read capability audits from a report
+python -m reverse_analyzer capability show-audit `
+  --report .\capability-out\report.json
 ```
 
-The Dashboard aggregates experiments, sessions, profile/strategy recommendations, and generated reconstruction-project summaries.
+- The registry prefers the higher-priority real provider by default. Explicitly select `--provider mock` to produce a `mocked` audit and placeholder artifacts without real side effects.
+- `--param key=value` is repeatable. Values are decoded as JSON when possible and otherwise retained as strings.
+- `--rollback` asks the provider to execute its generated rollback plan after a successful operation, validating reversibility.
+- Each run creates a session, `trace.jsonl`, `report.json`, `report.md`, an evidence manifest, and a capability audit such as `capabilities/memory_runtime_scan_audit.json`.
+- The provider interface standardizes lifecycle and auditing; it does not guarantee execution on every platform. Missing dependencies, unsupported platforms, and explicitly unimplemented provider actions return structured `unavailable` results.
 
-## Semantic IR and Reconstruction Validation
+## Runtime Memory, Injection, and Hooks
 
-Every completed `analyze` run writes `semantic_ir.json`. It normalizes behavior graphs, decompiler results, dynamic events, and GUI evidence into:
+### Memory CLI
 
-- `entities`: functions, APIs, dynamic events, UI controls, states, and related objects;
-- `relations`: calls, links, events, and state transitions;
-- `capabilities`: conservatively classified capability labels;
-- `summary`: metrics for reports, the Dashboard, and knowledge storage.
+```text
+memory {scan,read,write,protect,alloc,free,inject,hook-trace}
+```
 
-`--reconstruct` and `--reconstruct-gui` perform static reconstruction verification. The verifier only inspects generated text and project metadata; it does not build, launch, or execute reconstructed projects.
+The real memory provider is `windows_memory_runtime`, which calls Win32 APIs through `ctypes`. It executes only on Windows; other platforms return `unavailable` without modifying a target.
 
-## Model Integration and Safety Boundary
+Read-only operations:
 
-### Current Implementation
+```powershell
+# The current real scan path uses a hexadecimal AOB
+python -m reverse_analyzer memory scan `
+  --pid 4242 --out .\memory-scan `
+  --pattern "4D 5A" --pattern-type aob
+
+python -m reverse_analyzer memory read `
+  --pid 4242 --out .\memory-read `
+  --address 0x7FF600001000 --size 256
+```
+
+Reversible write, protection, and allocation examples. Here, `--rollback` immediately attempts rollback after the operation:
+
+```powershell
+python -m reverse_analyzer memory write `
+  --pid 4242 --out .\memory-write `
+  --address 0x7FF600001000 `
+  --data "90 90" --encoding hex --expected "74 05" `
+  --rollback
+
+python -m reverse_analyzer memory protect `
+  --pid 4242 --out .\memory-protect `
+  --address 0x7FF600001000 --size 4096 `
+  --protection PAGE_READWRITE --rollback
+
+python -m reverse_analyzer memory alloc `
+  --pid 4242 --out .\memory-alloc `
+  --size 4096 --protection PAGE_READWRITE --rollback
+```
+
+Free requires the exact allocation base. The provider validates the allocation and captures all data needed for rollback first:
+
+```powershell
+python -m reverse_analyzer memory free `
+  --pid 4242 --out .\memory-free `
+  --address 0x000001ABC0000000 --size 4096
+```
+
+Current boundaries:
+
+| Command | Current real behavior and limits |
+|---|---|
+| `scan` | Defaults to at most 256 MiB scanned and 256 results. The CLI accepts `aob/ascii/utf16/pointer`, but the current real provider does not convert the latter three labels; it parses `--pattern` only as a hexadecimal AOB. The provider requires a pattern even though argparse does not. |
+| `read` | The default read limit is 16 MiB, with bounded evidence persisted. |
+| `write` | The provider currently treats both `--data` and `--expected` as hexadecimal regardless of the other exposed encodings. Real execution requires `--expected`, and preimage/replacement lengths must match. |
+| `protect` | The range must fit completely inside one committed region. The CLI forwards `--expected-protection`, but the provider does not currently consume it; it independently records the live protection and precondition hash. |
+| `alloc` | The provider accepts Win32 `PAGE_*` names or positive integers. The CLI default `rw` is not currently accepted by the real provider, so pass `PAGE_READWRITE` or another explicit value. |
+| `free` | Only an exact allocation base in one readable, committed, private allocation is accepted. Execution is refused if the provider cannot capture complete rollback data. |
+
+The lower-level `probe`, `regions`, and `modules` actions are also implemented but have no dedicated memory subcommand. Invoke them through `capability run --capability memory_runtime --action ...`.
+
+### Controlled DLL Injection
+
+```powershell
+python -m reverse_analyzer memory inject `
+  --pid 4242 --out .\inject-out `
+  --dll C:\lab\trace.dll `
+  --method load_library `
+  --expected-sha256 <dll-sha256> `
+  --rollback
+```
+
+- `windows_controlled_injector` currently executes only the Windows `LoadLibraryW` path.
+- The DLL path must be absolute. `--expected-sha256` can bind the plan to a specific payload.
+- Rollback attempts remote `FreeLibrary`, frees temporary memory, and checks that the module disappeared. Additional references in the target can prevent a complete unload.
+- `manual_map` now has controlled Win32 execute and rollback paths covering PE32/PE32+ mapping, relocations, normal and delay imports, TLS callbacks, x64 exception tables, section protections, entry-point invocation, and reverse-order cleanup. Ordinary regression tests use deterministic host fixtures; a gated E2E against a real Windows target is still required.
+
+### Hook Trace
+
+The real hook provider is `frida_hook_runtime`, with `api_hook`, `inline_hook`, and `breakpoint_trace` actions. It depends on the optional Python `frida` binding/runtime, accepts data-driven hook specifications only, and rejects arbitrary JavaScript. A plan can still be generated without Frida, while execution returns `unavailable`.
+
+The currently executable interface is the generic capability command:
+
+```powershell
+python -m reverse_analyzer capability run `
+  --capability hook_runtime `
+  --action api_hook `
+  --pid 4242 `
+  --out .\hook-out `
+  --provider frida_hook_runtime `
+  --param 'hook_specification={"type":"api_hook","module":"kernel32.dll","export":"CreateFileW"}' `
+  --param duration_ms=10000
+```
+
+The `memory hook-trace --plan ... --duration ... --backend ...` convenience command is registered, but its adapter currently forwards `plan_path`/`duration`/`backend` while the provider reads `hook_specification`/`duration_ms`. It does not load the plan file or use that backend argument yet, so the convenience command is not a connected real hook-execution path.
+
+## PE Patch: plan / verify / apply / rollback
+
+The currently reliable CLI workflow is an equal-length `inline_patch`:
+
+```powershell
+python -m reverse_analyzer patch plan .\sample.exe `
+  --out .\patch-session `
+  --strategy inline_patch `
+  --offset 0x120 `
+  --replacement "90 90" `
+  --operation-id replace-branch
+
+python -m reverse_analyzer patch verify .\sample.exe `
+  --plan .\patch-session\patch\plan.json `
+  --out .\patch-session\patch
+
+python -m reverse_analyzer patch apply .\sample.exe `
+  --plan .\patch-session\patch\plan.json `
+  --out .\patched.exe `
+  --artifact-dir .\patch-session\patch
+
+python -m reverse_analyzer patch rollback .\patched.exe `
+  --plan .\patch-session\patch\rollback_plan.json `
+  --out .\restored.exe `
+  --artifact-dir .\patch-session\patch
+```
+
+- `patch plan --out X` writes artifacts under `X/patch/`. Typical files are `plan.json`, `verify.json`, `risk_report.json`, and `rollback_plan.json`.
+- The input PE is always read-only. Apply and rollback require different paths and write new files. Apply re-verifies before writing, and the rollback plan binds the patched SHA-256.
+- Verification fails closed on target hash, preimage, PE layout, strategy contract, instruction boundaries/CFG, and rollback recoverability. It also reports PE directory, relocation, and overlay risks.
+- `auto` currently resolves to `inline_patch`. The parser also accepts `code_cave_patch`, `section_extend_patch`, `resource_replace`, `iat_thunk_patch`, `entrypoint_redirect`, and `overlay_preserve_patch`, but these advanced strategies commonly require intent fields that the current CLI does not expose and are not general end-to-end CLI workflows.
+- Missing `pefile` produces `unavailable`. For a patch in an executable section, missing Capstone or a PE machine other than x86 (`0x14c`)/x64 (`0x8664`) makes instruction checking unavailable and the overall verification `failed`.
+- Authenticode handling only detects the certificate table and reports that a patch can invalidate a signature. It does not validate the certificate chain or re-sign the file.
+
+The same engine is available through the `patch_executor -> local_verified_patch` capability provider with `plan`, `validate`, `apply`, and `rollback` actions.
+
+## Android: analyze / unpack / rebuild / verify
+
+```powershell
+# Complete APK static-analysis pipeline
+python -m reverse_analyzer android analyze .\app.apk --out .\android-analysis
+
+# Bounded Python ZIP unpacking is the default
+python -m reverse_analyzer android unpack .\app.apk `
+  --out .\android-unpack `
+  --destination .\decoded
+
+# Default zip_copy: verify, then copy bytes into a new APK
+python -m reverse_analyzer android rebuild .\app.apk `
+  --out .\android-rebuild `
+  --apk-out .\rebuilt.apk `
+  --strategy zip_copy
+
+# Local ZIP/manifest verification
+python -m reverse_analyzer android verify .\rebuilt.apk `
+  --out .\android-verify
+```
+
+`apktool_rebuild` needs apktool, apksigner, and valid signing configuration:
+
+```powershell
+python -m reverse_analyzer android rebuild .\app.apk `
+  --out .\android-rebuild `
+  --project-dir .\decoded `
+  --apk-out .\rebuilt-signed.apk `
+  --strategy apktool_rebuild `
+  --apktool C:\Tools\apktool.bat `
+  --apksigner C:\Android\build-tools\35.0.0\apksigner.bat `
+  --keystore C:\Keys\research.jks `
+  --key-alias research
+```
+
+Signature verification must be enabled explicitly. Supplying `--apksigner` alone does not run it:
+
+```powershell
+python -m reverse_analyzer android verify .\rebuilt-signed.apk `
+  --out .\android-verify `
+  --apksigner C:\Android\build-tools\35.0.0\apksigner.bat `
+  --param verify_signature=true
+```
+
+- `android analyze` aliases the complete `analyze` pipeline. The other commands use the `local_android_rebuild` provider.
+- `zip_copy` is a verified byte-for-byte copy whose output hash should equal the source APK hash. It is not a decompile-and-rebuild operation.
+- Missing apktool/apksigner or signing configuration produces `unavailable` for the external-tool stage. ADB is not required for rebuilding.
+- ZIP boundaries are 10,000 entries, 128 MiB per entry, 768 MiB total uncompressed data, and a maximum compression ratio of 1,000.
+- The provider records rollback metadata. The dedicated `unpack` CLI does not expose `--rollback`; `rebuild` does.
+
+## Protocol: capture / infer / summarize
+
+```powershell
+python -m reverse_analyzer protocol capture .\traffic.pcapng `
+  --out .\protocol-out --format auto
+
+python -m reverse_analyzer protocol infer .\messages.jsonl `
+  --out .\protocol-infer --format jsonl
+
+python -m reverse_analyzer protocol summarize .\stream.bin `
+  --out .\protocol-summary --format raw
+```
+
+- All three subcommands currently run the complete pipeline: `protocol_capture -> protocol_infer -> protocol_summarize -> protocol_analyze`. Their names indicate entry intent, not a single isolated stage.
+- `capture` imports an existing passive evidence file. It neither opens a network interface nor captures live traffic.
+- PCAP, PCAPNG, JSON, JSONL, and raw inputs are supported, including TCP reassembly, bidirectional UDP flows, and length-prefix/delimiter/magic/entropy inference.
+- The pipeline recognizes JSON, protobuf shapes, base64, gzip, zlib, and msgpack. `msgpack` is optional; without it, heuristic recognition remains and the limitation is recorded as `partial`/a warning.
+- Default bounds are 8 MiB input, 4,096 packets, 1,024 messages, and 256 KiB per message. Adjust them with `--max-bytes`, `--max-packets`, `--max-messages`, and `--max-message-bytes`.
+- Output includes capture/flow/field statistics, inference, summary, per-message JSON, a Semantic IR fragment, top-level Semantic IR, an evidence graph, reports, and a manifest.
+- A missing source returns structured `unavailable` while still preserving a report and manifest.
+
+## Source Reconstruction
+
+```powershell
+python -m reverse_analyzer source reconstruct .\sample.exe `
+  --out .\source-out `
+  --strategy auto `
+  --decompile `
+  --gui
+```
+
+This command aliases `analyze` with `--reconstruct` forced on. The only current strategy is `auto`, which selects among:
+
+- `unity-csharp`
+- `android-kotlin`
+- `android-java`
+- `electron`
+- `pyinstaller-python`
+- `csharp`
+- `cpp`
+- `c`
+
+Output is written under `<out>/reconstructed_<sample>/`. It is an editable project skeleton, not complete source recovery. Reconstructed functions and types use conservative placeholders/TODOs, with provenance and confidence retained for inferred material. The default reconstruction path neither builds nor runs the generated project; local commands run only when the caller explicitly supplies a bounded runtime/behavior validation spec. The input sample remains read-only.
+
+Typical metadata:
+
+```text
+analysis/source_reconstruction.json
+analysis/project.json
+analysis/provenance.json
+analysis/confidence.json
+analysis/evidence_index.json
+analysis/behavior_hints.json
+analysis/equivalence_assessment.json
+analysis/summary.json
+```
+
+`analysis/equivalence_assessment.json` summarizes differential/static/runtime observed evidence and associates each mismatch with Semantic IR and provenance. `matched` means only that the supplied observations met their thresholds; `claim_scope` is fixed to `observed_evidence_only`, and `complete_behavior_equivalence_proven` is always `false`. It does not automatically prove complete source recovery or complete behavior, timing, environment, or state-space equivalence.
+
+## Dashboard
+
+```powershell
+# Generate static Dashboard files only
+python -m reverse_analyzer dashboard --workspace . --out .\dashboard
+
+# Generate and start the built-in server
+python -m reverse_analyzer dashboard --workspace . --out .\dashboard --serve
+
+# Spell out the default bind address and port
+python -m reverse_analyzer dashboard --workspace . --out .\dashboard `
+  --serve --host 127.0.0.1 --port 8088
+```
+
+- Without `--serve`, the command only generates `index.html` and `data.json`.
+- The default host is `127.0.0.1`; the default port comes from configuration or is `8088`. `--serve` runs until interrupted.
+- `--host` is used directly for binding. Passing a non-loopback address changes the exposure scope.
+- Current views aggregate engine/Android/protocol/source analyses, capability audits, KnowledgeBase recommendations, session comparisons and trends, artifact navigation, Semantic IR, evidence graphs, platform-core summaries, and the newest valid workspace `environment-validation.json`.
+- The environment panel separates dependency discovery from probe verification and preserves the `discovered`, `verified`, and `dependency_gated` machine states. The source-reconstruction panel shows the observed-evidence assessment, dimensions, and mismatches while explicitly declining a complete-behavior proof claim.
+
+## Dependencies and Platform Limits
+
+| Component | Type | Behavior when missing |
+|---|---|---|
+| `pefile`, `capstone`, `requests` | Core Python dependencies in `requirements.txt` | The affected function fails or follows the unavailable rules above; executable PE patch verification can fail overall. |
+| Ghidra | Optional external tool | Decompilation is `unavailable`; other local analysis continues. |
+| Frida Python binding/runtime | Optional | Dynamic collection/hook execution is `unavailable`; plans and static evidence can remain. |
+| Procmon | Optional, Windows | The Procmon dynamic collection stage is `unavailable`. |
+| `yara-python` | Optional | YARA depth is reduced while other rule/static evidence continues. |
+| apktool, apksigner, Android build tools | Optional | `apktool_rebuild` or explicit signature verification is `unavailable`; `zip_copy` and local verification remain available. |
+| `msgpack` | Optional | Deep msgpack parsing degrades to heuristic `partial` results. |
+| ADB | Optional | It affects other Android/dynamic paths and is not required for APK rebuilding. |
+| Xcode, `xcrun`, signing identities, physical iOS devices | Optional, macOS/live target | The environment report can only discover and probe the toolchain. Offline IPA static analysis remains available; rebuild, re-signing, and dynamic-device validation are outside the completed scope. |
+| Win32 memory/injector/native-hook/debugger and UIA | Windows, target rights, compatible architecture, interactive desktop | Fake backends and opt-in smokes do not close live-target gates. Missing platform access, rights, `comtypes`, or a visible window leaves the path `dependency-gated`, `partial`, or `unavailable`. |
+| PresentMon, graphics bridge, ImGui bridge | Optional, Windows | A probe confirms only that a tool or bridge responds; it does not prove an in-process Present hook, ImGui backend, or real graphics lifecycle E2E. |
+| Kernel bridge, signed driver, live IOCTL fixture | External Windows lab stack | `environment-validation.json` can expose dependency state, but the kernel runtime is still `missing`; file discovery or a bridge probe is not a driver E2E. |
+| MemProcFS/LeechCore, DMA hardware and acquisition permissions | External hardware/runtime | The DMA provider is still `missing`; an executable probe does not prove hardware initialization, address translation, or live acquisition. |
+| `comtypes`, Tesseract, VLM provider | Optional GUI/OCR/model runtime | UIA needs a Windows desktop and real window. VLM/OCR acceptance also needs a non-test provider, real images, and successful requests; mock/plugin discovery does not close validation. |
+
+`windows_memory_runtime` and `windows_controlled_injector` execute only on Windows. Even there, process architecture, target lifetime, access tokens, protected processes, and memory rights can end an operation as `failed`. PE patching, local APK handling, protocol import, reports, and the Dashboard do not inherently require Windows.
+
+The `discovered`, `verified`, and `dependency_gated` states above are environment-readiness evidence only and never promote capability status automatically. See the [Skill Parity Matrix](docs/skill_parity_matrix.md) for per-capability implementation and acceptance boundaries.
+
+## Analysis Model Provider Boundary
+
+Capability providers and analysis-model providers are separate layers:
 
 | Item | Current behavior |
 |---|---|
 | Default analysis provider | `RuleBasedProvider`: local, deterministic, and network-free. |
-| OpenAI-compatible provider | `OpenAICompatibleProvider` exposes an adapter boundary; it is offline by default and is not wired into the `analyze` CLI network path. |
-| Default model identifier | `gpt-4.1-mini`, overridable with `OPENAI_MODEL`. |
-| Remote calls | Only possible when a caller explicitly passes `enabled=True` and a controlled `transport`. This repository does not ship an HTTP transport. |
+| OpenAI-compatible interface | `OpenAICompatibleProvider` is an adapter boundary only. The current `analyze` CLI has no built-in HTTP transport. |
+| Remote calls | They are possible only when an application layer explicitly enables the provider and injects a controlled `transport`. Setting API environment variables alone does not upload samples. |
 
-### GPT-Family Compatibility
-
-The adapter does not maintain a hard-coded GPT model whitelist. A caller can supply an API-supported model identifier, so the boundary can be used with GPT-family models or another OpenAI-compatible service.
-
-This is **not** a claim that every GPT model is validated or available. Availability, context size, structured output, tool use, pricing, account access, region, and API-version behavior are determined by the service endpoint. Validate the target endpoint with a minimal integration test before relying on it.
-
-Example configuration:
-
-```powershell
-$env:OPENAI_MODEL = "gpt-4.1-mini"
-$env:OPENAI_BASE_URL = "https://api.openai.com/v1"
-$env:OPENAI_API_KEY = "<your-key>"
-$env:REVERSE_ANALYZER_OPENAI_ENABLED = "true"
-```
-
-> These variables configure a provider instance only. `analyze` still uses the local `RuleBasedProvider`. A remote-model integration needs an application-level, reviewed `transport` implementation and target-model integration tests.
-
-### No Model-Jailbreak Capability
-
-The project does not provide model jailbreaks, safety-policy bypasses, unrestricted-model claims, or guardrail-circumvention features. Model-related work belongs to:
-
-- API compatibility and model-capability evaluation;
-- prompt-injection defenses and input/output boundaries;
-- audit logs, graceful failure, and reproducible tests;
-- local analysis workflows for authorized software samples.
+The project does not include model jailbreak, safety-policy bypass, or "unrestricted model" functionality.
 
 ## Configuration
 
@@ -293,55 +464,16 @@ The project does not provide model jailbreaks, safety-policy bypasses, unrestric
 | `REVERSE_ANALYZER_SESSIONS_DIR` | Session directory. |
 | `REVERSE_ANALYZER_REPORTS_DIR` | Report directory. |
 | `REVERSE_ANALYZER_DASHBOARD_PORT` | Dashboard port; defaults to `8088`. |
-| `GHIDRA_HOME` | Ghidra root; `--ghidra-home` overrides it for one run. |
-| `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` | OpenAI-compatible provider settings. |
-| `REVERSE_ANALYZER_OPENAI_ENABLED` | Explicitly enables remote mode for a provider instance; a caller still supplies the transport. |
-
-## Repository Layout
-
-```text
-reverse_analyzer/
-  cli.py                    # CLI orchestration and artifact lifecycle
-  core/                     # Session, Flow, Task, and core models
-  runtime/                  # Session Store, Experiment Store, and tracing
-  providers/                # Rule-based and OpenAI-compatible provider boundary
-  tools/                    # Static, dynamic, GUI, IR, reconstruction, validation tools
-  report/                   # JSON / Markdown report construction
-  knowledge/                # Profile/strategy statistics, recommendations, session summaries
-  dashboard.py              # Offline Dashboard
-  source_reconstruction.py  # Read-only summary of generated projects
-tests/                      # Unit and CLI regression tests
-rules/                      # Bundled YARA rules
-scripts/                    # Operational and auxiliary scripts
-```
+| `GHIDRA_HOME` | Ghidra root; `--ghidra-home` overrides it. |
+| `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` | OpenAI-compatible provider instance settings; they do not mean that the CLI has a remote transport. |
+| `REVERSE_ANALYZER_OPENAI_ENABLED` | Explicit remote switch for a provider instance; the caller must still provide a transport. |
 
 ## Development Verification
 
 ```powershell
 python -m compileall reverse_analyzer tests
 python -m unittest discover -s tests -v
-```
-
-Before committing, also run:
-
-```powershell
 git diff --check
-python -m reverse_analyzer list-tools
 ```
 
-## Security and Scope
-
-- Analyze only software you own, public/permissioned samples, CTF targets, or targets covered by explicit authorization.
-- The default path favors local and static analysis; optional tools should produce explainable fallback results when unavailable.
-- Reports, samples, keys, dynamic traces, and reconstructed projects are not uploaded automatically.
-- [`LICENSE`](LICENSE) governs use of this repository.
-
-## Contributing and Roadmap
-
-Useful, testable improvements include:
-
-- improving Semantic IR provenance, entity quality, and relations;
-- extending GUI evidence extraction and visual regression for authorized samples;
-- improving graceful-unavailable behavior for optional tooling;
-- adding explicit configuration, integration tests, and a capability matrix for verified model transports;
-- improving Dashboard views of evidence chains and reconstruction validation.
+Use this project only with software you own, publicly licensed samples, CTF targets, or software covered by explicit authorization. Use is governed by [LICENSE](LICENSE).

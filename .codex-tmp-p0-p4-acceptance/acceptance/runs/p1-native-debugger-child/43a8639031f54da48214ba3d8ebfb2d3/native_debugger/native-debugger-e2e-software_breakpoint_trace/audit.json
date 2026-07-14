@@ -1,0 +1,1484 @@
+{
+  "action": "software_breakpoint_trace",
+  "after_snapshot": {
+    "all_events_continued": true,
+    "bounded": true,
+    "breakpoint": {
+      "active": false,
+      "byte_restored": true,
+      "hit_count": 1,
+      "installed": true,
+      "rearm_count": 0
+    },
+    "call_stacks": [
+      {
+        "architecture": "x64",
+        "capture_method": "bounded_frame_pointer_walk",
+        "complete": true,
+        "event_index": 7,
+        "frames": [
+          {
+            "address": 140720415070465,
+            "address_hex": "0x7ffc065a5901",
+            "index": 0,
+            "module": {
+              "base_address": 140720413868032,
+              "image_path": "C:\\Windows\\System32\\ntdll.dll",
+              "rva": 1202433
+            },
+            "source": "thread_context"
+          }
+        ],
+        "schema_version": 1,
+        "termination_reason": "end_of_chain",
+        "thread_id": 47880
+      }
+    ],
+    "capture_phase": "execute",
+    "captured_at": "2026-07-14T13:09:21.804240+00:00",
+    "context_summaries": [
+      {
+        "architecture": "x64",
+        "event_index": 7,
+        "flags": 582,
+        "frame_pointer": 0,
+        "instruction_pointer": 140720415070465,
+        "reason": "exception_observation",
+        "registers": {
+          "r10": 0,
+          "r11": 0,
+          "r12": 0,
+          "r13": 0,
+          "r14": 0,
+          "r15": 0,
+          "r8": 0,
+          "r9": 140720415144176,
+          "rax": 246920261632,
+          "rbx": 0,
+          "rcx": 0,
+          "rdi": 0,
+          "rdx": 140720415144176,
+          "rsi": 0
+        },
+        "stack_pointer": 246927063272,
+        "thread_id": 47880,
+        "trap_flag": false
+      },
+      {
+        "after": {
+          "architecture": "x64",
+          "flags": 514,
+          "frame_pointer": 246922869952,
+          "instruction_pointer": 140698508269408,
+          "registers": {
+            "r10": 0,
+            "r11": 582,
+            "r12": 0,
+            "r13": 0,
+            "r14": 0,
+            "r15": 0,
+            "r8": 246922869704,
+            "r9": 0,
+            "rax": 0,
+            "rbx": 0,
+            "rcx": 140720415321908,
+            "rdi": 0,
+            "rdx": 0,
+            "rsi": 0
+          },
+          "stack_pointer": 246922869896,
+          "thread_id": 7404,
+          "trap_flag": false
+        },
+        "before": {
+          "architecture": "x64",
+          "flags": 514,
+          "frame_pointer": 246922869952,
+          "instruction_pointer": 140698508269409,
+          "registers": {
+            "r10": 0,
+            "r11": 582,
+            "r12": 0,
+            "r13": 0,
+            "r14": 0,
+            "r15": 0,
+            "r8": 246922869704,
+            "r9": 0,
+            "rax": 0,
+            "rbx": 0,
+            "rcx": 140720415321908,
+            "rdi": 0,
+            "rdx": 0,
+            "rsi": 0
+          },
+          "stack_pointer": 246922869896,
+          "thread_id": 7404,
+          "trap_flag": false
+        },
+        "event_index": 9,
+        "ok": true,
+        "reason": "software_breakpoint_hit",
+        "status": "ok"
+      }
+    ],
+    "continuation_count": 10,
+    "debug_detached": true,
+    "elapsed_ms": 5012,
+    "event_count": 10,
+    "event_counts": {
+      "exception": 2,
+      "module_load": 4,
+      "process_create": 1,
+      "thread_create": 2,
+      "thread_exit": 1
+    },
+    "events": [
+      {
+        "base_address": 140698508263424,
+        "continue_status": 65538,
+        "continued": true,
+        "debug_event_code": 3,
+        "elapsed_ms": 1,
+        "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+        "index": 0,
+        "kind": "process_create",
+        "pid": 36988,
+        "start_address": 0,
+        "thread_id": 7404,
+        "thread_local_base": 246920245248,
+        "timestamp": "2026-07-14T13:09:16.792637+00:00"
+      },
+      {
+        "base_address": 140720413868032,
+        "continue_status": 65538,
+        "continued": true,
+        "debug_event_code": 6,
+        "elapsed_ms": 1,
+        "image_path": "C:\\Windows\\System32\\ntdll.dll",
+        "index": 1,
+        "kind": "module_load",
+        "pid": 36988,
+        "thread_id": 7404,
+        "timestamp": "2026-07-14T13:09:16.792765+00:00"
+      },
+      {
+        "continue_status": 65538,
+        "continued": true,
+        "debug_event_code": 2,
+        "elapsed_ms": 1,
+        "index": 2,
+        "kind": "thread_create",
+        "pid": 36988,
+        "start_address": 140720414466592,
+        "thread_id": 2508,
+        "thread_local_base": 246920253440,
+        "timestamp": "2026-07-14T13:09:16.792856+00:00"
+      },
+      {
+        "base_address": 140720379199488,
+        "continue_status": 65538,
+        "continued": true,
+        "debug_event_code": 6,
+        "elapsed_ms": 1,
+        "image_path": "C:\\Windows\\System32\\kernel32.dll",
+        "index": 3,
+        "kind": "module_load",
+        "pid": 36988,
+        "thread_id": 7404,
+        "timestamp": "2026-07-14T13:09:16.792906+00:00"
+      },
+      {
+        "base_address": 140720371793920,
+        "continue_status": 65538,
+        "continued": true,
+        "debug_event_code": 6,
+        "elapsed_ms": 1,
+        "image_path": "C:\\Windows\\System32\\KernelBase.dll",
+        "index": 4,
+        "kind": "module_load",
+        "pid": 36988,
+        "thread_id": 7404,
+        "timestamp": "2026-07-14T13:09:16.792990+00:00"
+      },
+      {
+        "base_address": 140720367665152,
+        "continue_status": 65538,
+        "continued": true,
+        "debug_event_code": 6,
+        "elapsed_ms": 1,
+        "image_path": "C:\\Windows\\System32\\ucrtbase.dll",
+        "index": 5,
+        "kind": "module_load",
+        "pid": 36988,
+        "thread_id": 7404,
+        "timestamp": "2026-07-14T13:09:16.793077+00:00"
+      },
+      {
+        "continue_status": 65538,
+        "continued": true,
+        "debug_event_code": 2,
+        "elapsed_ms": 1,
+        "index": 6,
+        "kind": "thread_create",
+        "pid": 36988,
+        "start_address": 140720415144176,
+        "thread_id": 47880,
+        "thread_local_base": 246920261632,
+        "timestamp": "2026-07-14T13:09:16.793137+00:00"
+      },
+      {
+        "call_stack": {
+          "architecture": "x64",
+          "capture_method": "bounded_frame_pointer_walk",
+          "complete": true,
+          "event_index": 7,
+          "frames": [
+            {
+              "address": 140720415070465,
+              "address_hex": "0x7ffc065a5901",
+              "index": 0,
+              "module": {
+                "base_address": 140720413868032,
+                "image_path": "C:\\Windows\\System32\\ntdll.dll",
+                "rva": 1202433
+              },
+              "source": "thread_context"
+            }
+          ],
+          "schema_version": 1,
+          "termination_reason": "end_of_chain",
+          "thread_id": 47880
+        },
+        "classification": "debugger_initial_breakpoint",
+        "context": {
+          "architecture": "x64",
+          "event_index": 7,
+          "flags": 582,
+          "frame_pointer": 0,
+          "instruction_pointer": 140720415070465,
+          "reason": "exception_observation",
+          "registers": {
+            "r10": 0,
+            "r11": 0,
+            "r12": 0,
+            "r13": 0,
+            "r14": 0,
+            "r15": 0,
+            "r8": 0,
+            "r9": 140720415144176,
+            "rax": 246920261632,
+            "rbx": 0,
+            "rcx": 0,
+            "rdi": 0,
+            "rdx": 140720415144176,
+            "rsi": 0
+          },
+          "stack_pointer": 246927063272,
+          "thread_id": 47880,
+          "trap_flag": false
+        },
+        "continue_status": 65538,
+        "continued": true,
+        "debug_event_code": 1,
+        "elapsed_ms": 1,
+        "exception_address": 140720415070464,
+        "exception_code": 2147483651,
+        "exception_code_hex": "0x80000003",
+        "exception_flags": 0,
+        "first_chance": true,
+        "index": 7,
+        "information": [
+          0
+        ],
+        "kind": "exception",
+        "pid": 36988,
+        "thread_id": 47880,
+        "timestamp": "2026-07-14T13:09:16.793239+00:00"
+      },
+      {
+        "continue_status": 65538,
+        "continued": true,
+        "debug_event_code": 4,
+        "elapsed_ms": 2,
+        "exit_code": 0,
+        "index": 8,
+        "kind": "thread_exit",
+        "pid": 36988,
+        "thread_id": 47880,
+        "timestamp": "2026-07-14T13:09:16.793551+00:00"
+      },
+      {
+        "breakpoint_hit": 1,
+        "classification": "software_breakpoint_hit",
+        "context": {
+          "after": {
+            "architecture": "x64",
+            "flags": 514,
+            "frame_pointer": 246922869952,
+            "instruction_pointer": 140698508269408,
+            "registers": {
+              "r10": 0,
+              "r11": 582,
+              "r12": 0,
+              "r13": 0,
+              "r14": 0,
+              "r15": 0,
+              "r8": 246922869704,
+              "r9": 0,
+              "rax": 0,
+              "rbx": 0,
+              "rcx": 140720415321908,
+              "rdi": 0,
+              "rdx": 0,
+              "rsi": 0
+            },
+            "stack_pointer": 246922869896,
+            "thread_id": 7404,
+            "trap_flag": false
+          },
+          "before": {
+            "architecture": "x64",
+            "flags": 514,
+            "frame_pointer": 246922869952,
+            "instruction_pointer": 140698508269409,
+            "registers": {
+              "r10": 0,
+              "r11": 582,
+              "r12": 0,
+              "r13": 0,
+              "r14": 0,
+              "r15": 0,
+              "r8": 246922869704,
+              "r9": 0,
+              "rax": 0,
+              "rbx": 0,
+              "rcx": 140720415321908,
+              "rdi": 0,
+              "rdx": 0,
+              "rsi": 0
+            },
+            "stack_pointer": 246922869896,
+            "thread_id": 7404,
+            "trap_flag": false
+          },
+          "event_index": 9,
+          "ok": true,
+          "reason": "software_breakpoint_hit",
+          "status": "ok"
+        },
+        "continue_status": 65538,
+        "continued": true,
+        "debug_event_code": 1,
+        "elapsed_ms": 504,
+        "exception_address": 140698508269408,
+        "exception_code": 2147483651,
+        "exception_code_hex": "0x80000003",
+        "exception_flags": 0,
+        "first_chance": true,
+        "index": 9,
+        "information": [
+          0
+        ],
+        "kind": "exception",
+        "pid": 36988,
+        "thread_id": 7404,
+        "timestamp": "2026-07-14T13:09:17.295646+00:00"
+      }
+    ],
+    "exceptions": [
+      {
+        "classification": "debugger_initial_breakpoint",
+        "crash_candidate": false,
+        "event_index": 7,
+        "exception_address": 140720415070464,
+        "exception_code": 2147483651,
+        "exception_code_hex": "0x80000003",
+        "first_chance": true,
+        "information": [
+          0
+        ],
+        "schema_version": 1,
+        "thread_id": 47880
+      },
+      {
+        "classification": "software_breakpoint_hit",
+        "crash_candidate": false,
+        "event_index": 9,
+        "exception_address": 140698508269408,
+        "exception_code": 2147483651,
+        "exception_code_hex": "0x80000003",
+        "first_chance": true,
+        "information": [
+          0
+        ],
+        "schema_version": 1,
+        "thread_id": 7404
+      }
+    ],
+    "max_events": 512,
+    "module_inventory": [
+      {
+        "base_address": 140698508263424,
+        "base_address_hex": "0x7ff6ec9b0000",
+        "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+        "is_main_image": true,
+        "loaded_at": "2026-07-14T13:09:16.792637+00:00",
+        "loaded_event_index": 0,
+        "observed_upper_bound": 140720367665152,
+        "status": "loaded"
+      },
+      {
+        "base_address": 140720367665152,
+        "base_address_hex": "0x7ffc03870000",
+        "image_path": "C:\\Windows\\System32\\ucrtbase.dll",
+        "is_main_image": false,
+        "loaded_at": "2026-07-14T13:09:16.793077+00:00",
+        "loaded_event_index": 5,
+        "observed_upper_bound": 140720371793920,
+        "status": "loaded"
+      },
+      {
+        "base_address": 140720371793920,
+        "base_address_hex": "0x7ffc03c60000",
+        "image_path": "C:\\Windows\\System32\\KernelBase.dll",
+        "is_main_image": false,
+        "loaded_at": "2026-07-14T13:09:16.792990+00:00",
+        "loaded_event_index": 4,
+        "observed_upper_bound": 140720379199488,
+        "status": "loaded"
+      },
+      {
+        "base_address": 140720379199488,
+        "base_address_hex": "0x7ffc04370000",
+        "image_path": "C:\\Windows\\System32\\kernel32.dll",
+        "is_main_image": false,
+        "loaded_at": "2026-07-14T13:09:16.792906+00:00",
+        "loaded_event_index": 3,
+        "observed_upper_bound": 140720413868032,
+        "status": "loaded"
+      },
+      {
+        "base_address": 140720413868032,
+        "base_address_hex": "0x7ffc06480000",
+        "image_path": "C:\\Windows\\System32\\ntdll.dll",
+        "is_main_image": false,
+        "loaded_at": "2026-07-14T13:09:16.792765+00:00",
+        "loaded_event_index": 1,
+        "status": "loaded"
+      }
+    ],
+    "operations": [
+      {
+        "ok": true,
+        "operation": "DebugActiveProcess",
+        "pid": 36988,
+        "status": "ok"
+      },
+      {
+        "kill_on_exit": false,
+        "ok": true,
+        "operation": "DebugSetProcessKillOnExit",
+        "status": "ok"
+      },
+      {
+        "address": 140698508269408,
+        "bytes_hex": "55",
+        "ok": true,
+        "operation": "install_preimage",
+        "size": 1,
+        "status": "ok"
+      },
+      {
+        "address": 140698508269408,
+        "new_protection": 64,
+        "ok": true,
+        "old_protection": 32,
+        "operation": "VirtualProtectEx",
+        "size": 1,
+        "status": "ok"
+      },
+      {
+        "address": 140698508269408,
+        "bytes_hex": "55",
+        "ok": true,
+        "operation": "install_locked_preimage",
+        "size": 1,
+        "status": "ok"
+      },
+      {
+        "address": 140698508269408,
+        "bytes_written": 1,
+        "ok": true,
+        "operation": "WriteProcessMemory",
+        "status": "ok"
+      },
+      {
+        "address": 140698508269408,
+        "bytes_hex": "cc",
+        "ok": true,
+        "operation": "install_verify",
+        "size": 1,
+        "status": "ok"
+      },
+      {
+        "address": 140698508269408,
+        "ok": true,
+        "operation": "FlushInstructionCache",
+        "size": 1,
+        "status": "ok"
+      },
+      {
+        "address": 140698508269408,
+        "new_protection": 32,
+        "ok": true,
+        "old_protection": 64,
+        "operation": "VirtualProtectEx",
+        "size": 1,
+        "status": "ok"
+      },
+      {
+        "continue_status": 65538,
+        "ok": true,
+        "operation": "ContinueDebugEvent",
+        "pid": 36988,
+        "status": "ok",
+        "thread_id": 7404
+      },
+      {
+        "continue_status": 65538,
+        "ok": true,
+        "operation": "ContinueDebugEvent",
+        "pid": 36988,
+        "status": "ok",
+        "thread_id": 7404
+      },
+      {
+        "continue_status": 65538,
+        "ok": true,
+        "operation": "ContinueDebugEvent",
+        "pid": 36988,
+        "status": "ok",
+        "thread_id": 2508
+      },
+      {
+        "continue_status": 65538,
+        "ok": true,
+        "operation": "ContinueDebugEvent",
+        "pid": 36988,
+        "status": "ok",
+        "thread_id": 7404
+      },
+      {
+        "continue_status": 65538,
+        "ok": true,
+        "operation": "ContinueDebugEvent",
+        "pid": 36988,
+        "status": "ok",
+        "thread_id": 7404
+      },
+      {
+        "continue_status": 65538,
+        "ok": true,
+        "operation": "ContinueDebugEvent",
+        "pid": 36988,
+        "status": "ok",
+        "thread_id": 7404
+      },
+      {
+        "continue_status": 65538,
+        "ok": true,
+        "operation": "ContinueDebugEvent",
+        "pid": 36988,
+        "status": "ok",
+        "thread_id": 47880
+      },
+      {
+        "continue_status": 65538,
+        "ok": true,
+        "operation": "ContinueDebugEvent",
+        "pid": 36988,
+        "status": "ok",
+        "thread_id": 47880
+      },
+      {
+        "continue_status": 65538,
+        "ok": true,
+        "operation": "ContinueDebugEvent",
+        "pid": 36988,
+        "status": "ok",
+        "thread_id": 47880
+      },
+      {
+        "address": 140698508269408,
+        "bytes_hex": "cc",
+        "ok": true,
+        "operation": "breakpoint_hit_restore_preimage",
+        "size": 1,
+        "status": "ok"
+      },
+      {
+        "address": 140698508269408,
+        "new_protection": 64,
+        "ok": true,
+        "old_protection": 32,
+        "operation": "VirtualProtectEx",
+        "size": 1,
+        "status": "ok"
+      },
+      {
+        "address": 140698508269408,
+        "bytes_hex": "cc",
+        "ok": true,
+        "operation": "breakpoint_hit_restore_locked_preimage",
+        "size": 1,
+        "status": "ok"
+      },
+      {
+        "address": 140698508269408,
+        "bytes_written": 1,
+        "ok": true,
+        "operation": "WriteProcessMemory",
+        "status": "ok"
+      },
+      {
+        "address": 140698508269408,
+        "bytes_hex": "55",
+        "ok": true,
+        "operation": "breakpoint_hit_restore_verify",
+        "size": 1,
+        "status": "ok"
+      },
+      {
+        "address": 140698508269408,
+        "ok": true,
+        "operation": "FlushInstructionCache",
+        "size": 1,
+        "status": "ok"
+      },
+      {
+        "address": 140698508269408,
+        "new_protection": 32,
+        "ok": true,
+        "old_protection": 64,
+        "operation": "VirtualProtectEx",
+        "size": 1,
+        "status": "ok"
+      },
+      {
+        "continue_status": 65538,
+        "ok": true,
+        "operation": "ContinueDebugEvent",
+        "pid": 36988,
+        "status": "ok",
+        "thread_id": 7404
+      },
+      {
+        "address": 140698508269408,
+        "bytes_hex": "55",
+        "ok": true,
+        "operation": "cleanup_preimage",
+        "size": 1,
+        "status": "ok"
+      },
+      {
+        "ok": true,
+        "operation": "DebugActiveProcessStop",
+        "pid": 36988,
+        "status": "ok"
+      }
+    ],
+    "process_exited": false,
+    "process_identity": {
+      "architecture": "x64",
+      "creation_time": 134285081567609993,
+      "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+      "pid": 36988,
+      "wow64": false
+    },
+    "requested_duration_ms": 5000,
+    "schema_version": 1,
+    "status": "ok",
+    "target_identity": {
+      "display_name": "gcc-native-debugger-fixture.exe",
+      "kind": "process",
+      "pid": 36988
+    },
+    "termination_reason": "duration",
+    "thread_inventory": [
+      {
+        "created_at": "2026-07-14T13:09:16.792856+00:00",
+        "created_event_index": 2,
+        "is_initial_thread": false,
+        "start_address": 140720414466592,
+        "status": "active",
+        "thread_id": 2508,
+        "thread_local_base": 246920253440
+      },
+      {
+        "created_at": "2026-07-14T13:09:16.792637+00:00",
+        "created_event_index": 0,
+        "is_initial_thread": true,
+        "start_address": 0,
+        "status": "active",
+        "thread_id": 7404,
+        "thread_local_base": 246920245248
+      },
+      {
+        "created_at": "2026-07-14T13:09:16.793137+00:00",
+        "created_event_index": 6,
+        "exit_code": 0,
+        "exited_at": "2026-07-14T13:09:16.793551+00:00",
+        "exited_event_index": 8,
+        "is_initial_thread": false,
+        "start_address": 140720415144176,
+        "status": "exited",
+        "thread_id": 47880,
+        "thread_local_base": 246920261632
+      }
+    ]
+  },
+  "before_snapshot": {
+    "capture_phase": "execute_validation",
+    "captured_at": "2026-07-14T13:09:16.791368+00:00",
+    "current": {
+      "breakpoint": {
+        "address": 140698508269408,
+        "bytes_hex": "55",
+        "expected_hex": "55"
+      },
+      "process": {
+        "accessible": true,
+        "architecture": "x64",
+        "context_api": "GetThreadContext",
+        "context_supported": true,
+        "creation_time": 134285081567609993,
+        "debugger_architecture": "x64",
+        "exists": true,
+        "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+        "native_machine": 34404,
+        "pid": 36988,
+        "process_machine": 0,
+        "status": "ok",
+        "wow64": false
+      }
+    },
+    "planned": {
+      "architecture_boundary": {
+        "context_api": "GetThreadContext",
+        "context_supported": true,
+        "debugger_architecture": "x64",
+        "target_architecture": "x64",
+        "wow64": false
+      },
+      "backend": {
+        "available": true,
+        "name": "windows_native_debugger",
+        "platform": "win32",
+        "production": true,
+        "simulated": false
+      },
+      "breakpoint": {
+        "address": 140698508269408,
+        "bytes_hex": "55",
+        "expected_hex": "55",
+        "matches_expected": true,
+        "status": "ok"
+      },
+      "capture_phase": "plan",
+      "captured_at": "2026-07-14T13:09:16.790547+00:00",
+      "process": {
+        "accessible": true,
+        "architecture": "x64",
+        "context_api": "GetThreadContext",
+        "context_supported": true,
+        "creation_time": 134285081567609993,
+        "debugger_architecture": "x64",
+        "exists": true,
+        "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+        "native_machine": 34404,
+        "pid": 36988,
+        "process_machine": 0,
+        "status": "ok",
+        "wow64": false
+      },
+      "process_identity": {
+        "architecture": "x64",
+        "creation_time": 134285081567609993,
+        "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+        "pid": 36988,
+        "wow64": false
+      },
+      "schema_version": 1,
+      "target_identity": {
+        "display_name": "gcc-native-debugger-fixture.exe",
+        "kind": "process",
+        "pid": 36988
+      }
+    },
+    "schema_version": 1,
+    "target_identity": {
+      "display_name": "gcc-native-debugger-fixture.exe",
+      "kind": "process",
+      "pid": 36988
+    },
+    "validation": {
+      "capability": "native_debugger",
+      "checks": [
+        {
+          "capability": "native_debugger",
+          "message": "plan capability/provider identity does not match native_debugger provider",
+          "name": "capability_identity",
+          "provider": "windows_native_debugger",
+          "status": "ok"
+        },
+        {
+          "message": "native debugger plan was not issued by this provider instance",
+          "name": "provider_instance",
+          "status": "ok"
+        },
+        {
+          "message": "native debugger session_id must be non-empty and at most 256 characters",
+          "name": "session_id",
+          "status": "ok"
+        },
+        {
+          "message": "unsupported or non-canonical native_debugger action: software_breakpoint_trace",
+          "name": "supported_action",
+          "status": "ok"
+        },
+        {
+          "authorization_source": "params.authorized",
+          "message": "native debugger execution requires explicit authorized=True consent",
+          "name": "explicit_authorization",
+          "status": "ok"
+        },
+        {
+          "message": "target PID must be positive, unambiguous, non-self, and match target identity",
+          "name": "target_pid",
+          "pid": 36988,
+          "status": "ok",
+          "target_pid": 36988
+        },
+        {
+          "message": "parameters are valid",
+          "name": "parameters",
+          "status": "ok"
+        },
+        {
+          "message": "duration_ms must be between 1 and 60000",
+          "name": "duration_bound",
+          "status": "ok"
+        },
+        {
+          "message": "max_events must be between 1 and 10000",
+          "name": "event_bound",
+          "status": "ok"
+        },
+        {
+          "message": "max_stack_frames must be between 1 and 128",
+          "name": "stack_frame_bound",
+          "status": "ok"
+        },
+        {
+          "actual": "577f86e1bead306a765d6e5cca459c90a17ceac96c347b3932159c3f08c106c9",
+          "expected": "577f86e1bead306a765d6e5cca459c90a17ceac96c347b3932159c3f08c106c9",
+          "message": "native debugger plan precondition hash does not match immutable inputs",
+          "name": "plan_integrity",
+          "status": "ok"
+        },
+        {
+          "message": "native debugger plan identity was not issued by this provider instance",
+          "name": "issued_plan",
+          "status": "ok"
+        },
+        {
+          "available": true,
+          "message": "Windows native debugger backend is available",
+          "name": "windows_native_debugger",
+          "platform": "win32",
+          "production": true,
+          "simulated": false,
+          "status": "ok"
+        },
+        {
+          "message": "target process is not accessible through the native debugger backend",
+          "name": "process_access",
+          "process": {
+            "accessible": true,
+            "architecture": "x64",
+            "context_api": "GetThreadContext",
+            "context_supported": true,
+            "creation_time": 134285081567609993,
+            "debugger_architecture": "x64",
+            "exists": true,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+            "native_machine": 34404,
+            "pid": 36988,
+            "process_machine": 0,
+            "status": "ok",
+            "wow64": false
+          },
+          "status": "ok"
+        },
+        {
+          "current": {
+            "architecture": "x64",
+            "creation_time": 134285081567609993,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+            "pid": 36988,
+            "wow64": false
+          },
+          "message": "target PID or creation-time identity changed after planning",
+          "name": "process_identity",
+          "planned": {
+            "architecture": "x64",
+            "creation_time": 134285081567609993,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+            "pid": 36988,
+            "wow64": false
+          },
+          "status": "ok"
+        },
+        {
+          "context_api": "GetThreadContext",
+          "context_supported": true,
+          "debugger_architecture": "x64",
+          "message": "target uses a supported same-bitness x86/x64 context",
+          "name": "architecture_boundary",
+          "status": "ok",
+          "target_architecture": "x64",
+          "wow64": false
+        },
+        {
+          "actual": "x64",
+          "message": "requested architecture does not match the live target architecture",
+          "name": "requested_architecture",
+          "requested": "x64",
+          "status": "ok"
+        },
+        {
+          "actual_hex": "55",
+          "expected_hex": "55",
+          "message": "breakpoint address matches the explicit expected original byte",
+          "name": "breakpoint_preimage",
+          "status": "ok"
+        }
+      ],
+      "ok": true,
+      "provider": "windows_native_debugger",
+      "session_id": "native-debugger-e2e-software_breakpoint_trace"
+    }
+  },
+  "capability": "native_debugger",
+  "dashboard_trace": [
+    {
+      "action": "software_breakpoint_trace",
+      "breakpoint_hit_count": 1,
+      "byte_restored": true,
+      "capability": "native_debugger",
+      "crash_detected": false,
+      "debug_detached": true,
+      "event_count": 10,
+      "exception_count": 2,
+      "kind": "native_debugger_execution",
+      "pid": 36988,
+      "provider": "windows_native_debugger",
+      "session_id": "native-debugger-e2e-software_breakpoint_trace",
+      "status": "ok",
+      "termination_reason": "duration"
+    },
+    {
+      "classification": "debugger_initial_breakpoint",
+      "event_index": 7,
+      "event_kind": "exception",
+      "exception_code": 2147483651,
+      "kind": "native_debugger_event",
+      "session_id": "native-debugger-e2e-software_breakpoint_trace",
+      "thread_id": 47880
+    },
+    {
+      "classification": "software_breakpoint_hit",
+      "event_index": 9,
+      "event_kind": "exception",
+      "exception_code": 2147483651,
+      "kind": "native_debugger_event",
+      "session_id": "native-debugger-e2e-software_breakpoint_trace",
+      "thread_id": 7404
+    }
+  ],
+  "events": [
+    {
+      "action": "software_breakpoint_trace",
+      "kind": "plan",
+      "message": "native debugger plan created",
+      "ts": "2026-07-14T13:09:21.804240+00:00"
+    },
+    {
+      "error_count": 0,
+      "kind": "validate",
+      "message": "native debugger plan validated",
+      "ok": true,
+      "ts": "2026-07-14T13:09:21.804240+00:00",
+      "warning_count": 0
+    },
+    {
+      "kind": "execute",
+      "message": "native debugger execution completed",
+      "status": "ok",
+      "ts": "2026-07-14T13:09:21.804240+00:00"
+    }
+  ],
+  "evidence_manifest_entries": [
+    {
+      "description": "Native debugger lifecycle audit record",
+      "kind": "native-debugger-audit",
+      "path": "native_debugger/native-debugger-e2e-software_breakpoint_trace/audit.json",
+      "session_id": "native-debugger-e2e-software_breakpoint_trace",
+      "status": "ok"
+    },
+    {
+      "description": "Bounded normalized debug events and context summaries",
+      "kind": "native-debugger-events",
+      "path": "native_debugger/native-debugger-e2e-software_breakpoint_trace/events.json",
+      "session_id": "native-debugger-e2e-software_breakpoint_trace",
+      "status": "ok"
+    },
+    {
+      "description": "Module, thread, exception, call-stack, and crash evidence",
+      "kind": "native-debugger-diagnostics",
+      "path": "native_debugger/native-debugger-e2e-software_breakpoint_trace/diagnostics.json",
+      "session_id": "native-debugger-e2e-software_breakpoint_trace",
+      "status": "ok"
+    },
+    {
+      "description": "Native debugger artifact manifest",
+      "kind": "native-debugger-manifest",
+      "path": "native_debugger/native-debugger-e2e-software_breakpoint_trace/manifest.json",
+      "session_id": "native-debugger-e2e-software_breakpoint_trace",
+      "status": "ok"
+    }
+  ],
+  "precondition_hash": "577f86e1bead306a765d6e5cca459c90a17ceac96c347b3932159c3f08c106c9",
+  "provenance": {
+    "audit_schema_version": 1,
+    "authorization_source": "params.authorized",
+    "backend": {
+      "available": true,
+      "name": "windows_native_debugger",
+      "platform": "win32",
+      "production": true,
+      "simulated": false
+    },
+    "debug_api": [
+      "DebugActiveProcess",
+      "WaitForDebugEvent",
+      "ContinueDebugEvent",
+      "DebugActiveProcessStop"
+    ],
+    "lifecycle_events": [
+      {
+        "action": "software_breakpoint_trace",
+        "kind": "plan",
+        "message": "native debugger plan created",
+        "ts": "2026-07-14T13:09:21.804240+00:00"
+      },
+      {
+        "error_count": 0,
+        "kind": "validate",
+        "message": "native debugger plan validated",
+        "ok": true,
+        "ts": "2026-07-14T13:09:21.804240+00:00",
+        "warning_count": 0
+      },
+      {
+        "kind": "execute",
+        "message": "native debugger execution completed",
+        "status": "ok",
+        "ts": "2026-07-14T13:09:21.804240+00:00"
+      }
+    ],
+    "native_win32": true,
+    "plan": {
+      "action": "software_breakpoint_trace",
+      "before_snapshot": {
+        "architecture_boundary": {
+          "context_api": "GetThreadContext",
+          "context_supported": true,
+          "debugger_architecture": "x64",
+          "target_architecture": "x64",
+          "wow64": false
+        },
+        "backend": {
+          "available": true,
+          "name": "windows_native_debugger",
+          "platform": "win32",
+          "production": true,
+          "simulated": false
+        },
+        "breakpoint": {
+          "address": 140698508269408,
+          "bytes_hex": "55",
+          "expected_hex": "55",
+          "matches_expected": true,
+          "status": "ok"
+        },
+        "capture_phase": "plan",
+        "captured_at": "2026-07-14T13:09:16.790547+00:00",
+        "process": {
+          "accessible": true,
+          "architecture": "x64",
+          "context_api": "GetThreadContext",
+          "context_supported": true,
+          "creation_time": 134285081567609993,
+          "debugger_architecture": "x64",
+          "exists": true,
+          "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+          "native_machine": 34404,
+          "pid": 36988,
+          "process_machine": 0,
+          "status": "ok",
+          "wow64": false
+        },
+        "process_identity": {
+          "architecture": "x64",
+          "creation_time": 134285081567609993,
+          "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+          "pid": 36988,
+          "wow64": false
+        },
+        "schema_version": 1,
+        "target_identity": {
+          "display_name": "gcc-native-debugger-fixture.exe",
+          "kind": "process",
+          "pid": 36988
+        }
+      },
+      "capability": "native_debugger",
+      "parameters": {
+        "address": 140698508269408,
+        "architecture": "x64",
+        "authorization_scope": "authorized native debugging",
+        "authorization_source": "params.authorized",
+        "authorized": true,
+        "duration_ms": 5000,
+        "expected_original_byte": 85,
+        "expected_original_hex": "55",
+        "max_breakpoint_hits": 1,
+        "max_events": 512,
+        "max_stack_frames": 32,
+        "pid": 36988,
+        "pid_conflict": false,
+        "poll_interval_ms": 10,
+        "rearm": false,
+        "requested_action": "software_breakpoint_trace",
+        "requested_architecture": "x64"
+      },
+      "precondition_hash": "577f86e1bead306a765d6e5cca459c90a17ceac96c347b3932159c3f08c106c9",
+      "provenance": {
+        "audit_schema_version": 1,
+        "authorization_source": "params.authorized",
+        "backend": {
+          "available": true,
+          "name": "windows_native_debugger",
+          "platform": "win32",
+          "production": true,
+          "simulated": false
+        },
+        "debug_api": [
+          "DebugActiveProcess",
+          "WaitForDebugEvent",
+          "ContinueDebugEvent",
+          "DebugActiveProcessStop"
+        ],
+        "native_win32": true,
+        "precondition_hash": "577f86e1bead306a765d6e5cca459c90a17ceac96c347b3932159c3f08c106c9",
+        "process_identity": {
+          "architecture": "x64",
+          "creation_time": 134285081567609993,
+          "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+          "pid": 36988,
+          "wow64": false
+        },
+        "provider": "windows_native_debugger",
+        "provider_instance": "08e96b9cb0f84aa7afac09ade1d495e5",
+        "request_source": "windows-e2e",
+        "simulated": false,
+        "target_identity": {
+          "display_name": "gcc-native-debugger-fixture.exe",
+          "kind": "process",
+          "pid": 36988
+        }
+      },
+      "provider": "windows_native_debugger",
+      "rollback_plan": {
+        "active": false,
+        "address": 140698508269408,
+        "clear_trap_flag": true,
+        "completed": false,
+        "detach": true,
+        "original_byte_hex": "55",
+        "pid": 36988,
+        "precondition_hash": "577f86e1bead306a765d6e5cca459c90a17ceac96c347b3932159c3f08c106c9",
+        "restore_original_byte": true,
+        "status": "planned",
+        "supported": true
+      },
+      "session_id": "native-debugger-e2e-software_breakpoint_trace",
+      "steps": [
+        {
+          "description": "Re-probe PID and creation time immediately before attach",
+          "name": "verify_target_identity"
+        },
+        {
+          "description": "Call DebugActiveProcess and disable kill-on-debugger-exit",
+          "name": "attach"
+        },
+        {
+          "description": "Verify the expected byte, write 0xCC, and flush the instruction cache",
+          "name": "install_breakpoint"
+        },
+        {
+          "description": "Normalize and continue a bounded set of debug events",
+          "name": "trace"
+        },
+        {
+          "description": "Restore byte/context state and call DebugActiveProcessStop",
+          "name": "cleanup"
+        }
+      ],
+      "target": {
+        "display_name": "gcc-native-debugger-fixture.exe",
+        "kind": "process",
+        "pid": 36988
+      }
+    },
+    "precondition_hash": "577f86e1bead306a765d6e5cca459c90a17ceac96c347b3932159c3f08c106c9",
+    "process_identity": {
+      "architecture": "x64",
+      "creation_time": 134285081567609993,
+      "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+      "pid": 36988,
+      "wow64": false
+    },
+    "provider": "windows_native_debugger",
+    "provider_instance": "08e96b9cb0f84aa7afac09ade1d495e5",
+    "request_source": "windows-e2e",
+    "simulated": false,
+    "target_identity": {
+      "display_name": "gcc-native-debugger-fixture.exe",
+      "kind": "process",
+      "pid": 36988
+    },
+    "validation": {
+      "capability": "native_debugger",
+      "checks": [
+        {
+          "capability": "native_debugger",
+          "message": "plan capability/provider identity does not match native_debugger provider",
+          "name": "capability_identity",
+          "provider": "windows_native_debugger",
+          "status": "ok"
+        },
+        {
+          "message": "native debugger plan was not issued by this provider instance",
+          "name": "provider_instance",
+          "status": "ok"
+        },
+        {
+          "message": "native debugger session_id must be non-empty and at most 256 characters",
+          "name": "session_id",
+          "status": "ok"
+        },
+        {
+          "message": "unsupported or non-canonical native_debugger action: software_breakpoint_trace",
+          "name": "supported_action",
+          "status": "ok"
+        },
+        {
+          "authorization_source": "params.authorized",
+          "message": "native debugger execution requires explicit authorized=True consent",
+          "name": "explicit_authorization",
+          "status": "ok"
+        },
+        {
+          "message": "target PID must be positive, unambiguous, non-self, and match target identity",
+          "name": "target_pid",
+          "pid": 36988,
+          "status": "ok",
+          "target_pid": 36988
+        },
+        {
+          "message": "parameters are valid",
+          "name": "parameters",
+          "status": "ok"
+        },
+        {
+          "message": "duration_ms must be between 1 and 60000",
+          "name": "duration_bound",
+          "status": "ok"
+        },
+        {
+          "message": "max_events must be between 1 and 10000",
+          "name": "event_bound",
+          "status": "ok"
+        },
+        {
+          "message": "max_stack_frames must be between 1 and 128",
+          "name": "stack_frame_bound",
+          "status": "ok"
+        },
+        {
+          "actual": "577f86e1bead306a765d6e5cca459c90a17ceac96c347b3932159c3f08c106c9",
+          "expected": "577f86e1bead306a765d6e5cca459c90a17ceac96c347b3932159c3f08c106c9",
+          "message": "native debugger plan precondition hash does not match immutable inputs",
+          "name": "plan_integrity",
+          "status": "ok"
+        },
+        {
+          "message": "native debugger plan identity was not issued by this provider instance",
+          "name": "issued_plan",
+          "status": "ok"
+        },
+        {
+          "available": true,
+          "message": "Windows native debugger backend is available",
+          "name": "windows_native_debugger",
+          "platform": "win32",
+          "production": true,
+          "simulated": false,
+          "status": "ok"
+        },
+        {
+          "message": "target process is not accessible through the native debugger backend",
+          "name": "process_access",
+          "process": {
+            "accessible": true,
+            "architecture": "x64",
+            "context_api": "GetThreadContext",
+            "context_supported": true,
+            "creation_time": 134285081567609993,
+            "debugger_architecture": "x64",
+            "exists": true,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+            "native_machine": 34404,
+            "pid": 36988,
+            "process_machine": 0,
+            "status": "ok",
+            "wow64": false
+          },
+          "status": "ok"
+        },
+        {
+          "current": {
+            "architecture": "x64",
+            "creation_time": 134285081567609993,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+            "pid": 36988,
+            "wow64": false
+          },
+          "message": "target PID or creation-time identity changed after planning",
+          "name": "process_identity",
+          "planned": {
+            "architecture": "x64",
+            "creation_time": 134285081567609993,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+            "pid": 36988,
+            "wow64": false
+          },
+          "status": "ok"
+        },
+        {
+          "context_api": "GetThreadContext",
+          "context_supported": true,
+          "debugger_architecture": "x64",
+          "message": "target uses a supported same-bitness x86/x64 context",
+          "name": "architecture_boundary",
+          "status": "ok",
+          "target_architecture": "x64",
+          "wow64": false
+        },
+        {
+          "actual": "x64",
+          "message": "requested architecture does not match the live target architecture",
+          "name": "requested_architecture",
+          "requested": "x64",
+          "status": "ok"
+        },
+        {
+          "actual_hex": "55",
+          "expected_hex": "55",
+          "message": "breakpoint address matches the explicit expected original byte",
+          "name": "breakpoint_preimage",
+          "status": "ok"
+        }
+      ],
+      "ok": true,
+      "provider": "windows_native_debugger",
+      "session_id": "native-debugger-e2e-software_breakpoint_trace"
+    }
+  },
+  "provider": "windows_native_debugger",
+  "report_section": {
+    "action": "software_breakpoint_trace",
+    "all_events_continued": true,
+    "breakpoint_hit_count": 1,
+    "byte_restored": true,
+    "call_stack_count": 1,
+    "capability": "native_debugger",
+    "context_summary_count": 2,
+    "continuation_count": 10,
+    "crash_detected": false,
+    "debug_detached": true,
+    "event_count": 10,
+    "event_counts": {
+      "exception": 2,
+      "module_load": 4,
+      "process_create": 1,
+      "thread_create": 2,
+      "thread_exit": 1
+    },
+    "exception_count": 2,
+    "module_count": 5,
+    "native_win32": true,
+    "provider": "windows_native_debugger",
+    "rollback_status": "completed",
+    "rollback_supported": true,
+    "session_id": "native-debugger-e2e-software_breakpoint_trace",
+    "simulated": false,
+    "status": "ok",
+    "target_identity": {
+      "display_name": "gcc-native-debugger-fixture.exe",
+      "kind": "process",
+      "pid": 36988
+    },
+    "termination_reason": "duration",
+    "thread_count": 3
+  },
+  "rollback_plan": {
+    "active": false,
+    "address": 140698508269408,
+    "byte_restored": true,
+    "cleanup_errors": [],
+    "clear_trap_flag": true,
+    "completed": true,
+    "debug_attached": false,
+    "debug_detached": true,
+    "detach": true,
+    "original_byte_hex": "55",
+    "pending_single_step_thread_id": null,
+    "pid": 36988,
+    "precondition_hash": "577f86e1bead306a765d6e5cca459c90a17ceac96c347b3932159c3f08c106c9",
+    "restore_original_byte": true,
+    "restored": true,
+    "status": "completed",
+    "supported": true
+  },
+  "schema_version": 1,
+  "session_id": "native-debugger-e2e-software_breakpoint_trace",
+  "status": "ok",
+  "target_identity": {
+    "display_name": "gcc-native-debugger-fixture.exe",
+    "kind": "process",
+    "pid": 36988
+  }
+}

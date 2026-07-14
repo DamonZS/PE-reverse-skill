@@ -1,0 +1,13 @@
+{
+  "status": "ok",
+  "provider": "windows_controlled_injector",
+  "evidence_class": "live_host_proof",
+  "executed_tests": 1,
+  "skipped_tests": 0,
+  "live_operations": 13,
+  "actions": [
+    "load_library",
+    "free_library"
+  ],
+  "synthetic": false
+}

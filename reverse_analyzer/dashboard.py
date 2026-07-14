@@ -4,13 +4,48 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from functools import partial
+import heapq
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
+import math
+import os
 from pathlib import Path
+import re
 from typing import Any, Iterable
+from urllib.parse import quote
 
-from .dashboard_platform_core import build_platform_core_view
+from .acceptance import verify_acceptance_record
+from .dashboard_platform_core import (
+    build_analysis_views,
+    build_capability_audit_view,
+    build_platform_core_view,
+    build_risk_highlights,
+    collect_report_artifacts,
+)
 from .source_reconstruction import summarize_source_reconstruction
+
+
+_ENVIRONMENT_REPORT_NAME = "environment-validation.json"
+_MAX_ENVIRONMENT_REPORT_BYTES = 2 * 1024 * 1024
+_MAX_ENVIRONMENT_REPORT_CANDIDATES = 128
+_MAX_ACCEPTANCE_RECORD_BYTES = 2 * 1024 * 1024
+_MAX_ACCEPTANCE_RECORDS = 500
+_ENVIRONMENT_CHECK_STATUSES = {"discovered", "verified", "failed", "unavailable"}
+_ENVIRONMENT_WORKFLOW_STATUSES = {
+    "verified",
+    "dependency_gated",
+    "partial",
+    "failed",
+    "unavailable",
+    "unsupported_host",
+}
+_ENVIRONMENT_FIXTURE_STATUSES = {
+    "repository_ready",
+    "ready_to_run",
+    "dependency_gated",
+    "unsupported_host",
+    "live_verified",
+}
 
 
 def build_dashboard(
@@ -34,16 +69,48 @@ def build_dashboard(
         "malformed_json": 0,
         "invalid_records": 0,
         "skipped_files": [],
+        "environment_validation": {
+            "candidates_seen": 0,
+            "candidates_considered": 0,
+            "candidate_limit_reached": False,
+            "malformed_reports": 0,
+            "invalid_reports": 0,
+            "oversize_reports": 0,
+            "unsafe_paths": 0,
+            "skipped_files": [],
+        },
+        "acceptance_history": {
+            "candidates_seen": 0,
+            "records_loaded": 0,
+            "malformed_records": 0,
+            "invalid_records": 0,
+            "oversize_records": 0,
+            "unsafe_paths": 0,
+            "candidate_limit_reached": False,
+            "skipped_files": [],
+        },
     }
 
     experiments = _load_records((root / "experiments",), diagnostics)
     sessions = _load_records(_session_directories(root), diagnostics)
-    dynamic_profiles = _load_json(knowledge_root / "dynamic_profiles.json", diagnostics)
-    gui_strategies = _load_json(knowledge_root / "gui_strategies.json", diagnostics)
+    knowledge_stores = {
+        "dynamic": _load_json(knowledge_root / "dynamic_profiles.json", diagnostics),
+        "gui": _load_json(knowledge_root / "gui_strategies.json", diagnostics),
+        "patch": _load_json(knowledge_root / "patch_strategies.json", diagnostics),
+        "engine": _load_json(knowledge_root / "engine_strategies.json", diagnostics),
+        "protocol": _load_json(knowledge_root / "protocol_formats.json", diagnostics),
+        "source": _load_json(knowledge_root / "source_restoration.json", diagnostics),
+    }
+    knowledge_sessions = _knowledge_session_records(
+        _load_json(knowledge_root / "sessions.json", diagnostics),
+        diagnostics,
+    )
     source_reconstruction = summarize_source_reconstruction(root)
+    environment_validation = _load_environment_validation(root, diagnostics)
+    acceptance_history = _load_acceptance_history(root, diagnostics)
     binary_patches = _load_binary_patches(root, diagnostics)
     evidence_manifests = _load_evidence_manifests(root, diagnostics)
-    platform_core_report = _load_platform_core_report(root, diagnostics)
+    reports = _load_reports(root, diagnostics)
 
     experiments.sort(key=_record_timestamp, reverse=True)
     sessions.sort(key=_record_timestamp, reverse=True)
@@ -51,6 +118,38 @@ def build_dashboard(
     for experiment in experiments:
         status = str(experiment.get("status") or "unknown").lower()
         status_counts[status] = status_counts.get(status, 0) + 1
+
+    capability_audit = build_capability_audit_view(reports)
+    analysis_views = build_analysis_views(
+        reports,
+        source_summary=source_reconstruction,
+    )
+    knowledge_recommendations = _build_knowledge_recommendations(knowledge_stores)
+    session_analytics = _build_session_analytics(sessions, knowledge_sessions)
+    risk_highlights = build_risk_highlights(reports, analysis_views)
+    platform_report = _latest_platform_report(reports)
+    platform_core = build_platform_core_view(
+        platform_report,
+        capability_audit=capability_audit,
+    )
+    artifact_references = collect_report_artifacts(reports, capability_audit)
+    artifact_references.extend(
+        _workspace_artifact_references(
+            reports=reports,
+            sessions=sessions,
+            binary_patches=binary_patches,
+            evidence_manifests=evidence_manifests,
+            source_reconstruction=source_reconstruction,
+            environment_validation=environment_validation,
+            acceptance_history=acceptance_history,
+        )
+    )
+    artifact_navigation = _build_artifact_navigation(
+        artifact_references,
+        workspace=root,
+        destination=destination,
+    )
+    _attach_acceptance_artifact_links(acceptance_history, artifact_navigation)
 
     data = {
         "generated_at": _utc_now(),
@@ -63,13 +162,27 @@ def build_dashboard(
         "experiments": experiments[:50],
         "sessions": sessions[:20],
         "recommendations": {
-            "dynamic_profile": _recommend_dynamic_profile(dynamic_profiles),
-            "gui_strategy": _recommend_gui_strategy(gui_strategies),
+            "dynamic_profile": knowledge_recommendations["dynamic"]["recommendation"],
+            "gui_strategy": knowledge_recommendations["gui"]["recommendation"],
+            "patch_strategy": knowledge_recommendations["patch"]["recommendation"],
+            "engine_strategy": knowledge_recommendations["engine"]["recommendation"],
+            "protocol_format": knowledge_recommendations["protocol"]["recommendation"],
+            "source_restoration": knowledge_recommendations["source"]["recommendation"],
         },
+        "knowledge_recommendations": knowledge_recommendations,
+        "analysis_views": analysis_views,
+        "capability_audit": capability_audit,
+        "session_analytics": session_analytics,
+        "session_compare": session_analytics["compare"],
+        "session_trend": session_analytics["trend"],
+        "risk_highlights": risk_highlights,
+        "artifact_navigation": artifact_navigation,
         "source_reconstruction": source_reconstruction,
+        "environment_validation": environment_validation,
+        "acceptance_history": acceptance_history,
         "binary_patches": binary_patches,
         "evidence_manifests": evidence_manifests,
-        "platform_core": build_platform_core_view(platform_core_report),
+        "platform_core": platform_core,
         "diagnostics": diagnostics,
     }
 
@@ -89,17 +202,568 @@ def serve_dashboard(
 
 
 
-def _load_platform_core_report(workspace: Path, diagnostics: dict[str, Any]) -> dict[str, Any]:
-    candidates = []
+def _load_reports(workspace: Path, diagnostics: dict[str, Any]) -> list[dict[str, Any]]:
+    candidates: list[Path] = []
     try:
-        candidates = sorted(workspace.rglob("report.json"), key=lambda path: path.stat().st_mtime, reverse=True)
+        candidates = list(workspace.rglob("report.json"))
     except OSError:
-        candidates = []
+        pass
+
+    def modified(path: Path) -> float:
+        try:
+            return path.stat().st_mtime
+        except OSError:
+            return 0.0
+
+    candidates.sort(key=lambda path: (modified(path), str(path)), reverse=True)
+    reports: list[dict[str, Any]] = []
     for path in candidates:
         payload = _load_json(path, diagnostics)
+        if not isinstance(payload, dict):
+            if payload is not None:
+                diagnostics["invalid_records"] += 1
+            continue
+        try:
+            source_path = path.resolve().relative_to(workspace.resolve()).as_posix()
+        except (OSError, ValueError):
+            source_path = str(path)
+        timestamp = _record_timestamp(payload)
+        if not timestamp:
+            try:
+                timestamp = (
+                    datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+                    .replace(microsecond=0)
+                    .isoformat()
+                    .replace("+00:00", "Z")
+                )
+            except OSError:
+                timestamp = ""
+        reports.append(
+            {
+                "payload": payload,
+                "source_path": source_path,
+                "timestamp": timestamp,
+            }
+        )
+    return reports
+
+
+def _latest_platform_report(reports: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    for entry in reports:
+        payload = entry.get("payload")
         if isinstance(payload, dict) and isinstance(payload.get("platform_core"), dict):
             return payload
     return {"platform_core": {"status": "unavailable"}}
+
+
+def _load_platform_core_report(workspace: Path, diagnostics: dict[str, Any]) -> dict[str, Any]:
+    """Compatibility wrapper returning the newest Platform Core report."""
+
+    return _latest_platform_report(_load_reports(workspace, diagnostics))
+
+
+def _load_environment_validation(
+    workspace: Path, diagnostics: dict[str, Any]
+) -> dict[str, Any]:
+    """Load the newest valid environment report confined to ``workspace``."""
+
+    state = diagnostics.setdefault("environment_validation", {})
+    for key, default in {
+        "candidates_seen": 0,
+        "candidates_considered": 0,
+        "candidate_limit_reached": False,
+        "malformed_reports": 0,
+        "invalid_reports": 0,
+        "oversize_reports": 0,
+        "unsafe_paths": 0,
+        "skipped_files": [],
+    }.items():
+        state.setdefault(key, default)
+
+    unavailable = {
+        "available": False,
+        "source_path": None,
+        "modified_at": None,
+        "checks": {},
+        "workflows": {},
+        "summary": {},
+        "reason": f"No valid {_ENVIRONMENT_REPORT_NAME} found in the workspace.",
+    }
+    try:
+        root = workspace.resolve()
+    except (OSError, RuntimeError):
+        return unavailable
+    if not root.is_dir():
+        return unavailable
+
+    candidates: list[tuple[int, str, Path, int]] = []
+    seen: set[Path] = set()
+    try:
+        for candidate in root.rglob(_ENVIRONMENT_REPORT_NAME):
+            state["candidates_seen"] += 1
+            try:
+                resolved = candidate.resolve(strict=True)
+                resolved.relative_to(root)
+                stat = resolved.stat()
+            except ValueError:
+                state["unsafe_paths"] += 1
+                _record_environment_skip(state, candidate, "outside_workspace")
+                continue
+            except (OSError, RuntimeError) as error:
+                _record_environment_skip(state, candidate, f"unreadable: {error}")
+                continue
+            if not resolved.is_file() or resolved in seen:
+                continue
+            seen.add(resolved)
+            entry = (stat.st_mtime_ns, resolved.as_posix(), resolved, stat.st_size)
+            if len(candidates) < _MAX_ENVIRONMENT_REPORT_CANDIDATES:
+                heapq.heappush(candidates, entry)
+            elif entry > candidates[0]:
+                heapq.heapreplace(candidates, entry)
+                state["candidate_limit_reached"] = True
+            else:
+                state["candidate_limit_reached"] = True
+    except OSError as error:
+        _record_environment_skip(state, root, f"scan_failed: {error}")
+
+    for _, _, path, size in sorted(candidates, reverse=True):
+        state["candidates_considered"] += 1
+        diagnostics["files_scanned"] += 1
+        relative = path.relative_to(root).as_posix()
+        if size > _MAX_ENVIRONMENT_REPORT_BYTES:
+            state["oversize_reports"] += 1
+            _record_environment_skip(state, path, "report_too_large", relative=relative)
+            continue
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                value = json.load(handle)
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            diagnostics["malformed_json"] += 1
+            state["malformed_reports"] += 1
+            _record_environment_skip(
+                state,
+                path,
+                f"malformed_json: {error}",
+                relative=relative,
+            )
+            continue
+        if not _valid_environment_report(value):
+            diagnostics["invalid_records"] += 1
+            state["invalid_reports"] += 1
+            _record_environment_skip(state, path, "invalid_schema", relative=relative)
+            continue
+        diagnostics["files_loaded"] += 1
+        report = dict(value)
+        report.update(
+            {
+                "available": True,
+                "source_path": relative,
+                "modified_at": _path_modified_at(path),
+            }
+        )
+        return report
+    return unavailable
+
+
+def _record_environment_skip(
+    state: dict[str, Any],
+    path: Path,
+    reason: str,
+    *,
+    relative: str | None = None,
+) -> None:
+    skipped = state.setdefault("skipped_files", [])
+    if len(skipped) < _MAX_ENVIRONMENT_REPORT_CANDIDATES:
+        skipped.append({"path": relative or str(path), "reason": reason})
+
+
+def _load_acceptance_history(
+    workspace: Path, diagnostics: dict[str, Any]
+) -> dict[str, Any]:
+    """Load bounded acceptance run records confined to the workspace."""
+
+    state = diagnostics.setdefault("acceptance_history", {})
+    for key, default in {
+        "candidates_seen": 0,
+        "records_loaded": 0,
+        "malformed_records": 0,
+        "invalid_records": 0,
+        "oversize_records": 0,
+        "unsafe_paths": 0,
+        "candidate_limit_reached": False,
+        "skipped_files": [],
+    }.items():
+        state.setdefault(key, default)
+    records: list[dict[str, Any]] = []
+    try:
+        root = workspace.resolve()
+    except (OSError, RuntimeError):
+        return _acceptance_history_summary(records)
+    if not root.is_dir():
+        return _acceptance_history_summary(records)
+
+    candidates: list[Path] = []
+    try:
+        discovered = sorted(root.rglob("acceptance/records/*.json"))
+    except OSError as error:
+        state["skipped_files"].append({"path": str(root), "reason": str(error)})
+        return _acceptance_history_summary(records)
+    state["candidates_seen"] = len(discovered)
+    if len(discovered) > _MAX_ACCEPTANCE_RECORDS:
+        state["candidate_limit_reached"] = True
+        discovered = discovered[:_MAX_ACCEPTANCE_RECORDS]
+
+    seen: set[Path] = set()
+    for candidate in discovered:
+        try:
+            path = candidate.resolve(strict=True)
+            path.relative_to(root)
+            size = path.stat().st_size
+        except ValueError:
+            state["unsafe_paths"] += 1
+            state["skipped_files"].append(
+                {"path": str(candidate), "reason": "outside_workspace"}
+            )
+            continue
+        except (OSError, RuntimeError) as error:
+            state["skipped_files"].append(
+                {"path": str(candidate), "reason": f"unreadable: {error}"}
+            )
+            continue
+        if path in seen or not path.is_file():
+            continue
+        seen.add(path)
+        relative = path.relative_to(root).as_posix()
+        if size > _MAX_ACCEPTANCE_RECORD_BYTES:
+            state["oversize_records"] += 1
+            state["skipped_files"].append(
+                {"path": relative, "reason": "record_too_large"}
+            )
+            continue
+        malformed_before = diagnostics["malformed_json"]
+        value = _load_json(path, diagnostics)
+        if value is None:
+            if diagnostics["malformed_json"] > malformed_before:
+                state["malformed_records"] += 1
+            continue
+        if not _valid_acceptance_record(value):
+            diagnostics["invalid_records"] += 1
+            state["invalid_records"] += 1
+            state["skipped_files"].append(
+                {"path": relative, "reason": "invalid_schema"}
+            )
+            continue
+        record = dict(value)
+        integrity = verify_acceptance_record(path)
+        record["declared_live_verified"] = record.get("live_verified") is True
+        record["integrity"] = integrity
+        record["live_verified"] = integrity.get("live_verified") is True
+        record["source_path"] = relative
+        record["outcome"] = _acceptance_outcome(record["outcome"])
+        record["observed_artifacts"] = _acceptance_observed_artifacts(
+            record.get("observed_artifacts")
+        )
+        if not isinstance(record.get("record_path"), str) or not record["record_path"].strip():
+            record["record_path"] = relative
+        records.append(record)
+        state["records_loaded"] += 1
+
+    records.sort(
+        key=lambda item: (
+            str(item.get("finished_at") or item.get("started_at") or ""),
+            str(item.get("fixture_id") or ""),
+        ),
+        reverse=True,
+    )
+    return _acceptance_history_summary(records)
+
+
+def _valid_acceptance_record(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    for key in ("fixture_id", "capability", "outcome", "started_at", "finished_at"):
+        if not isinstance(value.get(key), str) or not value[key].strip():
+            return False
+    if value.get("phase") not in {"P0", "P1", "P2", "P3", "P4"}:
+        return False
+    if not isinstance(value.get("live_verified"), bool):
+        return False
+    record_path = value.get("record_path")
+    if record_path is not None and (
+        not isinstance(record_path, str) or not record_path.strip()
+    ):
+        return False
+    observed = value.get("observed_artifacts")
+    if observed is not None and not isinstance(observed, list):
+        return False
+    return True
+
+
+def _acceptance_outcome(value: Any) -> str:
+    return str(value or "unknown").strip().casefold().replace("-", "_").replace(" ", "_")
+
+
+def _acceptance_observed_artifacts(value: Any) -> list[dict[str, str]]:
+    artifacts: list[dict[str, str]] = []
+    for item in value if isinstance(value, list) else []:
+        if isinstance(item, str) and item.strip():
+            artifacts.append({"path": item.strip(), "label": Path(item).name or item})
+        elif isinstance(item, dict) and isinstance(item.get("path"), str) and item["path"].strip():
+            path = item["path"].strip()
+            artifacts.append(
+                {
+                    "path": path,
+                    "label": str(item.get("label") or Path(path).name or path),
+                    "kind": str(item.get("kind") or "acceptance_artifact"),
+                }
+            )
+    return artifacts
+
+
+def _acceptance_history_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
+    failed = {"failed", "failure", "error"}
+    blocked = {"dependency_blocked", "dependency_gated", "blocked", "unavailable"}
+    return {
+        "available": bool(records),
+        "summary": {
+            "total": len(records),
+            "live_verified": sum(item.get("live_verified") is True for item in records),
+            "failed": sum(item.get("outcome") in failed for item in records),
+            "dependency_blocked": sum(item.get("outcome") in blocked for item in records),
+        },
+        "records": records,
+    }
+
+
+def _valid_environment_report(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    schema_version = value.get("schema_version")
+    if isinstance(schema_version, bool) or schema_version not in {1, 2}:
+        return False
+    if not isinstance(value.get("generated_at"), str) or not value["generated_at"].strip():
+        return False
+    if not isinstance(value.get("host"), dict) or not isinstance(value.get("execute_probes"), bool):
+        return False
+    execute_probes = value["execute_probes"]
+    checks = value.get("checks")
+    workflows = value.get("workflows")
+    summary = value.get("summary")
+    if not isinstance(checks, dict) or not isinstance(workflows, dict) or not isinstance(summary, dict):
+        return False
+
+    for name, check in checks.items():
+        if not isinstance(name, str) or not name or not isinstance(check, dict):
+            return False
+        status = check.get("status")
+        discovered = check.get("discovered")
+        probe = check.get("probe")
+        if status not in _ENVIRONMENT_CHECK_STATUSES or not isinstance(discovered, bool):
+            return False
+        if status in {"discovered", "verified", "failed"} and not discovered:
+            return False
+        if status == "unavailable" and discovered:
+            return False
+        if probe is not None and not isinstance(probe, dict):
+            return False
+        probe_status = probe.get("status") if isinstance(probe, dict) else None
+        if status == "verified" and (not execute_probes or probe_status != "ok"):
+            return False
+        if status == "failed" and (not execute_probes or probe_status != "failed"):
+            return False
+        if status in {"discovered", "unavailable"} and probe is not None:
+            return False
+
+    actual_workflow_counts = {
+        status: 0 for status in _ENVIRONMENT_WORKFLOW_STATUSES
+    }
+    for name, workflow in workflows.items():
+        if not isinstance(name, str) or not name or not isinstance(workflow, dict):
+            return False
+        status = workflow.get("status")
+        if status not in _ENVIRONMENT_WORKFLOW_STATUSES:
+            return False
+        if not isinstance(workflow.get("ready"), bool) or not isinstance(
+            workflow.get("verified"), bool
+        ):
+            return False
+        required = workflow.get("required")
+        any_of = workflow.get("any_of")
+        if (
+            not isinstance(required, list)
+            or not isinstance(any_of, list)
+            or (not required and not any_of)
+            or any(
+                not isinstance(item, str) or item not in checks
+                for item in [*required, *any_of]
+            )
+        ):
+            return False
+
+        if status == "unsupported_host":
+            if workflow["ready"] or workflow["verified"]:
+                return False
+        else:
+            required_checks = [checks[item] for item in required]
+            alternative_checks = [checks[item] for item in any_of]
+            dependency_checks = [*required_checks, *alternative_checks]
+            ready = all(item["discovered"] for item in required_checks) and (
+                not alternative_checks
+                or any(item["discovered"] for item in alternative_checks)
+            )
+            partially_ready = any(item["discovered"] for item in dependency_checks)
+            verified = ready and all(
+                item["status"] == "verified" for item in required_checks
+            ) and (
+                not alternative_checks
+                or any(item["status"] == "verified" for item in alternative_checks)
+            )
+            failed = any(item["status"] == "failed" for item in dependency_checks)
+            if verified:
+                expected_status = "verified"
+            elif failed:
+                expected_status = "failed"
+            elif ready:
+                expected_status = "dependency_gated"
+            elif partially_ready:
+                expected_status = "partial"
+            else:
+                expected_status = "unavailable"
+            if (
+                workflow["ready"] is not ready
+                or workflow["verified"] is not verified
+                or status != expected_status
+            ):
+                return False
+        actual_workflow_counts[status] += 1
+
+    summary_keys = ("total", *_ENVIRONMENT_WORKFLOW_STATUSES)
+    counts: dict[str, int] = {}
+    for key in summary_keys:
+        count = summary.get(key)
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            return False
+        counts[key] = count
+    workflows_valid = (
+        counts["total"] == len(workflows)
+        and counts["total"]
+        == sum(counts[status] for status in _ENVIRONMENT_WORKFLOW_STATUSES)
+        and all(
+            counts[status] == actual_workflow_counts[status]
+            for status in _ENVIRONMENT_WORKFLOW_STATUSES
+        )
+    )
+    if not workflows_valid:
+        return False
+    if schema_version == 1:
+        return True
+    return _valid_environment_acceptance_fixtures(
+        value.get("acceptance_fixtures"), summary
+    )
+
+
+def _valid_environment_acceptance_fixtures(
+    fixtures: Any, summary: Mapping[str, Any]
+) -> bool:
+    if not isinstance(fixtures, list):
+        return False
+    status_counts = {status: 0 for status in _ENVIRONMENT_FIXTURE_STATUSES}
+    fixture_ids: set[str] = set()
+    for fixture in fixtures:
+        if not isinstance(fixture, dict):
+            return False
+        fixture_id = fixture.get("id")
+        if (
+            not isinstance(fixture_id, str)
+            or not fixture_id.strip()
+            or fixture_id in fixture_ids
+        ):
+            return False
+        fixture_ids.add(fixture_id)
+        if fixture.get("phase") not in {"P0", "P1", "P2", "P3", "P4"}:
+            return False
+        for key in (
+            "capability",
+            "evidence_level",
+            "host",
+            "command",
+            "acceptance_boundary",
+        ):
+            if not isinstance(fixture.get(key), str) or not fixture[key].strip():
+                return False
+        status = fixture.get("status")
+        if status not in _ENVIRONMENT_FIXTURE_STATUSES:
+            return False
+        if not isinstance(fixture.get("host_supported"), bool) or not isinstance(
+            fixture.get("live_verified"), bool
+        ):
+            return False
+        if (status == "unsupported_host") is fixture["host_supported"]:
+            return False
+        if fixture["live_verified"] is not (status == "live_verified"):
+            return False
+        expected_artifacts = fixture.get("expected_artifacts")
+        if (
+            not isinstance(expected_artifacts, list)
+            or not expected_artifacts
+            or any(not isinstance(item, str) or not item for item in expected_artifacts)
+        ):
+            return False
+        workflow_states = fixture.get("workflow_states")
+        if not isinstance(workflow_states, dict) or any(
+            not isinstance(name, str)
+            or not name
+            or state not in {*_ENVIRONMENT_WORKFLOW_STATUSES, "missing"}
+            for name, state in workflow_states.items()
+        ):
+            return False
+        gate_env = fixture.get("gate_env", [])
+        configured_gates = fixture.get("configured_gates")
+        missing_gates = fixture.get("missing_gates")
+        if any(
+            not isinstance(items, list)
+            or any(not isinstance(item, str) or not item for item in items)
+            for items in (gate_env, configured_gates, missing_gates)
+        ):
+            return False
+        if set(configured_gates) & set(missing_gates):
+            return False
+        if set(configured_gates) | set(missing_gates) != set(gate_env):
+            return False
+        status_counts[status] += 1
+
+    readiness_statuses = _ENVIRONMENT_FIXTURE_STATUSES - {"live_verified"}
+    readiness_counts: dict[str, int] = {}
+    for status in readiness_statuses:
+        key = f"acceptance_fixture_{status}"
+        count = summary.get(key)
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            return False
+        readiness_counts[status] = count
+
+    total = summary.get("acceptance_fixture_total")
+    live_count = summary.get("acceptance_fixture_live_verified", 0)
+    if (
+        isinstance(total, bool)
+        or not isinstance(total, int)
+        or total != len(fixtures)
+        or isinstance(live_count, bool)
+        or not isinstance(live_count, int)
+        or live_count != status_counts["live_verified"]
+        or sum(readiness_counts.values()) != total
+    ):
+        return False
+
+    # A merged report replaces a verified fixture's readiness status with
+    # ``live_verified`` while retaining the original readiness summary.
+    return all(
+        status_counts[status] <= readiness_counts[status]
+        for status in readiness_statuses
+    ) and sum(
+        readiness_counts[status] - status_counts[status]
+        for status in readiness_statuses
+    ) == live_count
+
 
 def _session_directories(workspace: Path) -> tuple[Path, ...]:
     """Return top-level and local-runner session directories for a workspace."""
@@ -461,15 +1125,18 @@ def _audit_text(value: Any) -> str | None:
 def _audit_count(value: Any) -> int:
     try:
         return max(0, int(value or 0))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
 
 
 def _number(value: Any) -> float:
-    try:
-        return float(value or 0)
-    except (TypeError, ValueError):
+    if isinstance(value, bool):
         return 0.0
+    try:
+        number = float(value or 0)
+    except (TypeError, ValueError, OverflowError):
+        return 0.0
+    return number if math.isfinite(number) else 0.0
 
 
 def _recommend_dynamic_profile(data: Any) -> dict[str, Any]:
@@ -531,6 +1198,625 @@ def _recommend_gui_strategy(data: Any) -> dict[str, Any]:
     return {key: best[key] for key in keys if key in best}
 
 
+def _knowledge_session_records(
+    value: Any,
+    diagnostics: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Normalize KnowledgeBase session history without treating metadata as sessions."""
+
+    if value is None:
+        return []
+    if isinstance(value, dict):
+        nested = value.get("sessions")
+        if not isinstance(nested, list):
+            nested = value.get("records")
+        if isinstance(nested, list):
+            value = nested
+        elif any(key in value for key in ("session_id", "target", "timestamp")):
+            value = [value]
+        else:
+            diagnostics["invalid_records"] += 1
+            return []
+    if not isinstance(value, list):
+        diagnostics["invalid_records"] += 1
+        return []
+
+    records: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            diagnostics["invalid_records"] += 1
+            continue
+        record = dict(item)
+        record.setdefault("source_file", "sessions.json")
+        records.append(record)
+    return records
+
+
+def _build_knowledge_recommendations(
+    stores: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """Summarize all persisted recommendation stores using stable ordering."""
+
+    labels = {
+        "dynamic": "Dynamic profile",
+        "gui": "GUI strategy",
+        "patch": "Patch strategy",
+        "engine": "Engine strategy",
+        "protocol": "Protocol format",
+        "source": "Source restoration",
+    }
+    results: dict[str, dict[str, Any]] = {}
+    for namespace in labels:
+        store = stores.get(namespace)
+        container_name = "profiles" if namespace == "dynamic" else "strategies"
+        container = store.get(container_name) if isinstance(store, dict) else {}
+        if not isinstance(container, dict):
+            container = {}
+        if namespace == "dynamic":
+            recommendation = _recommend_dynamic_profile(store)
+        elif namespace == "gui":
+            recommendation = _recommend_gui_strategy(store)
+        else:
+            recommendation = _recommend_strategy_store(store, namespace=namespace)
+        results[namespace] = {
+            "namespace": namespace,
+            "label": labels[namespace],
+            "candidate_count": sum(isinstance(item, dict) for item in container.values()),
+            "total_runs": sum(
+                max(0, int(_number(item.get("runs"))))
+                for item in container.values()
+                if isinstance(item, dict)
+            ),
+            "recommendation": recommendation,
+        }
+    return results
+
+
+def _recommend_strategy_store(data: Any, *, namespace: str) -> dict[str, Any]:
+    strategies = data.get("strategies") if isinstance(data, dict) else {}
+    if not isinstance(strategies, dict):
+        strategies = {}
+    candidates: list[dict[str, Any]] = []
+    for raw_key, raw_record in strategies.items():
+        if not isinstance(raw_record, dict):
+            continue
+        key = str(raw_key)
+        record = dict(raw_record)
+        runs = max(0, int(_number(record.get("runs"))))
+        if namespace == "patch":
+            score = _patch_strategy_score(record, runs=runs)
+        else:
+            score = _generic_strategy_score(record, runs=runs)
+        candidate = {
+            "key": key,
+            "score": round(score, 4),
+            "runs": runs,
+            "success_rate": _number(record.get("success_rate")),
+        }
+        if namespace == "patch":
+            candidate["strategy"] = str(record.get("strategy") or key.split(":", 1)[-1])
+            candidate["target_format"] = str(
+                record.get("target_format") or key.split(":", 1)[0] or "unknown"
+            )
+        for metric_name, metric_value in record.items():
+            if metric_name.startswith("avg_") and isinstance(metric_value, (int, float)):
+                candidate[metric_name] = metric_value
+        candidates.append(candidate)
+
+    if not candidates:
+        defaults = {
+            "patch": {"strategy": "inline_patch"},
+            "engine": {"key": "unknown:static_engine_fingerprint"},
+            "protocol": {"key": "protocol:protocol_strings_dynamic_fusion"},
+            "source": {"key": "source:source_summary"},
+        }
+        return {
+            **defaults.get(namespace, {"key": None}),
+            "score": 0.0,
+            "reason": f"no {namespace} strategy history",
+        }
+    candidates.sort(
+        key=lambda item: (
+            -_number(item.get("score")),
+            -_number(item.get("runs")),
+            str(item.get("key") or ""),
+        )
+    )
+    return candidates[0]
+
+
+def _generic_strategy_score(record: dict[str, Any], *, runs: int) -> float:
+    score = _number(record.get("success_rate")) * 100.0
+    score += min(float(runs), 10.0) * 1.5
+    for key, value in record.items():
+        if not key.startswith("avg_") or isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        metric_name = key[4:].lower()
+        sign = -1.0 if any(
+            token in metric_name
+            for token in ("risk", "overhead", "cost", "latency", "warning", "error", "failure", "hook")
+        ) else 1.0
+        if any(token in metric_name for token in ("similarity", "match_rate", "confidence", "coverage", "score")):
+            score += sign * float(value) * 20.0
+        elif any(token in metric_name for token in ("events", "controls", "widgets", "text", "nodes", "flows", "files", "functions")):
+            score += sign * min(float(value), 100.0) / 5.0
+        else:
+            score += sign * min(float(value), 50.0) / 10.0
+    return score
+
+
+def _patch_strategy_score(record: dict[str, Any], *, runs: int) -> float:
+    risk_counts = record.get("risk_counts") if isinstance(record.get("risk_counts"), dict) else {}
+    risk_weights = {"critical": 4.0, "high": 2.0, "medium": 0.5, "warning": 0.25, "low": 0.1}
+    risk_penalty = sum(
+        risk_weights.get(str(name).lower(), 0.25) * max(0.0, _number(count))
+        for name, count in risk_counts.items()
+    ) / max(1, runs)
+    return (
+        _number(record.get("success_rate")) * 100.0
+        + _number(record.get("verify_rate")) * 20.0
+        + _number(record.get("apply_rate")) * 30.0
+        + _number(record.get("rollback_rate")) * 15.0
+        + min(float(runs), 10.0) * 1.5
+        - min(60.0, risk_penalty * 10.0)
+        - min(10.0, _number(record.get("avg_operation_count")) * 0.1)
+    )
+
+
+def _build_session_analytics(
+    sessions: Iterable[dict[str, Any]],
+    knowledge_sessions: Iterable[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build de-duplicated history, adjacent-session comparison, and trend data."""
+
+    merged: dict[str, dict[str, Any]] = {}
+    for source_name, records in (("session", sessions), ("knowledge", knowledge_sessions)):
+        for index, raw_record in enumerate(records):
+            if not isinstance(raw_record, dict):
+                continue
+            record = dict(raw_record)
+            identity = _session_identity(record, fallback=f"{source_name}:{index}")
+            current = merged.setdefault(identity, {"_sources": []})
+            current["_sources"].append(source_name)
+            for key, value in record.items():
+                if value not in (None, "", [], {}):
+                    current[key] = value
+            current["session_key"] = identity
+
+    records = list(merged.values())
+    records.sort(
+        key=lambda item: (_record_timestamp(item), str(item.get("session_key") or "")),
+        reverse=True,
+    )
+    for record in records:
+        record["_sources"] = sorted(set(record.get("_sources") or []))
+
+    points = [_session_trend_point(record) for record in reversed(records[:100])]
+    status_counts: dict[str, int] = {}
+    for record in records:
+        status = str(record.get("status") or "unknown").lower()
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+    compare = _compare_sessions(records[0], records[1]) if len(records) >= 2 else {
+        "available": False,
+        "reason": "at least two distinct sessions are required",
+        "latest": _session_compare_side(records[0]) if records else None,
+        "previous": None,
+        "deltas": {},
+        "recommendation_changes": [],
+    }
+    completed = sum(
+        count
+        for status, count in status_counts.items()
+        if status in {"ok", "completed", "success", "succeeded", "passed"}
+    )
+    return {
+        "record_count": len(records),
+        "records": records[:50],
+        "compare": compare,
+        "trend": {
+            "point_count": len(points),
+            "status_counts": status_counts,
+            "completion_rate": round(completed / len(records), 4) if records else 0.0,
+            "points": points,
+        },
+    }
+
+
+def _session_identity(record: dict[str, Any], *, fallback: str) -> str:
+    session_id = record.get("session_id") or record.get("id")
+    if session_id not in (None, ""):
+        return f"id:{session_id}"
+    target = record.get("target") or record.get("sample_id") or record.get("path")
+    timestamp = _record_timestamp(record)
+    if target or timestamp:
+        return f"record:{target or ''}:{timestamp}"
+    return fallback
+
+
+_SESSION_METRIC_PATHS = {
+    "findings": ("finding_count",),
+    "artifacts": ("artifact_count",),
+    "evidence_files": ("evidence_integrity", "covered_file_count"),
+    "semantic_modules": ("semantic_ir", "module_count"),
+    "semantic_entities": ("semantic_ir", "entity_count"),
+    "behavior_nodes": ("behavior_graph", "node_count"),
+    "behavior_edges": ("behavior_graph", "edge_count"),
+    "verification_score": ("reconstruction_verification", "score"),
+}
+
+
+def _session_metrics(record: dict[str, Any]) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    for name, path in _SESSION_METRIC_PATHS.items():
+        value: Any = record
+        for key in path:
+            value = value.get(key) if isinstance(value, dict) else None
+        if value is None or isinstance(value, bool):
+            continue
+        try:
+            metrics[name] = round(float(value), 4)
+        except (TypeError, ValueError):
+            continue
+    return metrics
+
+
+def _session_recommendations(record: dict[str, Any]) -> dict[str, str]:
+    fields = {
+        "dynamic": ("recommended_dynamic_profile", "profile"),
+        "gui": ("recommended_gui_strategy", "strategy"),
+        "patch": ("recommended_patch_strategy", "strategy"),
+        "engine": ("recommended_engine_strategy", "key"),
+        "protocol": ("recommended_protocol_strategy", "key"),
+        "source": ("recommended_source_strategy", "key"),
+    }
+    recommendations: dict[str, str] = {}
+    for namespace, (field, preferred_key) in fields.items():
+        value = record.get(field)
+        if isinstance(value, dict):
+            selected = value.get(preferred_key) or value.get("key") or value.get("strategy")
+        else:
+            selected = value
+        if selected not in (None, ""):
+            recommendations[namespace] = str(selected)
+    return recommendations
+
+
+def _session_compare_side(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "session_id": record.get("session_id") or record.get("id") or record.get("session_key"),
+        "target": record.get("target") or record.get("sample_id") or record.get("path"),
+        "status": record.get("status") or "unknown",
+        "timestamp": _record_timestamp(record),
+        "metrics": _session_metrics(record),
+        "recommendations": _session_recommendations(record),
+    }
+
+
+def _compare_sessions(latest: dict[str, Any], previous: dict[str, Any]) -> dict[str, Any]:
+    latest_side = _session_compare_side(latest)
+    previous_side = _session_compare_side(previous)
+    latest_metrics = latest_side["metrics"]
+    previous_metrics = previous_side["metrics"]
+    deltas = {
+        key: round(latest_metrics.get(key, 0.0) - previous_metrics.get(key, 0.0), 4)
+        for key in sorted(set(latest_metrics) | set(previous_metrics))
+    }
+    recommendation_changes = []
+    latest_recommendations = latest_side["recommendations"]
+    previous_recommendations = previous_side["recommendations"]
+    for namespace in sorted(set(latest_recommendations) | set(previous_recommendations)):
+        before = previous_recommendations.get(namespace)
+        after = latest_recommendations.get(namespace)
+        if before != after:
+            recommendation_changes.append(
+                {"namespace": namespace, "previous": before, "latest": after}
+            )
+    return {
+        "available": True,
+        "latest": latest_side,
+        "previous": previous_side,
+        "deltas": deltas,
+        "recommendation_changes": recommendation_changes,
+    }
+
+
+def _session_trend_point(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "session_id": record.get("session_id") or record.get("id") or record.get("session_key"),
+        "timestamp": _record_timestamp(record),
+        "status": record.get("status") or "unknown",
+        "metrics": _session_metrics(record),
+        "recommendations": _session_recommendations(record),
+    }
+
+
+def _workspace_artifact_references(
+    *,
+    reports: Iterable[dict[str, Any]],
+    sessions: Iterable[dict[str, Any]],
+    binary_patches: dict[str, Any],
+    evidence_manifests: dict[str, Any],
+    source_reconstruction: dict[str, Any],
+    environment_validation: dict[str, Any],
+    acceptance_history: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Collect workspace artifact candidates that are not embedded in report artifacts."""
+
+    references: list[dict[str, Any]] = []
+
+    def add(path: Any, *, label: str, domain: str, kind: str, source: Any = None) -> None:
+        if isinstance(path, str) and path.strip():
+            references.append(
+                {
+                    "path": path,
+                    "label": label,
+                    "domain": domain,
+                    "kind": kind,
+                    "source": str(source) if source not in (None, "") else None,
+                }
+            )
+
+    for entry in reports:
+        source = entry.get("source_path")
+        add(source, label="Analysis report", domain="report", kind="report", source=source)
+    for session in sessions:
+        source = session.get("source_file") or session.get("session_id")
+        for key in ("out_dir", "report_path", "manifest_path", "artifact_path", "project_dir"):
+            add(
+                session.get(key),
+                label=key.replace("_", " ").title(),
+                domain="session",
+                kind=key,
+                source=source,
+            )
+        evidence = session.get("evidence_integrity")
+        if isinstance(evidence, dict):
+            add(
+                evidence.get("manifest_path"),
+                label="Session evidence manifest",
+                domain="session",
+                kind="evidence_manifest",
+                source=source,
+            )
+    for patch in binary_patches.get("recent", []):
+        if isinstance(patch, dict):
+            add(
+                patch.get("artifact_path"),
+                label=f"{str(patch.get('audit_type') or 'patch').title()} artifacts",
+                domain="patch",
+                kind="patch_audit",
+                source=patch.get("source_path"),
+            )
+    for manifest in evidence_manifests.get("recent", []):
+        if isinstance(manifest, dict):
+            add(
+                manifest.get("manifest_path"),
+                label="Evidence manifest",
+                domain="evidence",
+                kind="evidence_manifest",
+            )
+    add(
+        environment_validation.get("source_path"),
+        label="Environment validation report",
+        domain="environment",
+        kind="environment_validation",
+    )
+    for record in acceptance_history.get("records", []):
+        if not isinstance(record, dict):
+            continue
+        source = record.get("source_path")
+        add(
+            source,
+            label=f"Acceptance record: {record.get('fixture_id') or 'fixture'}",
+            domain="acceptance",
+            kind="acceptance_record",
+            source=source,
+        )
+        add(
+            record.get("record_path"),
+            label=f"Acceptance record path: {record.get('fixture_id') or 'fixture'}",
+            domain="acceptance",
+            kind="acceptance_record",
+            source=source,
+        )
+        for artifact in record.get("observed_artifacts", []):
+            if isinstance(artifact, dict):
+                add(
+                    artifact.get("path"),
+                    label=str(artifact.get("label") or "Observed acceptance artifact"),
+                    domain="acceptance",
+                    kind=str(artifact.get("kind") or "acceptance_artifact"),
+                    source=source,
+                )
+    for project in source_reconstruction.get("projects", []):
+        if not isinstance(project, dict):
+            continue
+        project_path = project.get("relative_path") or project.get("project_dir") or project.get("path")
+        add(
+            project_path,
+            label=str(project.get("name") or "Reconstructed source project"),
+            domain="source",
+            kind="source_project",
+        )
+        project_artifacts = project.get("artifacts")
+        if (
+            isinstance(project_path, str)
+            and isinstance(project_artifacts, list)
+            and "analysis/equivalence_assessment.json" in project_artifacts
+        ):
+            project_root = project_path.rstrip("/\\")
+            add(
+                f"{project_root}/analysis/equivalence_assessment.json",
+                label="Observed-evidence equivalence assessment",
+                domain="source",
+                kind="source_equivalence_assessment",
+                source=project_path,
+            )
+    return references
+
+
+def _attach_acceptance_artifact_links(
+    acceptance_history: dict[str, Any], artifact_navigation: dict[str, Any]
+) -> None:
+    items = artifact_navigation.get("items", [])
+    for record in acceptance_history.get("records", []):
+        if not isinstance(record, dict):
+            continue
+        source = str(record.get("source_path") or "")
+        links: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for item in items if isinstance(items, list) else []:
+            if not isinstance(item, dict) or "acceptance" not in item.get("domains", []):
+                continue
+            if source not in item.get("sources", []) and item.get("path") != source:
+                continue
+            path = str(item.get("path") or "")
+            if not path or path in seen:
+                continue
+            seen.add(path)
+            links.append(
+                {
+                    "path": path,
+                    "label": item.get("label") or path,
+                    "kind": item.get("kind"),
+                    "exists": item.get("exists") is True,
+                    "href": item.get("href"),
+                }
+            )
+        record["artifact_links"] = links
+
+
+def _build_artifact_navigation(
+    references: Iterable[dict[str, Any]],
+    *,
+    workspace: Path,
+    destination: Path,
+) -> dict[str, Any]:
+    """Resolve artifact links while preventing references from escaping the workspace."""
+
+    root = workspace.resolve()
+    dashboard_root = destination.resolve()
+    resolved_items: dict[str, dict[str, Any]] = {}
+    blocked_count = 0
+    for reference in references:
+        raw_path = reference.get("path") if isinstance(reference, dict) else None
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            continue
+        resolved = _resolve_workspace_artifact(
+            raw_path,
+            source=reference.get("source"),
+            workspace=root,
+        )
+        if resolved is None:
+            blocked_count += 1
+            continue
+        path, exists = resolved
+        relative = path.relative_to(root).as_posix()
+        item = resolved_items.get(relative)
+        domain = str(reference.get("domain") or "other")
+        kind = str(reference.get("kind") or "artifact")
+        if item is None:
+            item = {
+                "path": relative,
+                "label": str(reference.get("label") or path.name or relative),
+                "domain": domain,
+                "kind": kind,
+                "domains": [],
+                "kinds": [],
+                "sources": [],
+                "exists": exists,
+                "is_directory": exists and path.is_dir(),
+                "size_bytes": path.stat().st_size if exists and path.is_file() else None,
+                "modified_at": _path_modified_at(path) if exists else None,
+            }
+            if exists:
+                href = os.path.relpath(path, dashboard_root).replace(os.sep, "/")
+                item["href"] = quote(href, safe="/.:@-_")
+            resolved_items[relative] = item
+        item["domains"].append(domain)
+        item["kinds"].append(kind)
+        source = reference.get("source")
+        if source not in (None, ""):
+            item["sources"].append(str(source))
+
+    items = list(resolved_items.values())
+    for item in items:
+        item["domains"] = sorted(set(item["domains"]))
+        item["kinds"] = sorted(set(item["kinds"]))
+        item["sources"] = sorted(set(item["sources"]))[:20]
+    items.sort(key=lambda item: (not item["exists"], item["domain"], item["path"]))
+    groups = []
+    for domain in sorted({item["domain"] for item in items}):
+        domain_items = [item for item in items if item["domain"] == domain]
+        groups.append(
+            {
+                "domain": domain,
+                "count": len(domain_items),
+                "available_count": sum(item["exists"] for item in domain_items),
+                "items": domain_items,
+            }
+        )
+    return {
+        "count": len(items),
+        "available_count": sum(item["exists"] for item in items),
+        "missing_count": sum(not item["exists"] for item in items),
+        "blocked_count": blocked_count,
+        "items": items[:500],
+        "groups": groups,
+    }
+
+
+def _resolve_workspace_artifact(
+    raw_path: str,
+    *,
+    source: Any,
+    workspace: Path,
+) -> tuple[Path, bool] | None:
+    value = raw_path.strip()
+    if not value or "\x00" in value or re.match(r"^[a-z][a-z0-9+.-]*://", value, re.I):
+        return None
+    path = Path(value).expanduser()
+    candidates: list[Path] = []
+    if path.is_absolute():
+        candidates.append(path)
+    else:
+        candidates.append(workspace / path)
+        if isinstance(source, str) and source.strip():
+            source_path = Path(source.strip())
+            if not source_path.is_absolute():
+                source_path = workspace / source_path
+            source_base = source_path if source_path.is_dir() else source_path.parent
+            candidates.append(source_base / path)
+
+    safe_candidates: list[Path] = []
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve(strict=False)
+            resolved.relative_to(workspace)
+        except (OSError, RuntimeError, ValueError):
+            continue
+        if resolved not in safe_candidates:
+            safe_candidates.append(resolved)
+        if resolved.exists():
+            return resolved, True
+    if safe_candidates:
+        return safe_candidates[0], False
+    return None
+
+
+def _path_modified_at(path: Path) -> str | None:
+    try:
+        return (
+            datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+    except OSError:
+        return None
+
+
 def _write_json(path: Path, data: dict[str, Any]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         json.dump(data, handle, ensure_ascii=False, indent=2, sort_keys=True)
@@ -567,7 +1853,7 @@ def _html_document(data: dict[str, Any]) -> str:
     table {{ width:100%; border-collapse:collapse; }} th,td {{ padding:10px 7px; border-top:1px solid #1d302e; text-align:left; vertical-align:top; }} th {{ color:var(--muted); font-size:11px; text-transform:uppercase; }}
     .badge {{ display:inline-block; padding:2px 7px; border:1px solid var(--line); border-radius:2px; color:var(--amber); }} .recommendation {{ border-left:3px solid var(--accent); padding-left:12px; margin:14px 0; }}
     .empty {{ color:var(--muted); padding:20px 0; text-align:center; }} .meta {{ color:var(--muted); font-size:12px; }} ul {{ margin:0; padding-left:18px; }}
-    .source-panel {{ margin-top:16px; }} .source-summary {{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; color:var(--muted); }} .source-project {{ border-top:1px solid #1d302e; padding:14px 0; }} .source-project:first-child {{ border-top:0; padding-top:0; }} .source-head {{ display:flex; justify-content:space-between; gap:12px; align-items:baseline; }} .source-head strong {{ color:var(--accent); }} .source-metrics {{ display:flex; flex-wrap:wrap; gap:10px; margin:8px 0; color:var(--muted); font-size:12px; }} details {{ margin-top:9px; }} summary {{ cursor:pointer; color:#c9d8d4; }} .source-files {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px; margin-top:10px; }} .source-file {{ border:1px solid #1d302e; background:#0a1413; padding:9px; border-radius:3px; }} pre {{ white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto; margin:8px 0 0; padding:8px; border-left:2px solid #29403d; color:#c9d8d4; }}
+    .source-panel {{ margin-top:16px; }} .source-summary {{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; color:var(--muted); }} .source-project {{ border-top:1px solid #1d302e; padding:14px 0; }} .source-project:first-child {{ border-top:0; padding-top:0; }} .source-head {{ display:flex; justify-content:space-between; gap:12px; align-items:baseline; }} .source-head strong {{ color:var(--accent); }} .source-metrics {{ display:flex; flex-wrap:wrap; gap:10px; margin:8px 0; color:var(--muted); font-size:12px; }} .table-scroll {{ overflow-x:auto; }} .section-label {{ margin:14px 0 5px; color:#c9d8d4; font-size:12px; }} .evidence-boundary {{ border-left:2px solid var(--amber); padding:7px 10px; margin:9px 0; color:var(--muted); font-size:12px; }} details {{ margin-top:9px; }} summary {{ cursor:pointer; color:#c9d8d4; }} .source-files,.analysis-grid,.artifact-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px; margin-top:10px; }} .source-file,.analysis-card,.artifact-group,.audit-record {{ border:1px solid #1d302e; background:#0a1413; padding:11px; border-radius:3px; }} .analysis-card h3,.artifact-group h3 {{ margin:0 0 8px; font-size:13px; color:var(--accent); }} .analysis-card.is-low {{ border-color:var(--amber); }} .risk-list {{ display:grid; gap:8px; }} .risk-item {{ border-left:3px solid var(--amber); padding:8px 10px; background:#171813; }} .risk-item.high,.risk-item.critical {{ border-left-color:var(--red); background:#1b1111; }} .audit-grid {{ display:grid; gap:8px; }} .audit-record pre {{ max-height:130px; }} .delta-positive {{ color:var(--accent); }} .delta-negative {{ color:var(--red); }} a {{ color:#78b9ff; overflow-wrap:anywhere; }} .artifact-missing {{ color:var(--muted); }} pre {{ white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto; margin:8px 0 0; padding:8px; border-left:2px solid #29403d; color:#c9d8d4; }}
     @media (max-width:780px) {{ .kpis {{ grid-template-columns:repeat(2,1fr); }} .grid {{ grid-template-columns:1fr; }} .toolbar {{ flex-direction:column; }} table {{ font-size:12px; }} }}
   </style>
 </head>
@@ -580,6 +1866,15 @@ def _html_document(data: dict[str, Any]) -> str:
       <aside><div class="panel"><h2>Recommended Profiles</h2><div id="recommendations"></div></div><div class="panel"><h2>Recent Sessions</h2><div id="sessions"></div></div><div class="panel"><h2>Ingestion Diagnostics</h2><div id="diagnostics"></div></div></aside>
     </section>
     <section class="panel"><h2>Platform Core</h2><div id="platform-core"></div></section>
+    <section class="panel"><h2>Environment Validation</h2><div id="environment-validation"></div></section>
+    <section class="panel"><h2>Analysis Domains</h2><div id="analysis-views"></div></section>
+    <section class="panel"><h2>Capability Audit</h2><div id="capability-audit"></div></section>
+    <section class="panel"><h2>Risk & Confidence</h2><div id="risk-highlights"></div></section>
+    <section class="grid">
+      <div class="panel"><h2>KnowledgeBase Recommendations</h2><div id="knowledge-recommendations"></div></div>
+      <div class="panel"><h2>Session Compare & Trend</h2><div id="session-compare"></div></div>
+    </section>
+    <section class="panel"><h2>Artifact Navigation</h2><div id="artifact-navigation"></div></section>
     <section class="panel"><h2>Binary Patch Audit</h2><div id="binary-patches"></div></section>
     <section class="panel"><h2>Evidence Integrity</h2><div id="evidence-manifests"></div></section>
     <section class="panel source-panel"><h2>Source Reconstruction</h2><div id="source-reconstruction"></div></section>
@@ -590,12 +1885,24 @@ def _html_document(data: dict[str, Any]) -> str:
       const data = JSON.parse(document.getElementById('dashboard-data').textContent);
       const el = id => document.getElementById(id);
       const text = value => value == null || value === '' ? '---' : String(value);
+      const compact = value => value && typeof value === 'object' ? JSON.stringify(value) : text(value);
+      const showEmpty = (box, message) => {{ const empty=document.createElement('div'); empty.className='empty'; empty.textContent=message; box.append(empty); }};
       const summary = data.summary;
       const reconstruction = data.source_reconstruction || {{summary: {{}}, projects: []}};
       const reconstructionSummary = reconstruction.summary || {{}};
       const patches = data.binary_patches || {{count: 0, dry_run_count: 0, applied_count: 0, recent: []}};
       const evidence = data.evidence_manifests || {{count: 0, valid_count: 0, failed_count: 0, recent: []}};
       const platformCore = data.platform_core || {{status: "unavailable", cards: [], capabilities: {{}}, artifacts: {{}}}};
+      const analysisViews = data.analysis_views || {{}};
+      const capabilityAudit = data.capability_audit || {{record_count: 0, records: [], traces: [], summary: {{}}}};
+      const riskHighlights = data.risk_highlights || {{count: 0, items: []}};
+      const knowledgeRecommendations = data.knowledge_recommendations || {{}};
+      const sessionCompare = data.session_compare || {{available: false}};
+      const sessionTrend = data.session_trend || {{point_count: 0, points: []}};
+      const artifactNavigation = data.artifact_navigation || {{count: 0, groups: []}};
+      const environmentValidation = data.environment_validation || {{available: false, checks: {{}}, workflows: {{}}, acceptance_fixtures: [], summary: {{}}}};
+      const acceptanceHistory = data.acceptance_history || {{available: false, summary: {{}}, records: []}};
+      const statusLabel = value => ({{dependency_gated:'dependency-gated', unsupported_host:'unsupported-host', repository_ready:'repository-ready', ready_to_run:'ready-to-run'}})[value] || text(value);
       const kpis = [['Experiments', summary.experiment_total], ['Completed', summary.completed_total], ['Sessions', summary.session_total], ['Verified evidence', evidence.valid_count || 0], ['Applied patches', patches.applied_count || 0], ['Source projects', reconstructionSummary.project_total || 0], ['Data warnings', data.diagnostics.malformed_json], ['Platform core', platformCore.status || 'unavailable']];
       kpis.forEach(([label,value]) => {{ const card=document.createElement('div'); card.className='kpi'; const small=document.createElement('span'); small.textContent=label; const bold=document.createElement('b'); bold.textContent=value; card.append(small,bold); el('kpis').append(card); }});
       const statuses = Object.keys(summary.status_counts).sort(); statuses.forEach(status => {{ const option=document.createElement('option'); option.value=status; option.textContent=status; el('status').append(option); }});
@@ -608,7 +1915,7 @@ def _html_document(data: dict[str, Any]) -> str:
         rows.forEach(item => {{ const tr=document.createElement('tr'); const values=[item.name || item.id || item.experiment_id || item.source_file, item.target || item.sample_id || item.path, item.status || 'unknown', item.updated_at || item.timestamp || item.created_at]; values.forEach((value,index) => {{ const td=document.createElement('td'); if(index===2) {{ const badge=document.createElement('span'); badge.className='badge'; badge.textContent=text(value); td.append(badge); }} else td.textContent=text(value); tr.append(td); }}); body.append(tr); }}); table.append(thead,body); box.append(table);
       }}
       function recommendation(title, value) {{ const box=document.createElement('div'); box.className='recommendation'; const name=document.createElement('strong'); name.textContent=title; const detail=document.createElement('div'); detail.className='meta'; detail.textContent=Object.entries(value).filter(([key]) => key !== 'reason').map(([key,val]) => key + ': ' + text(val)).join(' | ') || text(value.reason); box.append(name,detail); return box; }}
-      el('recommendations').append(recommendation('Dynamic profile', data.recommendations.dynamic_profile), recommendation('GUI strategy', data.recommendations.gui_strategy));
+      [['Dynamic profile','dynamic_profile'],['GUI strategy','gui_strategy'],['Patch strategy','patch_strategy'],['Engine strategy','engine_strategy'],['Protocol format','protocol_format'],['Source restoration','source_restoration']].forEach(([label,key]) => el('recommendations').append(recommendation(label, data.recommendations[key] || {{}})));
       const sessions=el('sessions'); if (!data.sessions.length) {{ sessions.innerHTML='<div class="empty">No sessions recorded.</div>'; }} else {{ const list=document.createElement('ul'); data.sessions.forEach(item => {{ const line=document.createElement('li'); line.textContent=[item.session_id || item.id || item.target || item.source_file, item.status || 'unknown', item.updated_at || item.timestamp || item.created_at].filter(Boolean).join(' | '); list.append(line); }}); sessions.append(list); }}
       const diagnostics=el('diagnostics'); diagnostics.textContent='Loaded ' + data.diagnostics.files_loaded + '/' + data.diagnostics.files_scanned + ' JSON files; malformed: ' + data.diagnostics.malformed_json + '; invalid records: ' + data.diagnostics.invalid_records + '.';
 
@@ -647,6 +1954,127 @@ def _html_document(data: dict[str, Any]) -> str:
           platformBox.append(details);
         }}
       }}
+
+      const environmentBox=el('environment-validation');
+      if (!environmentValidation.available) {{
+        showEmpty(environmentBox, text(environmentValidation.reason || 'No valid environment-validation.json report found.'));
+      }} else {{
+        const environmentSummary=environmentValidation.summary || {{}};
+        const host=environmentValidation.host || {{}};
+        const environmentMeta=document.createElement('div'); environmentMeta.className='meta'; environmentMeta.textContent='Report: ' + text(environmentValidation.source_path) + ' | generated: ' + text(environmentValidation.generated_at) + ' | host: ' + text(host.system) + ' ' + text(host.machine) + ' | probes executed: ' + (environmentValidation.execute_probes ? 'yes' : 'no'); environmentBox.append(environmentMeta);
+        const statusSummary=document.createElement('div'); statusSummary.className='source-summary'; [['Verified',environmentSummary.verified],['Dependency-gated',environmentSummary.dependency_gated],['Partial',environmentSummary.partial],['Failed',environmentSummary.failed],['Unavailable',environmentSummary.unavailable],['Unsupported host',environmentSummary.unsupported_host]].forEach(([label,value]) => {{ const item=document.createElement('span'); item.textContent=label + ': ' + text(value || 0); statusSummary.append(item); }}); environmentBox.append(statusSummary);
+
+        const checks=Object.entries(environmentValidation.checks || {{}});
+        const checksLabel=document.createElement('div'); checksLabel.className='section-label'; checksLabel.textContent='Dependency checks'; environmentBox.append(checksLabel);
+        if (!checks.length) {{ showEmpty(environmentBox, 'No dependency checks recorded.'); }} else {{
+          const wrap=document.createElement('div'); wrap.className='table-scroll';
+          const table=document.createElement('table'), head=document.createElement('tr'); ['Dependency','Kind','Discovery','Probe verification','Location'].forEach(label => {{ const th=document.createElement('th'); th.textContent=label; head.append(th); }}); const thead=document.createElement('thead'); thead.append(head); const body=document.createElement('tbody');
+          checks.forEach(([name,item]) => {{ const tr=document.createElement('tr'); const discovery=item.discovered === true ? 'discovered' : 'unavailable'; const probeStatus=item.status === 'verified' ? 'verified' : (item.status === 'failed' ? 'failed' : 'not-executed'); const values=[name,item.kind,discovery,probeStatus,item.path || item.module || item.value || item.env]; values.forEach((value,index) => {{ const td=document.createElement('td'); if(index === 2 || index === 3) {{ const badge=document.createElement('span'); badge.className='badge'; badge.textContent=statusLabel(value); td.append(badge); }} else td.textContent=text(value); tr.append(td); }}); body.append(tr); }}); table.append(thead,body); wrap.append(table); environmentBox.append(wrap);
+        }}
+
+        const workflows=Object.entries(environmentValidation.workflows || {{}});
+        const workflowsLabel=document.createElement('div'); workflowsLabel.className='section-label'; workflowsLabel.textContent='Workflow readiness'; environmentBox.append(workflowsLabel);
+        if (!workflows.length) {{ showEmpty(environmentBox, 'No workflow readiness records found.'); }} else {{
+          const wrap=document.createElement('div'); wrap.className='table-scroll';
+          const table=document.createElement('table'), head=document.createElement('tr'); ['Workflow','Status','Ready','Dependencies','Boundary'].forEach(label => {{ const th=document.createElement('th'); th.textContent=label; head.append(th); }}); const thead=document.createElement('thead'); thead.append(head); const body=document.createElement('tbody');
+          workflows.forEach(([name,item]) => {{ const tr=document.createElement('tr'); const required=Array.isArray(item.required) ? item.required.join(', ') : ''; const anyOf=Array.isArray(item.any_of) && item.any_of.length ? 'any: ' + item.any_of.join(', ') : ''; const dependencies=[required,anyOf].filter(Boolean).join(' | '); const values=[name,item.status,item.ready ? 'yes' : 'no',dependencies,item.note]; values.forEach((value,index) => {{ const td=document.createElement('td'); if(index === 1) {{ const badge=document.createElement('span'); badge.className='badge'; badge.textContent=statusLabel(value); td.append(badge); }} else td.textContent=text(value); tr.append(td); }}); body.append(tr); }}); table.append(thead,body); wrap.append(table); environmentBox.append(wrap);
+        }}
+
+        const fixtures=Array.isArray(environmentValidation.acceptance_fixtures) ? environmentValidation.acceptance_fixtures : [];
+        const fixturesLabel=document.createElement('div'); fixturesLabel.className='section-label'; fixturesLabel.textContent='P0-P4 acceptance fixtures'; environmentBox.append(fixturesLabel);
+        const fixtureSummary=document.createElement('div'); fixtureSummary.className='source-summary'; [['Repository-ready',environmentSummary.acceptance_fixture_repository_ready],['Ready-to-run',environmentSummary.acceptance_fixture_ready_to_run],['Dependency-gated',environmentSummary.acceptance_fixture_dependency_gated],['Unsupported host',environmentSummary.acceptance_fixture_unsupported_host],['Live verified',fixtures.filter(item => item.live_verified === true).length]].forEach(([label,value]) => {{ const item=document.createElement('span'); item.textContent=label + ': ' + text(value || 0); fixtureSummary.append(item); }}); environmentBox.append(fixtureSummary);
+        if (!fixtures.length) {{ showEmpty(environmentBox, 'No P0-P4 acceptance fixtures recorded.'); }} else {{
+          const wrap=document.createElement('div'); wrap.className='table-scroll';
+          const table=document.createElement('table'), head=document.createElement('tr'); ['Phase','Capability / fixture','Status','Evidence level','Missing gates','Acceptance command'].forEach(label => {{ const th=document.createElement('th'); th.textContent=label; head.append(th); }}); const thead=document.createElement('thead'); thead.append(head); const body=document.createElement('tbody');
+          fixtures.forEach(item => {{ const tr=document.createElement('tr'); const missing=Array.isArray(item.missing_gates) ? item.missing_gates.join(', ') : ''; const identity=[item.capability,item.id].filter(Boolean).join(' / '); const status=item.live_verified === true ? 'live-verified' : statusLabel(item.status); const values=[item.phase,identity,status,item.evidence_level,missing,item.command]; values.forEach((value,index) => {{ const td=document.createElement('td'); if(index === 2) {{ const badge=document.createElement('span'); badge.className='badge'; badge.textContent=text(value); td.append(badge); }} else td.textContent=text(value); tr.append(td); }}); body.append(tr); }}); table.append(thead,body); wrap.append(table); environmentBox.append(wrap);
+        }}
+      }}
+
+      const acceptanceLabel=document.createElement('div'); acceptanceLabel.className='section-label'; acceptanceLabel.textContent='Acceptance history'; environmentBox.append(acceptanceLabel);
+      const acceptanceSummary=acceptanceHistory.summary || {{}};
+      const acceptanceStats=document.createElement('div'); acceptanceStats.className='source-summary'; [['Runs',acceptanceSummary.total],['Live verified',acceptanceSummary.live_verified],['Failed',acceptanceSummary.failed],['Dependency blocked',acceptanceSummary.dependency_blocked]].forEach(([label,value]) => {{ const item=document.createElement('span'); item.textContent=label + ': ' + text(value || 0); acceptanceStats.append(item); }}); environmentBox.append(acceptanceStats);
+      const acceptanceRecords=Array.isArray(acceptanceHistory.records) ? acceptanceHistory.records : [];
+      if (!acceptanceRecords.length) {{ showEmpty(environmentBox, 'No acceptance run records found under acceptance/records.'); }} else {{
+        const wrap=document.createElement('div'); wrap.className='table-scroll';
+        const table=document.createElement('table'), head=document.createElement('tr'); ['Phase','Fixture / capability','Outcome','Live proof','Started / finished','Artifacts'].forEach(label => {{ const th=document.createElement('th'); th.textContent=label; head.append(th); }}); const thead=document.createElement('thead'); thead.append(head); const body=document.createElement('tbody');
+        acceptanceRecords.forEach(item => {{
+          const tr=document.createElement('tr');
+          const phase=document.createElement('td'); phase.textContent=text(item.phase); tr.append(phase);
+          const identity=document.createElement('td'); identity.textContent=[item.fixture_id,item.capability].filter(Boolean).join(' / '); tr.append(identity);
+          const outcome=document.createElement('td'); const outcomeBadge=document.createElement('span'); outcomeBadge.className='badge'; outcomeBadge.textContent=statusLabel(item.outcome); outcome.append(outcomeBadge); tr.append(outcome);
+          const live=document.createElement('td'); const liveBadge=document.createElement('span'); liveBadge.className='badge'; liveBadge.textContent=item.live_verified === true ? 'live-verified' : 'not-live-verified'; live.append(liveBadge); tr.append(live);
+          const timing=document.createElement('td'); timing.textContent=text(item.started_at) + ' / ' + text(item.finished_at); tr.append(timing);
+          const artifactCell=document.createElement('td'); const links=Array.isArray(item.artifact_links) ? item.artifact_links : []; if (!links.length) {{ artifactCell.textContent='none'; }} else {{ const list=document.createElement('ul'); links.forEach(entry => {{ const line=document.createElement('li'); if(entry.exists && entry.href) {{ const link=document.createElement('a'); link.href=entry.href; link.textContent=text(entry.label || entry.path); link.title=text(entry.path); line.append(link); }} else {{ const missing=document.createElement('span'); missing.className='artifact-missing'; missing.textContent=text(entry.label || entry.path) + ' [missing]'; line.append(missing); }} list.append(line); }}); artifactCell.append(list); }} tr.append(artifactCell);
+          body.append(tr);
+        }});
+        table.append(thead,body); wrap.append(table); environmentBox.append(wrap);
+      }}
+
+      const analysisBox=el('analysis-views');
+      const domainViews=Object.values(analysisViews);
+      if (!domainViews.length) {{ showEmpty(analysisBox, 'No analysis-domain reports found.'); }} else {{
+        const grid=document.createElement('div'); grid.className='analysis-grid';
+        domainViews.forEach(view => {{
+          const card=document.createElement('article'); card.className='analysis-card' + (view.low_confidence ? ' is-low' : '');
+          const title=document.createElement('h3'); title.textContent=text(view.title || view.domain);
+          const state=document.createElement('span'); state.className='badge'; state.textContent=text(view.status || 'unavailable');
+          const head=document.createElement('div'); head.className='source-head'; head.append(title,state); card.append(head);
+          const meta=document.createElement('div'); meta.className='meta'; meta.textContent='confidence=' + text(view.confidence) + ' | reports=' + text(view.history_count || 0) + ' | artifacts=' + text(view.artifact_count || 0); card.append(meta);
+          const metrics=Array.isArray(view.metrics) ? view.metrics : [];
+          if (metrics.length) {{ const list=document.createElement('ul'); metrics.forEach(metric => {{ const line=document.createElement('li'); line.textContent=text(metric.label) + ': ' + compact(metric.value); list.append(line); }}); card.append(list); }}
+          if (view.strategy != null) {{ const strategy=document.createElement('div'); strategy.className='meta'; strategy.textContent='Strategy: ' + compact(view.strategy); card.append(strategy); }}
+          if (view.report_source) {{ const source=document.createElement('div'); source.className='meta'; source.textContent='Report: ' + text(view.report_source); card.append(source); }}
+          grid.append(card);
+        }});
+        analysisBox.append(grid);
+      }}
+
+      const capabilityBox=el('capability-audit');
+      const capabilityRows=Array.isArray(capabilityAudit.records) ? capabilityAudit.records : [];
+      const capabilitySummary=capabilityAudit.summary || {{}};
+      const capabilityMeta=document.createElement('div'); capabilityMeta.className='meta'; capabilityMeta.textContent='Records: ' + text(capabilityAudit.record_count || 0) + ' | traces: ' + text(capabilityAudit.trace_count || 0) + ' | rollback: ' + text(capabilitySummary.rollback_supported_count || 0) + ' | preconditions: ' + text(capabilitySummary.precondition_hash_count || 0) + ' | before/after snapshots: ' + text(capabilitySummary.before_snapshot_count || 0) + '/' + text(capabilitySummary.after_snapshot_count || 0) + ' | events: ' + text(capabilitySummary.event_count || 0); capabilityBox.append(capabilityMeta);
+      if (!capabilityRows.length) {{ showEmpty(capabilityBox, 'No capability audit records found in reports.'); }} else {{
+        const grid=document.createElement('div'); grid.className='audit-grid';
+        capabilityRows.forEach(item => {{
+          const card=document.createElement('article'); card.className='audit-record';
+          const head=document.createElement('div'); head.className='source-head'; const name=document.createElement('strong'); name.textContent=text(item.capability) + ':' + text(item.action); const state=document.createElement('span'); state.className='badge'; state.textContent=text(item.status); head.append(name,state); card.append(head);
+          const target=document.createElement('div'); target.className='meta'; target.textContent='session=' + text(item.session_id) + ' | provider=' + text(item.provider) + ' | target=' + compact(item.target_identity) + ' | report_section=' + text(item.report_section); card.append(target);
+          const integrity=document.createElement('div'); integrity.className='meta'; integrity.textContent='precondition=' + text(item.precondition_hash) + ' | rollback=' + text(Boolean(item.rollback_plan || item.rollback_supported)) + ' | manifest=' + text(Boolean(item.evidence_manifest_entries)); card.append(integrity);
+          const detailPayload={{before_snapshot:item.before_snapshot,after_snapshot:item.after_snapshot,rollback_plan:item.rollback_plan,provenance:item.provenance,events:item.events,dashboard_trace:item.dashboard_trace}};
+          if (Object.values(detailPayload).some(value => value != null)) {{ const details=document.createElement('details'); const caption=document.createElement('summary'); caption.textContent='Audit evidence and dashboard trace'; const pre=document.createElement('pre'); pre.textContent=JSON.stringify(detailPayload,null,2); details.append(caption,pre); card.append(details); }}
+          grid.append(card);
+        }});
+        capabilityBox.append(grid);
+      }}
+
+      const riskBox=el('risk-highlights');
+      const risks=Array.isArray(riskHighlights.items) ? riskHighlights.items : [];
+      if (!risks.length) {{ showEmpty(riskBox, 'No high-risk or low-confidence report results.'); }} else {{
+        const meta=document.createElement('div'); meta.className='meta'; meta.textContent='Risks: ' + text(riskHighlights.risk_count || 0) + ' | low confidence: ' + text(riskHighlights.low_confidence_count || 0) + ' | threshold: ' + text(riskHighlights.low_confidence_threshold); riskBox.append(meta);
+        const list=document.createElement('div'); list.className='risk-list'; risks.forEach(item => {{ const row=document.createElement('div'); row.className='risk-item ' + text(item.severity).toLowerCase(); const title=document.createElement('strong'); title.textContent='[' + text(item.severity) + '] ' + text(item.title); const detail=document.createElement('div'); detail.className='meta'; detail.textContent=[item.domain,item.detail,item.confidence != null ? 'confidence=' + item.confidence : null,item.report_source].filter(Boolean).join(' | '); row.append(title,detail); list.append(row); }}); riskBox.append(list);
+      }}
+
+      const knowledgeBox=el('knowledge-recommendations');
+      const learned=Object.values(knowledgeRecommendations);
+      if (!learned.length) {{ showEmpty(knowledgeBox, 'No KnowledgeBase stores found.'); }} else {{ learned.forEach(item => {{ const node=recommendation(text(item.label), item.recommendation || {{}}); const stats=document.createElement('div'); stats.className='meta'; stats.textContent='Candidates: ' + text(item.candidate_count || 0) + ' | accumulated runs: ' + text(item.total_runs || 0); node.append(stats); knowledgeBox.append(node); }}); }}
+
+      const compareBox=el('session-compare');
+      const trendMeta=document.createElement('div'); trendMeta.className='meta'; trendMeta.textContent='Sessions: ' + text(sessionTrend.point_count || 0) + ' | completion rate: ' + text(sessionTrend.completion_rate || 0) + ' | statuses: ' + Object.entries(sessionTrend.status_counts || {{}}).map(([key,value]) => key + '=' + value).join(', '); compareBox.append(trendMeta);
+      if (!sessionCompare.available) {{ showEmpty(compareBox, text(sessionCompare.reason || 'No session comparison available.')); }} else {{
+        const latest=sessionCompare.latest || {{}}, previous=sessionCompare.previous || {{}};
+        const pair=document.createElement('div'); pair.className='source-summary'; pair.append('Latest: ' + text(latest.session_id) + ' (' + text(latest.status) + ')', 'Previous: ' + text(previous.session_id) + ' (' + text(previous.status) + ')'); compareBox.append(pair);
+        const deltas=document.createElement('ul'); Object.entries(sessionCompare.deltas || {{}}).forEach(([key,value]) => {{ const line=document.createElement('li'); line.className=Number(value) > 0 ? 'delta-positive' : (Number(value) < 0 ? 'delta-negative' : ''); line.textContent=key + ': ' + (Number(value) > 0 ? '+' : '') + text(value); deltas.append(line); }}); compareBox.append(deltas);
+        const changes=Array.isArray(sessionCompare.recommendation_changes) ? sessionCompare.recommendation_changes : [];
+        if (changes.length) {{ const details=document.createElement('details'); const caption=document.createElement('summary'); caption.textContent='Recommendation changes (' + changes.length + ')'; const list=document.createElement('ul'); changes.forEach(item => {{ const line=document.createElement('li'); line.textContent=text(item.namespace) + ': ' + text(item.previous) + ' -> ' + text(item.latest); list.append(line); }}); details.append(caption,list); compareBox.append(details); }}
+      }}
+
+      const artifactBox=el('artifact-navigation');
+      const artifactGroups=Array.isArray(artifactNavigation.groups) ? artifactNavigation.groups : [];
+      const artifactMeta=document.createElement('div'); artifactMeta.className='meta'; artifactMeta.textContent='References: ' + text(artifactNavigation.count || 0) + ' | available: ' + text(artifactNavigation.available_count || 0) + ' | missing: ' + text(artifactNavigation.missing_count || 0) + ' | blocked outside workspace: ' + text(artifactNavigation.blocked_count || 0); artifactBox.append(artifactMeta);
+      if (!artifactGroups.length) {{ showEmpty(artifactBox, 'No workspace artifacts referenced by reports or sessions.'); }} else {{
+        const grid=document.createElement('div'); grid.className='artifact-grid'; artifactGroups.forEach(group => {{ const card=document.createElement('article'); card.className='artifact-group'; const title=document.createElement('h3'); title.textContent=text(group.domain) + ' (' + text(group.available_count) + '/' + text(group.count) + ')'; card.append(title); const list=document.createElement('ul'); (group.items || []).forEach(item => {{ const line=document.createElement('li'); if (item.exists && item.href) {{ const link=document.createElement('a'); link.href=item.href; link.textContent=text(item.label || item.path); link.title=text(item.path); line.append(link); }} else {{ const missing=document.createElement('span'); missing.className='artifact-missing'; missing.textContent=text(item.label || item.path) + ' [missing]'; line.append(missing); }} list.append(line); }}); card.append(list); grid.append(card); }}); artifactBox.append(grid);
+      }}
+
       const patchBox=el('binary-patches'); const patchRows=Array.isArray(patches.recent) ? patches.recent : [];
       if (!patchRows.length) {{ const empty=document.createElement('div'); empty.className='empty'; empty.textContent='No binary patch manifests found in sessions or output artifacts.'; patchBox.append(empty); }} else {{
         const summary=document.createElement('div'); summary.className='meta'; summary.textContent='Audited: ' + text(patches.count) + ' | applied: ' + text(patches.applied_count) + ' | dry runs: ' + text(patches.dry_run_count); patchBox.append(summary);
@@ -661,15 +2089,26 @@ def _html_document(data: dict[str, Any]) -> str:
       }}
       const reconstructionBox=el('source-reconstruction');
       const projects=Array.isArray(reconstruction.projects) ? reconstruction.projects : [];
+      const reconstructionBoundary=document.createElement('div'); reconstructionBoundary.className='evidence-boundary'; reconstructionBoundary.textContent='Complete behavior proof: not claimed | Claim scope: differential/static/runtime observations only'; reconstructionBox.append(reconstructionBoundary);
       if (!projects.length) {{ const empty=document.createElement('div'); empty.className='empty'; empty.textContent='No reconstructed source projects discovered yet. Run analyze with --reconstruct or --reconstruct-gui.'; reconstructionBox.append(empty); }} else {{
         const sourceSummary=document.createElement('div'); sourceSummary.className='source-summary';
-        [['Projects', reconstructionSummary.project_total], ['Source files', reconstructionSummary.source_file_total], ['Resources', reconstructionSummary.resource_file_total], ['Recovered functions', reconstructionSummary.function_total], ['Dynamic evidence', reconstructionSummary.dynamic_evidence_total], ['Semantic entities', reconstructionSummary.semantic_entity_total], ['Verified projects', reconstructionSummary.verified_project_total]].forEach(([label,value]) => {{ const item=document.createElement('span'); item.textContent=label + ': ' + text(value || 0); sourceSummary.append(item); }});
+        [['Projects', reconstructionSummary.project_total], ['Source files', reconstructionSummary.source_file_total], ['Resources', reconstructionSummary.resource_file_total], ['Recovered functions', reconstructionSummary.function_total], ['Dynamic evidence', reconstructionSummary.dynamic_evidence_total], ['Semantic entities', reconstructionSummary.semantic_entity_total], ['Evidence assessments', reconstructionSummary.equivalence_assessment_project_total], ['Observed matches', reconstructionSummary.observed_evidence_matched_project_total]].forEach(([label,value]) => {{ const item=document.createElement('span'); item.textContent=label + ': ' + text(value || 0); sourceSummary.append(item); }});
         reconstructionBox.append(sourceSummary);
         projects.forEach(project => {{
           const card=document.createElement('article'); card.className='source-project';
           const head=document.createElement('div'); head.className='source-head'; const name=document.createElement('strong'); name.textContent=text(project.name || project.relative_path || 'reconstructed project'); const state=document.createElement('span'); state.className='badge'; state.textContent=text(project.status || project.output_stack || project.language || 'discovered'); head.append(name,state); card.append(head);
           const location=document.createElement('div'); location.className='meta'; location.textContent=text(project.relative_path || project.project_dir || project.path); card.append(location);
-          const metrics=document.createElement('div'); metrics.className='source-metrics'; [['Language', project.language || project.output_stack], ['Source files', project.source_file_count], ['Resources', project.resource_file_count], ['Functions', project.function_count], ['Modules', project.module_count], ['Evidence', project.dynamic_evidence_count], ['Semantic', project.semantic_entity_count], ['Verify', project.verification_score], ['Next', project.next_task]].forEach(([label,value]) => {{ if(value != null && value !== '') {{ const item=document.createElement('span'); item.textContent=label + ': ' + text(value); metrics.append(item); }} }}); card.append(metrics);
+          const assessment=project.equivalence_assessment && typeof project.equivalence_assessment === 'object' ? project.equivalence_assessment : {{}};
+          const assessmentStatus=project.equivalence_assessment_status || assessment.status || 'unverified';
+          const observedStatus=project.observed_evidence_matched === true ? 'matched' : (assessmentStatus === 'mismatch' ? 'mismatch' : 'unverified');
+          const assessmentScore=project.equivalence_assessment_score != null ? project.equivalence_assessment_score : assessment.score;
+          const mismatchCount=Number(project.equivalence_mismatch_count != null ? project.equivalence_mismatch_count : (assessment.mismatch_count || 0));
+          const metrics=document.createElement('div'); metrics.className='source-metrics'; [['Language', project.language || project.output_stack], ['Source files', project.source_file_count], ['Resources', project.resource_file_count], ['Functions', project.function_count], ['Modules', project.module_count], ['Evidence', project.dynamic_evidence_count], ['Semantic', project.semantic_entity_count], ['Assessment', statusLabel(assessmentStatus)], ['Evidence score', assessmentScore], ['Mismatches', mismatchCount], ['Next', project.next_task]].forEach(([label,value]) => {{ if(value != null && value !== '') {{ const item=document.createElement('span'); item.textContent=label + ': ' + text(value); metrics.append(item); }} }}); card.append(metrics);
+          const boundary=document.createElement('div'); boundary.className='evidence-boundary'; boundary.textContent='Observed evidence: ' + statusLabel(observedStatus) + ' | Complete behavior proof: not claimed | Claim scope: differential/static/runtime observations only'; card.append(boundary);
+
+          const dimensionDetails=document.createElement('details'); const dimensionCaption=document.createElement('summary'); const dimensionStatuses=project.equivalence_dimension_statuses && typeof project.equivalence_dimension_statuses === 'object' ? project.equivalence_dimension_statuses : Object.fromEntries(Object.entries(assessment.dimensions || {{}}).map(([key,value]) => [key,value && value.status ? value.status : 'unverified'])); const dimensions=Object.entries(dimensionStatuses); dimensionCaption.textContent='Dimensions (' + dimensions.length + ')'; dimensionDetails.append(dimensionCaption); if (!dimensions.length) {{ const empty=document.createElement('div'); empty.className='meta'; empty.textContent='No observed dimension evidence.'; dimensionDetails.append(empty); }} else {{ const list=document.createElement('ul'); dimensions.forEach(([dimension,status]) => {{ const detail=(assessment.dimensions || {{}})[dimension] || {{}}; const line=document.createElement('li'); line.textContent=dimension + ': ' + statusLabel(status) + (detail.score != null ? ' | score=' + text(detail.score) : ''); list.append(line); }}); dimensionDetails.append(list); }} card.append(dimensionDetails);
+
+          const mismatchDetails=document.createElement('details'); const mismatchCaption=document.createElement('summary'); mismatchCaption.textContent='Mismatches (' + text(mismatchCount) + ')'; mismatchDetails.append(mismatchCaption); const mismatches=Array.isArray(assessment.mismatches) ? assessment.mismatches : []; if (!mismatches.length) {{ const empty=document.createElement('div'); empty.className='meta'; empty.textContent='No observed mismatch records.'; mismatchDetails.append(empty); }} else {{ const list=document.createElement('ul'); mismatches.slice(0, 24).forEach(item => {{ const entities=Array.isArray(item.semantic_ir_entity_ids) ? item.semantic_ir_entity_ids.join(', ') : ''; const line=document.createElement('li'); line.textContent=[item.dimension,item.observation_id || item.id,entities ? 'entities=' + entities : null].filter(Boolean).map(text).join(' | '); list.append(line); }}); mismatchDetails.append(list); }} card.append(mismatchDetails);
           const files=Array.isArray(project.source_files) ? project.source_files : [];
           if (files.length) {{ const details=document.createElement('details'); const caption=document.createElement('summary'); caption.textContent='Recovered source files (' + files.length + ')'; details.append(caption); const fileGrid=document.createElement('div'); fileGrid.className='source-files'; files.slice(0, 24).forEach(file => {{ const item=document.createElement('div'); item.className='source-file'; const path=document.createElement('strong'); path.textContent=text(file.path || file.relative_path || file.name); const info=document.createElement('div'); info.className='meta'; info.textContent=[file.language, file.size_bytes != null ? file.size_bytes + ' B' : null].filter(Boolean).join(' | '); item.append(path,info); if(file.preview) {{ const preview=document.createElement('pre'); preview.textContent=text(file.preview); item.append(preview); }} fileGrid.append(item); }}); details.append(fileGrid); card.append(details); }}
           reconstructionBox.append(card);

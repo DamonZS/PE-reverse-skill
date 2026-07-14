@@ -1,0 +1,26 @@
+{
+  "counts": {
+    "critical": 0,
+    "high": 1,
+    "info": 0,
+    "low": 0,
+    "medium": 0
+  },
+  "findings": [
+    {
+      "category": "control_flow",
+      "evidence": {
+        "entrypoint_offset": 512,
+        "entrypoint_rva": 4096
+      },
+      "id": "entrypoint_intersection",
+      "message": "patch intersects the PE entrypoint",
+      "operation_id": "inline-offset",
+      "severity": "high"
+    }
+  ],
+  "overall_risk": "high",
+  "risk_score": 30,
+  "schema_version": 1,
+  "status": "ok"
+}

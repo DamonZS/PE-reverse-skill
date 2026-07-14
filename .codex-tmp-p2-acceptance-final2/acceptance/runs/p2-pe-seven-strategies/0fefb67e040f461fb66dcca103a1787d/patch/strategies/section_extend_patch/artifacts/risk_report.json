@@ -1,0 +1,49 @@
+{
+  "counts": {
+    "critical": 0,
+    "high": 3,
+    "info": 0,
+    "low": 0,
+    "medium": 0
+  },
+  "findings": [
+    {
+      "category": "pe_layout",
+      "evidence": {
+        "file_offset": 384,
+        "size_of_headers": 512
+      },
+      "id": "pe_header_modification",
+      "message": "patch intersects PE headers",
+      "operation_id": "section-extend-virtual-size",
+      "severity": "high"
+    },
+    {
+      "category": "pe_layout",
+      "evidence": {
+        "file_offset": 392,
+        "size_of_headers": 512
+      },
+      "id": "pe_header_modification",
+      "message": "patch intersects PE headers",
+      "operation_id": "section-extend-raw-size",
+      "severity": "high"
+    },
+    {
+      "category": "pe_layout",
+      "evidence": {
+        "new_raw_size": 1024,
+        "new_virtual_size": 524,
+        "section": ".text"
+      },
+      "id": "section_header_extension",
+      "message": "section VirtualSize is extended into existing file-backed padding",
+      "operation_id": "section-extend-virtual-size",
+      "severity": "high"
+    }
+  ],
+  "overall_risk": "high",
+  "risk_score": 90,
+  "schema_version": 1,
+  "status": "ok"
+}

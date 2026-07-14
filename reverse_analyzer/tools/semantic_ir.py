@@ -57,6 +57,35 @@ _KIND_ALIASES = {
     "asset": "resource",
 }
 
+_UNAVAILABLE_STATUSES = {
+    "unavailable",
+    "unsupported",
+    "not_available",
+    "not_run",
+    "skipped",
+}
+_PARTIAL_STATUSES = {
+    "partial",
+    "degraded",
+    "dependency_gated",
+    "dependency_missing",
+    "missing_dependency",
+    "mock",
+    "mocked",
+    "fake",
+    "fixture",
+    "schema",
+    "schema_only",
+    "stub",
+    "placeholder",
+    "dry_run",
+    "simulated",
+    "planned",
+    "unknown",
+}
+_FAILED_STATUSES = {"failed", "failure", "error", "invalid"}
+_SUCCESS_STATUSES = {"ok", "success", "successful", "complete", "completed", "done", "available"}
+
 _NETWORK_TOKENS = (
     "winhttp",
     "wininet",
@@ -145,14 +174,20 @@ def build_semantic_ir(
     decompiler: Mapping[str, Any] | None = None,
     dynamic_analysis: Mapping[str, Any] | None = None,
     gui_analysis: Mapping[str, Any] | None = None,
+    engine_analysis: Mapping[str, Any] | None = None,
+    android_analysis: Mapping[str, Any] | None = None,
+    ios_analysis: Mapping[str, Any] | None = None,
+    protocol_analysis: Mapping[str, Any] | None = None,
     out_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     """Normalize supplied analysis evidence into a stable semantic IR.
 
     A valid behavior evidence graph is authoritative because it already carries
     cross-domain provenance.  When it is absent or malformed, the function uses
-    conservative decompiler, dynamic, and GUI fallbacks.  Inputs are never
-    mutated and all output values are JSON-safe standard-library values.
+    conservative decompiler, dynamic, and GUI fallbacks. Platform analyses add
+    their available ``semantic_ir_fragment`` records after that base evidence.
+    Inputs are never mutated and all output values are JSON-safe standard-library
+    values.
     """
 
     source_maps = {
@@ -160,8 +195,15 @@ def build_semantic_ir(
         "decompiler": _as_mapping(decompiler),
         "dynamic_analysis": _as_mapping(dynamic_analysis),
         "gui_analysis": _as_mapping(gui_analysis),
+        "engine_analysis": _as_mapping(engine_analysis),
+        "android_analysis": _as_mapping(android_analysis),
+        "ios_analysis": _as_mapping(ios_analysis),
+        "protocol_analysis": _as_mapping(protocol_analysis),
     }
     builder = _SemanticBuilder()
+    platform_fragments: list[tuple[str, Mapping[str, Any]]] = []
+    fragment_capabilities: list[dict[str, Any]] = []
+    fragment_provenance: list[dict[str, Any]] = []
 
     graph_payload = _payload(source_maps["behavior_graph"], ("nodes", "edges"))
     if _has_supported_graph_nodes(graph_payload):
@@ -174,15 +216,43 @@ def build_semantic_ir(
         )
         _add_gui_fallback(builder, _payload(source_maps["gui_analysis"], ("evidence_graph", "state_machine", "controls")))
 
+    for source_name in ("engine_analysis", "android_analysis", "ios_analysis", "protocol_analysis"):
+        fragment = _semantic_fragment_payload(source_maps[source_name])
+        if not fragment:
+            continue
+        platform_fragments.append((source_name, fragment))
+
+    fragment_entity_map = _add_platform_fragment_entities(builder, platform_fragments)
+    for source_name, fragment in platform_fragments:
+        _add_platform_fragment(
+            builder,
+            fragment,
+            source_name,
+            fragment_entity_map,
+            fragment_capabilities,
+            fragment_provenance,
+        )
+
     entities = builder.entities()
     relations = builder.relations()
-    capabilities = _build_capabilities(entities)
+    capabilities = _merge_capabilities(
+        [*_build_capabilities(entities), *fragment_capabilities],
+        {str(entity["id"]) for entity in entities},
+    )
     kind_counts = {kind: 0 for kind in _ENTITY_KINDS}
     for entity in entities:
         kind_counts[entity["kind"]] = kind_counts.get(entity["kind"], 0) + 1
 
+    status_sources = [
+        *source_maps.values(),
+        *(fragment for _, fragment in platform_fragments),
+        *capabilities,
+    ]
     result: dict[str, Any] = {
-        "status": _overall_status(source_maps.values()),
+        "status": _overall_status(
+            status_sources,
+            has_content=bool(entities or relations or capabilities),
+        ),
         "schema_version": 1,
         "entities": entities,
         "relations": relations,
@@ -199,6 +269,9 @@ def build_semantic_ir(
         },
         "artifacts": [],
     }
+    provenance = _dedupe_provenance(fragment_provenance)
+    if provenance:
+        result["provenance"] = provenance
 
     if out_dir is not None and str(out_dir).strip():
         target = Path(out_dir) / "semantic_ir.json"
@@ -269,6 +342,81 @@ class _SemanticBuilder:
             self._graph_ids.setdefault(graph_reference, set()).add(entity_id)
         return entity
 
+    def add_fragment_entity(
+        self,
+        *,
+        entity_id: str,
+        kind: str,
+        name: str,
+        confidence: float,
+        sources: list[str],
+        attributes: Any,
+        references: list[Any] | None = None,
+        provenance: Any = None,
+    ) -> dict[str, Any]:
+        """Add an already-identified fragment entity without losing its references."""
+
+        requested_id = entity_id
+        existing = self._entities.get(entity_id)
+        if existing is not None and existing.get("kind") != kind:
+            entity_id = _entity_id(
+                kind,
+                requested_id,
+                {"fragment_id": requested_id, "kind": kind},
+            )
+
+        safe_attributes = _attribute_mapping(attributes)
+        safe_provenance = _dedupe_provenance(_provenance_records(provenance))
+        candidate: dict[str, Any] = {
+            "id": entity_id,
+            "kind": kind,
+            "name": name,
+            "confidence": confidence,
+            "sources": sorted(set(sources)),
+            "attributes": safe_attributes,
+        }
+        if safe_provenance:
+            candidate["provenance"] = safe_provenance
+
+        entity = self._entities.get(entity_id)
+        if entity is None:
+            entity = candidate
+            self._entities[entity_id] = entity
+        else:
+            prefer_candidate = _record_preferred(candidate, entity)
+            existing_attributes = _as_mapping(entity.get("attributes"))
+            entity["attributes"] = _merge_attribute_mappings(
+                existing_attributes,
+                safe_attributes,
+                prefer_right=prefer_candidate,
+            )
+            if prefer_candidate:
+                entity["kind"] = kind
+                entity["name"] = name
+            entity["confidence"] = max(float(entity.get("confidence") or 0.0), confidence)
+            entity["sources"] = sorted(set(entity.get("sources") or []).union(sources))
+            merged_provenance = _dedupe_provenance(
+                [
+                    *_provenance_records(entity.get("provenance")),
+                    *safe_provenance,
+                ]
+            )
+            if merged_provenance:
+                entity["provenance"] = merged_provenance
+
+        values: list[Any] = [requested_id, entity_id, name]
+        if references:
+            values.extend(references)
+        for value in values:
+            reference = _reference_text(value)
+            if reference:
+                self._references.setdefault(kind, {}).setdefault(reference, set()).add(entity_id)
+        for graph_value in (requested_id, entity_id):
+            graph_reference = _reference_text(graph_value)
+            if graph_reference:
+                self._graph_ids.setdefault(graph_reference, set()).add(entity_id)
+        return entity
+
     def add_relation(
         self,
         *,
@@ -278,14 +426,18 @@ class _SemanticBuilder:
         confidence: float,
         sources: list[str],
         identity: Any = None,
+        attributes: Any = None,
+        provenance: Any = None,
     ) -> None:
         if source_id not in self._entities or target_id not in self._entities:
             return
         relation_type = _text(relation_type) or "related_to"
         relation_id = _relation_id(relation_type, source_id, target_id, identity)
         relation = self._relations.get(relation_id)
+        safe_attributes = _attribute_mapping(attributes) if attributes is not None else {}
+        safe_provenance = _dedupe_provenance(_provenance_records(provenance))
         if relation is None:
-            self._relations[relation_id] = {
+            relation = {
                 "id": relation_id,
                 "type": relation_type,
                 "source": source_id,
@@ -293,9 +445,33 @@ class _SemanticBuilder:
                 "confidence": confidence,
                 "sources": sorted(set(sources)),
             }
+            if safe_attributes:
+                relation["attributes"] = safe_attributes
+            if safe_provenance:
+                relation["provenance"] = safe_provenance
+            self._relations[relation_id] = relation
             return
-        relation["confidence"] = max(float(relation["confidence"]), confidence)
+        existing_confidence = float(relation["confidence"])
+        relation["confidence"] = max(existing_confidence, confidence)
         relation["sources"] = sorted(set(relation["sources"]).union(sources))
+        if safe_attributes:
+            existing_attributes = _as_mapping(relation.get("attributes"))
+            prefer_candidate = confidence > existing_confidence
+            if confidence == existing_confidence:
+                prefer_candidate = _canonical_json(safe_attributes) < _canonical_json(existing_attributes)
+            relation["attributes"] = _merge_attribute_mappings(
+                existing_attributes,
+                safe_attributes,
+                prefer_right=prefer_candidate,
+            )
+        merged_provenance = _dedupe_provenance(
+            [
+                *_provenance_records(relation.get("provenance")),
+                *safe_provenance,
+            ]
+        )
+        if merged_provenance:
+            relation["provenance"] = merged_provenance
 
     def resolve_graph(self, value: Any) -> list[str]:
         reference = _reference_text(value)
@@ -305,11 +481,14 @@ class _SemanticBuilder:
         reference = _reference_text(value)
         if not reference:
             return []
-        kinds = preferred_kinds or _ENTITY_KINDS
+        kinds = preferred_kinds or tuple(sorted(self._references))
         matches: set[str] = set()
         for kind in kinds:
             matches.update(self._references.get(kind, {}).get(reference, set()))
         return sorted(matches)
+
+    def has_entity(self, entity_id: str) -> bool:
+        return entity_id in self._entities
 
     def ensure_reference(
         self,
@@ -917,6 +1096,474 @@ def _transition_references(raw: Mapping[str, Any], keys: tuple[str, ...]) -> lis
     return sorted(set(values))
 
 
+def _semantic_fragment_payload(source: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Return an available fragment from common result/data wrapper layouts."""
+
+    if not source:
+        return {}
+    queue: list[Mapping[str, Any]] = [source]
+    seen: set[int] = set()
+    direct_fragment: Mapping[str, Any] | None = None
+    while queue:
+        current = queue.pop(0)
+        object_id = id(current)
+        if object_id in seen:
+            continue
+        seen.add(object_id)
+        if _record_unavailable(current):
+            return {}
+
+        nested = current.get("semantic_ir_fragment")
+        if isinstance(nested, Mapping):
+            return _unwrap_semantic_fragment(nested)
+
+        if direct_fragment is None and _looks_like_semantic_fragment(current):
+            direct_fragment = current
+        for key in ("data", "result"):
+            candidate = current.get(key)
+            if isinstance(candidate, Mapping):
+                queue.append(candidate)
+
+    if direct_fragment is None or _record_unavailable(direct_fragment):
+        return {}
+    return _unwrap_semantic_fragment(direct_fragment)
+
+
+def _unwrap_semantic_fragment(fragment: Mapping[str, Any]) -> Mapping[str, Any]:
+    if _record_unavailable(fragment):
+        return {}
+    payload = _payload(fragment, ("entities", "relations", "capabilities"))
+    if _record_unavailable(payload):
+        return {}
+    if payload is fragment:
+        return fragment
+
+    combined = {str(key): value for key, value in payload.items()}
+    for key in ("schema_version", "source", "status"):
+        if key not in combined and key in fragment:
+            combined[key] = fragment.get(key)
+    provenance = _dedupe_provenance(
+        [
+            *_provenance_records(fragment.get("provenance")),
+            *_provenance_records(payload.get("provenance")),
+        ]
+    )
+    if provenance:
+        combined["provenance"] = provenance
+    return combined
+
+
+def _looks_like_semantic_fragment(value: Mapping[str, Any]) -> bool:
+    return any(key in value for key in ("entities", "relations", "capabilities", "provenance"))
+
+
+def _add_platform_fragment_entities(
+    builder: _SemanticBuilder,
+    fragments: list[tuple[str, Mapping[str, Any]]],
+) -> dict[str, set[str]]:
+    """Register every fragment entity before resolving cross-fragment references."""
+
+    prepared: list[dict[str, Any]] = []
+    raw_identities: dict[str, set[str]] = {}
+    for source_name, fragment in sorted(fragments, key=lambda item: item[0]):
+        entity_source = f"{source_name}.semantic_ir_fragment.entities"
+        for record in _records(
+            fragment.get("entities"),
+            key_field="id",
+            markers=("id", "entity_id", "kind", "type", "name", "label"),
+        ):
+            raw = _record_mapping(record, "id")
+            if _record_unavailable(raw):
+                continue
+            kind = _fragment_kind(raw.get("kind") or raw.get("type") or raw.get("node_type"))
+            if kind is None:
+                continue
+            raw_id = _first_text(raw, ("id", "entity_id", "key"))
+            name = _record_name(
+                raw,
+                ("name", "label", "title", "symbol", "id", "entity_id"),
+                kind,
+            )
+            # A producer-owned id identifies one semantic entity even when
+            # competing records disagree on its display name. Only a kind
+            # conflict requires disambiguating ids.
+            identity = kind
+            if raw_id:
+                raw_identities.setdefault(raw_id, set()).add(identity)
+            prepared.append(
+                {
+                    "source_name": source_name,
+                    "entity_source": entity_source,
+                    "raw": raw,
+                    "raw_id": raw_id,
+                    "kind": kind,
+                    "name": name,
+                    "identity": identity,
+                }
+            )
+
+    entity_map: dict[str, set[str]] = {}
+    for item in sorted(
+        prepared,
+        key=lambda value: (
+            str(value["raw_id"] or ""),
+            str(value["identity"]),
+            str(value["source_name"]),
+            _canonical_json(value["raw"]),
+        ),
+    ):
+        raw = item["raw"]
+        raw_id = item["raw_id"]
+        kind = str(item["kind"])
+        name = str(item["name"])
+        if raw_id and len(raw_identities.get(raw_id, ())) == 1:
+            entity_id = raw_id
+        elif raw_id:
+            entity_id = _entity_id(
+                kind,
+                raw_id,
+                {"fragment_id": raw_id, "kind": kind},
+            )
+        else:
+            stable_identity = {
+                str(key): _json_safe(value)
+                for key, value in raw.items()
+                if str(key)
+                not in {
+                    "attributes",
+                    "confidence",
+                    "evidence",
+                    "provenance",
+                    "source",
+                    "sources",
+                    "status",
+                }
+            }
+            entity_id = _entity_id(kind, name, {"fragment_record": stable_identity})
+
+        entity_source = str(item["entity_source"])
+        record_sources = sorted(set([*_sources(raw, entity_source), entity_source]))
+        attributes = _fragment_attributes(
+            raw,
+            {
+                "id",
+                "entity_id",
+                "key",
+                "kind",
+                "type",
+                "node_type",
+                "name",
+                "label",
+                "title",
+                "symbol",
+                "confidence",
+                "status",
+                "source",
+                "sources",
+                "evidence",
+                "provenance",
+            },
+        )
+        references = _references_from_record(raw)
+        if raw_id:
+            references = sorted(set([*references, raw_id]))
+        entity = builder.add_fragment_entity(
+            entity_id=entity_id,
+            kind=kind,
+            name=name,
+            confidence=_confidence(raw, 0.7),
+            sources=record_sources,
+            attributes=attributes,
+            references=references,
+            provenance=raw.get("provenance"),
+        )
+        if raw_id:
+            entity_map.setdefault(raw_id, set()).add(str(entity["id"]))
+    return entity_map
+
+
+def _add_platform_fragment(
+    builder: _SemanticBuilder,
+    fragment: Mapping[str, Any],
+    source_name: str,
+    entity_map: Mapping[str, set[str]],
+    capabilities: list[dict[str, Any]],
+    provenance: list[dict[str, Any]],
+) -> None:
+    relation_source = f"{source_name}.semantic_ir_fragment.relations"
+    capability_source = f"{source_name}.semantic_ir_fragment.capabilities"
+
+    provenance.extend(_provenance_records(fragment.get("provenance")))
+    fragment_source = _text(fragment.get("source"))
+    if fragment_source:
+        provenance.append({"analysis": source_name, "source": fragment_source})
+    provenance.append(
+        {
+            "analysis": source_name,
+            "source": f"{source_name}.semantic_ir_fragment",
+        }
+    )
+
+    for record in _records(
+        fragment.get("relations"),
+        key_field="id",
+        markers=("id", "type", "relation", "source", "target", "from", "to"),
+    ):
+        raw = _record_mapping(record, "id")
+        if _record_unavailable(raw):
+            continue
+        source_id = _fragment_endpoint(
+            builder,
+            entity_map,
+            raw.get("source") if "source" in raw else raw.get("from"),
+        )
+        target_id = _fragment_endpoint(
+            builder,
+            entity_map,
+            raw.get("target") if "target" in raw else raw.get("to"),
+        )
+        if source_id is None or target_id is None:
+            continue
+        relation_type = _text(raw.get("type") or raw.get("relation") or raw.get("kind")) or "related_to"
+        source_metadata = {key: value for key, value in raw.items() if key != "source"}
+        relation_sources = sorted(
+            set([*_sources(source_metadata, relation_source), relation_source])
+        )
+        attributes = _fragment_attributes(
+            raw,
+            {
+                "id",
+                "type",
+                "relation",
+                "kind",
+                "source",
+                "target",
+                "from",
+                "to",
+                "confidence",
+                "status",
+                "sources",
+                "evidence",
+                "provenance",
+            },
+        )
+        builder.add_relation(
+            relation_type=relation_type,
+            source_id=source_id,
+            target_id=target_id,
+            confidence=_confidence(raw, 0.7),
+            sources=relation_sources,
+            attributes=attributes or None,
+            provenance=raw.get("provenance"),
+        )
+
+    for record in _records(
+        fragment.get("capabilities"),
+        key_field="name",
+        markers=("id", "name", "category", "status", "entity_ids", "entities"),
+    ):
+        raw = _record_mapping(record, "name")
+        capability = _normalize_fragment_capability(
+            raw,
+            builder=builder,
+            entity_map=entity_map,
+            fallback_source=capability_source,
+        )
+        if capability is not None:
+            capabilities.append(capability)
+
+
+def _fragment_kind(value: Any) -> str | None:
+    text = _text(value)
+    if not text:
+        return None
+    normalized = text.casefold().replace("-", "_").replace(" ", "_")
+    return _KIND_ALIASES.get(normalized) or normalized
+
+
+def _fragment_attributes(raw: Mapping[str, Any], omitted: set[str]) -> dict[str, Any]:
+    supplied = raw.get("attributes")
+    attributes = _attribute_mapping(supplied) if isinstance(supplied, Mapping) else {}
+    for key, value in sorted(raw.items(), key=lambda pair: str(pair[0])):
+        text_key = str(key)
+        if text_key == "attributes" or text_key in omitted or text_key in attributes:
+            continue
+        attributes[text_key] = _json_safe(value)
+    return attributes
+
+
+def _fragment_endpoint(
+    builder: _SemanticBuilder,
+    entity_map: Mapping[str, set[str]],
+    value: Any,
+) -> str | None:
+    if isinstance(value, Mapping):
+        direct_reference = _first_text(value, ("id", "entity_id", "key", "value"))
+        references = [direct_reference] if direct_reference else _reference_values(value)
+    else:
+        references = _reference_values(value)
+    if len(references) != 1:
+        return None
+    reference = references[0]
+    mapped = entity_map.get(reference)
+    if mapped is not None:
+        matches = sorted(entity_id for entity_id in mapped if builder.has_entity(entity_id))
+        return matches[0] if len(matches) == 1 else None
+    if builder.has_entity(reference):
+        return reference
+    graph_matches = builder.resolve_graph(reference)
+    if len(graph_matches) == 1:
+        return graph_matches[0]
+    matches = builder.resolve(reference)
+    return matches[0] if len(matches) == 1 else None
+
+
+def _normalize_fragment_capability(
+    raw: Mapping[str, Any],
+    *,
+    builder: _SemanticBuilder,
+    entity_map: Mapping[str, set[str]],
+    fallback_source: str,
+) -> dict[str, Any] | None:
+    if _record_unavailable(raw):
+        return None
+    name = _first_text(raw, ("name", "category", "capability", "id"))
+    if not name:
+        return None
+    category = _first_text(raw, ("category", "capability", "name")) or name
+    capability_id = _text(raw.get("id")) or f"capability:{_slug(category)}:{_digest({'name': name, 'category': category})}"
+    references: list[str] = []
+    reference_value = raw.get("entity_ids") if "entity_ids" in raw else raw.get("entities")
+    for value in _reference_values(reference_value):
+        entity_id = _fragment_endpoint(builder, entity_map, value)
+        if entity_id:
+            references.append(entity_id)
+    entity_ids = sorted(set(references))
+    sources = sorted(set([*_sources(raw, fallback_source), fallback_source]))
+    attributes = _fragment_attributes(
+        raw,
+        {
+            "id",
+            "name",
+            "category",
+            "capability",
+            "confidence",
+            "entity_ids",
+            "entities",
+            "evidence_count",
+            "status",
+            "source",
+            "sources",
+            "evidence",
+            "provenance",
+        },
+    )
+    capability: dict[str, Any] = {
+        "id": capability_id,
+        "name": name,
+        "category": category,
+        "confidence": _confidence(raw, 0.7),
+        "entity_ids": entity_ids,
+        "evidence_count": _safe_nonnegative_int(
+            raw.get("evidence_count"),
+            default=max(len(entity_ids), len(sources)),
+        ),
+        "sources": sources,
+    }
+    status = _normalized_status(raw.get("status"))
+    if status:
+        capability["status"] = status
+    if attributes:
+        capability["attributes"] = attributes
+    capability_provenance = _dedupe_provenance(_provenance_records(raw.get("provenance")))
+    if capability_provenance:
+        capability["provenance"] = capability_provenance
+    return capability
+
+
+def _merge_capabilities(
+    values: Any,
+    valid_entity_ids: set[str],
+) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    records = [item for item in values if isinstance(item, Mapping)] if isinstance(values, (list, tuple)) else []
+    for raw in sorted(records, key=_canonical_json):
+        if _record_unavailable(raw):
+            continue
+        name = _first_text(raw, ("name", "category", "id"))
+        if not name:
+            continue
+        category = _first_text(raw, ("category", "name")) or name
+        entity_ids = sorted(
+            {
+                reference
+                for reference in _reference_values(raw.get("entity_ids"))
+                if reference in valid_entity_ids
+            }
+        )
+        capability_id = _text(raw.get("id")) or f"capability:{_slug(category)}:{_digest({'name': name, 'category': category})}"
+        candidate: dict[str, Any] = {
+            "id": capability_id,
+            "name": name,
+            "category": category,
+            "confidence": _confidence(raw, 0.7),
+            "entity_ids": entity_ids,
+            "evidence_count": _safe_nonnegative_int(
+                raw.get("evidence_count"),
+                default=len(entity_ids),
+            ),
+        }
+        sources = sorted(set(_reference_values(raw.get("sources"))))
+        if sources:
+            candidate["sources"] = sources
+        status = _normalized_status(raw.get("status"))
+        if status:
+            candidate["status"] = status
+        attributes = _as_mapping(raw.get("attributes"))
+        if attributes:
+            candidate["attributes"] = _attribute_mapping(attributes)
+        candidate_provenance = _dedupe_provenance(_provenance_records(raw.get("provenance")))
+        if candidate_provenance:
+            candidate["provenance"] = candidate_provenance
+
+        current = merged.get(capability_id)
+        if current is None:
+            merged[capability_id] = candidate
+            continue
+        prefer_candidate = _record_preferred(candidate, current)
+        if prefer_candidate:
+            current["name"] = name
+            current["category"] = category
+            if status:
+                current["status"] = status
+        current["confidence"] = max(float(current.get("confidence") or 0.0), float(candidate["confidence"]))
+        current["entity_ids"] = sorted(set(current.get("entity_ids") or []).union(entity_ids))
+        current["evidence_count"] = max(
+            _safe_nonnegative_int(current.get("evidence_count")),
+            _safe_nonnegative_int(candidate.get("evidence_count")),
+            len(current["entity_ids"]),
+        )
+        merged_sources = sorted(set(current.get("sources") or []).union(sources))
+        if merged_sources:
+            current["sources"] = merged_sources
+        merged_attributes = _merge_attribute_mappings(
+            _as_mapping(current.get("attributes")),
+            _as_mapping(candidate.get("attributes")),
+            prefer_right=prefer_candidate,
+        )
+        if merged_attributes:
+            current["attributes"] = merged_attributes
+        merged_provenance = _dedupe_provenance(
+            [
+                *_provenance_records(current.get("provenance")),
+                *candidate_provenance,
+            ]
+        )
+        if merged_provenance:
+            current["provenance"] = merged_provenance
+    return [merged[capability_id] for capability_id in sorted(merged)]
+
+
 def _build_capabilities(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
     categories: dict[str, list[dict[str, Any]]] = {}
     for entity in entities:
@@ -1223,17 +1870,162 @@ def _as_mapping(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
 
 
-def _overall_status(sources: Any) -> str:
-    statuses: list[str] = []
-    for source in sources:
-        if not isinstance(source, Mapping) or not source:
-            continue
-        payload = _payload(source, tuple())
-        value = _text(source.get("status")) or _text(payload.get("status"))
-        if value:
-            statuses.append(value.casefold())
-    if any(status in {"failed", "failure", "error"} for status in statuses):
+def _normalized_status(value: Any) -> str | None:
+    text = _text(value)
+    if not text:
+        return None
+    return text.casefold().replace("-", "_").replace(" ", "_")
+
+
+def _status_class(value: Any) -> str | None:
+    status = _normalized_status(value)
+    if not status:
+        return None
+    if status in _UNAVAILABLE_STATUSES:
+        return "unavailable"
+    if status in _FAILED_STATUSES:
         return "failed"
-    if statuses and all(status == "unavailable" for status in statuses):
+    if status in _PARTIAL_STATUSES:
+        return "partial"
+    if status in _SUCCESS_STATUSES:
+        return "ok"
+    return "partial"
+
+
+def _status_unavailable(value: Any) -> bool:
+    return _status_class(value) == "unavailable"
+
+
+def _record_unavailable(value: Any) -> bool:
+    if not isinstance(value, Mapping):
+        return _status_unavailable(value)
+    return (
+        _status_unavailable(value.get("status"))
+        or _status_unavailable(value.get("availability"))
+        or value.get("available") is False
+    )
+
+
+def _provenance_records(value: Any) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    if isinstance(value, Mapping):
+        if _record_unavailable(value):
+            return []
+        safe = _json_safe(value)
+        return [safe] if isinstance(safe, dict) and safe else []
+    if isinstance(value, (list, tuple, set, frozenset)):
+        records: list[dict[str, Any]] = []
+        for item in value:
+            records.extend(_provenance_records(item))
+        return records
+    if _status_unavailable(value):
+        return []
+    safe = _json_safe(value)
+    return [{"value": safe}] if _present(safe) else []
+
+
+def _dedupe_provenance(value: Any) -> list[dict[str, Any]]:
+    records: dict[str, dict[str, Any]] = {}
+    for record in _provenance_records(value):
+        records[_canonical_json(record)] = record
+    return [records[key] for key in sorted(records)]
+
+
+def _record_preferred(candidate: Mapping[str, Any], current: Mapping[str, Any]) -> bool:
+    candidate_confidence = _confidence(candidate, 0.0)
+    current_confidence = _confidence(current, 0.0)
+    if candidate_confidence != current_confidence:
+        return candidate_confidence > current_confidence
+
+    preference_keys = ("id", "kind", "type", "name", "category", "status")
+    candidate_key = {key: candidate.get(key) for key in preference_keys if key in candidate}
+    current_key = {key: current.get(key) for key in preference_keys if key in current}
+    return _canonical_json(candidate_key) < _canonical_json(current_key)
+
+
+def _merge_attribute_mappings(
+    left: Mapping[str, Any],
+    right: Mapping[str, Any],
+    *,
+    prefer_right: bool,
+) -> dict[str, Any]:
+    left_safe = _attribute_mapping(left)
+    right_safe = _attribute_mapping(right)
+    merged: dict[str, Any] = {}
+    for key in sorted(set(left_safe).union(right_safe)):
+        if key not in left_safe:
+            merged[key] = right_safe[key]
+            continue
+        if key not in right_safe:
+            merged[key] = left_safe[key]
+            continue
+        left_value = left_safe[key]
+        right_value = right_safe[key]
+        if isinstance(left_value, Mapping) and isinstance(right_value, Mapping):
+            merged[key] = _merge_attribute_mappings(
+                left_value,
+                right_value,
+                prefer_right=prefer_right,
+            )
+        elif _canonical_json(left_value) == _canonical_json(right_value):
+            merged[key] = left_value
+        else:
+            merged[key] = right_value if prefer_right else left_value
+    return merged
+
+
+def _safe_nonnegative_int(value: Any, *, default: int = 0) -> int:
+    try:
+        result = int(value)
+    except (TypeError, ValueError, OverflowError):
+        try:
+            result = int(default)
+        except (TypeError, ValueError, OverflowError):
+            result = 0
+    return max(0, result)
+
+
+def _overall_status(sources: Any, *, has_content: bool | None = None) -> str:
+    statuses: set[str] = set()
+    active: set[int] = set()
+
+    def collect(value: Any) -> None:
+        if isinstance(value, Mapping):
+            object_id = id(value)
+            if object_id in active:
+                return
+            active.add(object_id)
+            try:
+                status = _status_class(value.get("status"))
+                if status:
+                    statuses.add(status)
+                if value.get("available") is False:
+                    statuses.add("unavailable")
+                for key in (
+                    "data",
+                    "result",
+                    "semantic_ir_fragment",
+                    "entities",
+                    "relations",
+                    "capabilities",
+                ):
+                    if key in value:
+                        collect(value.get(key))
+            finally:
+                active.remove(object_id)
+            return
+        if isinstance(value, (list, tuple, set, frozenset)):
+            for item in value:
+                collect(item)
+
+    collect(sources)
+    if "failed" in statuses:
+        return "failed"
+    if has_content is False:
+        return "unavailable"
+    if "partial" in statuses or "unavailable" in statuses:
+        return "partial"
+    if has_content is None and statuses and all(status == "unavailable" for status in statuses):
         return "unavailable"
     return "ok"

@@ -1,0 +1,12 @@
+{
+  "status": "ok",
+  "provider": "windows_controlled_injector",
+  "evidence_class": "live_host_proof",
+  "executed_tests": 1,
+  "skipped_tests": 0,
+  "live_operations": 10,
+  "actions": [
+    "manual_map",
+    "manual_unmap"
+  ]
+}

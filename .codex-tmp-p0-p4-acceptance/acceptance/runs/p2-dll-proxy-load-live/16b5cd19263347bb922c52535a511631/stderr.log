@@ -1,0 +1,22 @@
+F
+======================================================================
+FAIL: test_generated_x64_proxy_loads_resolves_and_unloads (tests.test_dll_proxy_generator.DllProxyProjectGeneratorTests.test_generated_x64_proxy_loads_resolves_and_unloads)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\Project\pe-reverse-analyzer-main\tests\test_dll_proxy_generator.py", line 426, in test_generated_x64_proxy_loads_resolves_and_unloads
+    self.assertNotEqual(
+    ~~~~~~~~~~~~~~~~~~~^
+        address,
+        ^^^^^^^^
+        0,
+        ^^
+        f"GetProcAddress failed for {export_name!r}: {ctypes.WinError(ctypes.get_last_error())}",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+AssertionError: 0 == 0 : GetProcAddress failed for b'DATA': [WinError 127] 找不到指定的程序。
+
+----------------------------------------------------------------------
+Ran 1 test in 2.691s
+
+FAILED (failures=1)

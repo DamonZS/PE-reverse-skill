@@ -1,0 +1,34 @@
+E
+======================================================================
+ERROR: test_generated_x64_proxy_loads_resolves_and_unloads (tests.test_dll_proxy_generator.DllProxyProjectGeneratorTests.test_generated_x64_proxy_loads_resolves_and_unloads)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\Project\pe-reverse-analyzer-main\tests\test_dll_proxy_generator.py", line 396, in test_generated_x64_proxy_loads_resolves_and_unloads
+    project = self._build_and_verify_generated_proxy(
+        acceptance_root,
+        retain_toolchain_proof=True,
+    )
+  File "D:\Project\pe-reverse-analyzer-main\tests\test_dll_proxy_generator.py", line 492, in _build_and_verify_generated_proxy
+    result = generate_dll_proxy_project(source, copy_dir=copy_root, project_dir="proxy")
+  File "D:\Project\pe-reverse-analyzer-main\reverse_analyzer\patch\dll_proxy.py", line 383, in generate_dll_proxy_project
+    _commit_project(
+    ~~~~~~~~~~~~~~~^
+        copy_root=copy_root,
+        ^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        missing_parents=missing_parents,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "D:\Project\pe-reverse-analyzer-main\reverse_analyzer\patch\dll_proxy.py", line 1148, in _commit_project
+    staging.rename(project)
+    ~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Users\Damon\AppData\Local\Programs\Python\Python313\Lib\pathlib\_local.py", line 767, in rename
+    os.rename(self, target)
+    ~~~~~~~~~^^^^^^^^^^^^^^
+PermissionError: [WinError 5] 拒绝访问。: 'D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-dll-proxy-load-live\\107fdb9a3ce44c7bb7de1306e13a99e3\\.dll-proxy-stage-do0gcwnb' -> 'D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-dll-proxy-load-live\\107fdb9a3ce44c7bb7de1306e13a99e3\\proxy'
+
+----------------------------------------------------------------------
+Ran 1 test in 0.535s
+
+FAILED (errors=1)

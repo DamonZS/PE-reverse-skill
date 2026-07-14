@@ -1,0 +1,29 @@
+{
+  "action": "vtable_pointer",
+  "artifacts": [
+    {
+      "description": "Native hook lifecycle audit record",
+      "kind": "native-hook-audit",
+      "path": "native_hook/windows-native-hook-smoke/audit.json",
+      "session_id": "windows-native-hook-smoke",
+      "sha256": "b7b23ed7340108f47d2e3bf6281dd7f0e8228370f0cf92735f46a602101bf62f",
+      "size": 23799,
+      "status": "ok"
+    },
+    {
+      "description": "Native hook lifecycle and bounded trace events",
+      "kind": "native-hook-events",
+      "path": "native_hook/windows-native-hook-smoke/events.json",
+      "session_id": "windows-native-hook-smoke",
+      "sha256": "0e192fd2327998f6a23e218f420c7b5a313b3e9a64b936ba4c6cd38b5be1a84b",
+      "size": 941,
+      "status": "ok"
+    }
+  ],
+  "capability": "native_hook",
+  "generated_at": "2026-07-14T13:11:31.482601+00:00",
+  "provider": "windows_native_hook",
+  "schema_version": 1,
+  "session_id": "windows-native-hook-smoke",
+  "status": "ok"
+}

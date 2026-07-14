@@ -1,0 +1,49 @@
+{
+  "backing_sha256": "ba9a9f17baeca2f4043eb4b7cb4b97e7c78280c2e56cb12ea5f62d39dfe33dae",
+  "build": {
+    "argv": [
+      "C:\\Users\\Damon\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\cmake.EXE",
+      "--build",
+      "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpgamli3qy\\copy\\proxy\\build"
+    ],
+    "exit_code": 0
+  },
+  "configure": {
+    "argv": [
+      "C:\\Users\\Damon\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\cmake.EXE",
+      "-S",
+      "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpgamli3qy\\copy\\proxy",
+      "-B",
+      "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpgamli3qy\\copy\\proxy\\build",
+      "-G",
+      "Ninja",
+      "-DCMAKE_C_COMPILER=C:\\Users\\Damon\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\x86_64-w64-mingw32-gcc.EXE"
+    ],
+    "exit_code": 0
+  },
+  "evidence_level": "toolchain",
+  "export_count": 3,
+  "export_surface_verified": true,
+  "generator": "reverse_analyzer.patch.dll_proxy.generate_dll_proxy_project",
+  "mock": false,
+  "proxy_sha256": "72dc906d704fbf68a54f75d5e736c06a7965cd84c13f1c331c804b82d16bf3e6",
+  "schema_version": 1,
+  "source_build": {
+    "argv": [
+      "C:\\Users\\Damon\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\x86_64-w64-mingw32-gcc.EXE",
+      "-shared",
+      "-o",
+      "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpgamli3qy\\copy\\input\\fixture.dll",
+      "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpgamli3qy\\copy\\source\\fixture.c",
+      "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpgamli3qy\\copy\\source\\fixture.def"
+    ],
+    "exit_code": 0
+  },
+  "source_sha256": "ba9a9f17baeca2f4043eb4b7cb4b97e7c78280c2e56cb12ea5f62d39dfe33dae",
+  "status": "passed",
+  "tools": {
+    "cmake": "C:\\Users\\Damon\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\cmake.exe",
+    "compiler": "C:\\Users\\Damon\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\x86_64-w64-mingw32-gcc.exe",
+    "ninja": "C:\\Users\\Damon\\AppData\\Local\\Microsoft\\WinGet\\Packages\\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\\mingw64\\bin\\ninja.exe"
+  }
+}

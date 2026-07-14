@@ -1,0 +1,38 @@
+{
+  "action": "attach_trace",
+  "artifacts": [
+    {
+      "description": "Native debugger lifecycle audit record",
+      "kind": "native-debugger-audit",
+      "path": "native_debugger/native-debugger-e2e-attach_trace/audit.json",
+      "session_id": "native-debugger-e2e-attach_trace",
+      "sha256": "a905d770c47a7b8e3c5707d5513238ce1060b58ee36e6fd19d510ea6e9b87292",
+      "size": 36873,
+      "status": "ok"
+    },
+    {
+      "description": "Bounded normalized debug events and context summaries",
+      "kind": "native-debugger-events",
+      "path": "native_debugger/native-debugger-e2e-attach_trace/events.json",
+      "session_id": "native-debugger-e2e-attach_trace",
+      "sha256": "f599681441f02cd3f256af04098304156c5bbdb99b4ce61fb678987746814b3f",
+      "size": 6623,
+      "status": "ok"
+    },
+    {
+      "description": "Module, thread, exception, call-stack, and crash evidence",
+      "kind": "native-debugger-diagnostics",
+      "path": "native_debugger/native-debugger-e2e-attach_trace/diagnostics.json",
+      "session_id": "native-debugger-e2e-attach_trace",
+      "sha256": "0c59045b6088eb17f5921850d1b294501c61af7e0222d3138869dd3a07661013",
+      "size": 4233,
+      "status": "ok"
+    }
+  ],
+  "capability": "native_debugger",
+  "generated_at": "2026-07-14T13:09:16.753574+00:00",
+  "provider": "windows_native_debugger",
+  "schema_version": 1,
+  "session_id": "native-debugger-e2e-attach_trace",
+  "status": "ok"
+}

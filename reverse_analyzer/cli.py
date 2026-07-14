@@ -13,11 +13,30 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
 try:
+    from .acceptance import (
+        AcceptanceError,
+        list_acceptance_fixtures,
+        load_acceptance_records,
+        merge_acceptance_records,
+        run_acceptance_fixture,
+        verify_acceptance_record,
+    )
     from .config import AnalyzerConfig, ensure_runtime_dirs, load_config, write_default_knowledge
     from .core.audit import CapabilityAuditBuilder, summarize_audit_records
-    from .core.capabilities.models import CapabilityRequest, TargetIdentity
+    from .core.capabilities.knowledge import record_capability_lifecycle_outcome
+    from .core.capabilities.models import (
+        CapabilityArtifact,
+        CapabilityArtifactBundle,
+        CapabilityExecutionResult,
+        CapabilityPlan,
+        CapabilityRequest,
+        CapabilityRollbackResult,
+        CapabilityValidation,
+        TargetIdentity,
+    )
     from .core.integration import finalize_platform_core
     from .dashboard import build_dashboard, serve_dashboard
+    from .environment_validation import validate_external_environment, write_environment_report
     from .knowledge import KnowledgeBase
     from .providers import RuleBasedProvider, build_default_registry
     from .runtime import ExperimentStore, SessionStore, TraceLogger
@@ -26,7 +45,14 @@ except ImportError:  # Allows direct script execution while package-level migrat
     from config import AnalyzerConfig, ensure_runtime_dirs, load_config, write_default_knowledge
 
     CapabilityAuditBuilder = None  # type: ignore[assignment]
+    record_capability_lifecycle_outcome = None  # type: ignore[assignment]
+    CapabilityArtifact = None  # type: ignore[assignment]
+    CapabilityArtifactBundle = None  # type: ignore[assignment]
+    CapabilityExecutionResult = None  # type: ignore[assignment]
+    CapabilityPlan = None  # type: ignore[assignment]
     CapabilityRequest = None  # type: ignore[assignment]
+    CapabilityRollbackResult = None  # type: ignore[assignment]
+    CapabilityValidation = None  # type: ignore[assignment]
     TargetIdentity = None  # type: ignore[assignment]
     summarize_audit_records = None  # type: ignore[assignment]
     KnowledgeBase = None  # type: ignore[assignment]
@@ -38,6 +64,14 @@ except ImportError:  # Allows direct script execution while package-level migrat
     TraceLogger = None  # type: ignore[assignment]
     build_dashboard = None  # type: ignore[assignment]
     serve_dashboard = None  # type: ignore[assignment]
+    validate_external_environment = None  # type: ignore[assignment]
+    write_environment_report = None  # type: ignore[assignment]
+    AcceptanceError = ValueError  # type: ignore[assignment,misc]
+    list_acceptance_fixtures = None  # type: ignore[assignment]
+    load_acceptance_records = None  # type: ignore[assignment]
+    merge_acceptance_records = None  # type: ignore[assignment]
+    run_acceptance_fixture = None  # type: ignore[assignment]
+    verify_acceptance_record = None  # type: ignore[assignment]
     frida_install_guide = None  # type: ignore[assignment]
     ghidra_install_guide = None  # type: ignore[assignment]
     procmon_install_guide = None  # type: ignore[assignment]
@@ -109,6 +143,31 @@ _BUILTIN_TOOLS = [
         "name": "validate_patch_plan",
         "status": "available",
         "description": "Validate a binary patch plan, including hashes and payload references, without writing files.",
+    },
+    {
+        "name": "android_elf_patch_plan",
+        "status": "available",
+        "description": "Create a hash-bound ARM/AArch64 Android ELF patch plan with PT_LOAD mapping, alignment, relocation, risk, and rollback evidence.",
+    },
+    {
+        "name": "android_elf_patch_verify",
+        "status": "available",
+        "description": "Re-verify Android ELF patch identity, preimages, virtual-address mapping, relocation risks, and rollback metadata.",
+    },
+    {
+        "name": "dll_proxy_generate",
+        "status": "available",
+        "description": "Generate an architecture-checked forwarding DLL project inside an explicit copy directory with build, risk, validation, and rollback artifacts.",
+    },
+    {
+        "name": "pe_patch_plan",
+        "status": "optional-dependency",
+        "description": "Create an explicit-intent PE patch plan with RVA, section, instruction-boundary, CFG, directory, signature, overlay, and rollback checks.",
+    },
+    {
+        "name": "pe_patch_verify",
+        "status": "optional-dependency",
+        "description": "Re-verify a PE-aware patch plan and refresh its risk and rollback artifacts without modifying the target.",
     },
     {
         "name": "procmon_trace",
@@ -196,6 +255,11 @@ _BUILTIN_TOOLS = [
         "description": "Compare original and reconstructed screenshot pairs and report visual similarity metrics.",
     },
     {
+        "name": "gui_world_projection",
+        "status": "available",
+        "description": "Project world points and AABBs into a viewport with explicit matrix conventions and deterministic evidence artifacts.",
+    },
+    {
         "name": "engine_analyze",
         "status": "available",
         "description": "Fingerprint Unity/Unreal engine signals and persist static engine evidence artifacts.",
@@ -209,6 +273,21 @@ _BUILTIN_TOOLS = [
         "name": "protocol_analyze",
         "status": "available",
         "description": "Infer passive protocol evidence by fusing strings, dynamic behavior, GUI, and semantic hints.",
+    },
+    {
+        "name": "protocol_capture",
+        "status": "available",
+        "description": "Import bounded PCAP, PCAPNG, JSON, JSONL, or raw passive protocol evidence.",
+    },
+    {
+        "name": "protocol_infer",
+        "status": "available",
+        "description": "Infer flow framing, message formats, field statistics, and Protobuf wire shapes.",
+    },
+    {
+        "name": "protocol_summarize",
+        "status": "available",
+        "description": "Build a stable compact summary from normalized protocol capture and inference evidence.",
     },
     {
         "name": "session-store",
@@ -325,6 +404,174 @@ def _load_dynamic_hooks(path: str | Path) -> list[Mapping[str, Any]]:
     return [dict(item) for item in hooks]
 
 
+def _load_json_object(path: str | Path, *, label: str) -> dict[str, Any]:
+    """Read a BOM-tolerant JSON object for a dedicated CLI command."""
+
+    source = Path(path).expanduser().resolve()
+    try:
+        payload = json.loads(source.read_text(encoding="utf-8-sig"))
+    except OSError as exc:
+        raise ValueError(f"could not read {label} {source}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid JSON in {label} {source}: {exc}") from exc
+    if not isinstance(payload, Mapping):
+        raise ValueError(f"{label} must contain a JSON object: {source}")
+    return dict(payload)
+
+
+def _legacy_result_payload(result: Any) -> dict[str, Any]:
+    payload = result.to_dict() if hasattr(result, "to_dict") else result
+    if isinstance(payload, Mapping):
+        return dict(payload)
+    return {"status": "failed", "error": str(payload), "data": {"status": "failed", "artifacts": []}}
+
+
+def _patch_compatibility_artifacts(result_payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    allowed_kinds = {
+        "patched-binary",
+        "patch-manifest",
+        "patch-rollback",
+        "restored-binary",
+        "patch-rollback-manifest",
+    }
+    return [
+        dict(item)
+        for item in result_payload.get("artifacts") or []
+        if isinstance(item, Mapping) and str(item.get("kind") or "") in allowed_kinds
+    ]
+
+
+def _capability_compatibility_error(result_payload: Mapping[str, Any], validation_payload: Any) -> str | None:
+    report_section = result_payload.get("report_section")
+    if isinstance(report_section, Mapping):
+        reason = report_section.get("error") or report_section.get("reason")
+        if reason:
+            return str(reason)
+    provenance = result_payload.get("provenance")
+    failure = provenance.get("failure") if isinstance(provenance, Mapping) else None
+    if isinstance(failure, Mapping) and failure.get("reason"):
+        return str(failure["reason"])
+    if isinstance(validation_payload, Mapping):
+        errors = validation_payload.get("errors")
+        if isinstance(errors, Sequence) and not isinstance(errors, (str, bytes, bytearray)) and errors:
+            return "; ".join(str(item) for item in errors)
+    return None
+
+
+def _merge_capability_compatibility_payload(
+    capability_payload: Mapping[str, Any],
+    compatibility_payload: Mapping[str, Any],
+    *,
+    preserve_success_status: bool,
+    refresh_patch_data: bool,
+) -> dict[str, Any]:
+    """Expose legacy ToolResult fields alongside the audited capability result."""
+
+    merged = dict(capability_payload)
+    for key in ("tool", "status", "error", "data", "metadata", "started_at", "finished_at"):
+        if key in compatibility_payload:
+            value = compatibility_payload[key]
+            merged[key] = dict(value) if key == "data" and isinstance(value, Mapping) else value
+
+    raw_result = capability_payload.get("result")
+    result_payload = dict(raw_result) if isinstance(raw_result, Mapping) else {}
+    result_status = str(result_payload.get("status") or "failed")
+    rollback_payload = capability_payload.get("rollback")
+    _, exit_code = _capability_result_outcome(result_payload, rollback_payload)
+    compatibility_status = str(compatibility_payload.get("status") or result_status)
+    merged["status"] = compatibility_status if preserve_success_status and exit_code == 0 else result_status
+
+    data = merged.get("data")
+    if refresh_patch_data and isinstance(data, Mapping):
+        refreshed_data = dict(data)
+        refreshed_data["status"] = result_status
+        refreshed_data["dry_run"] = False if exit_code == 0 else bool(refreshed_data.get("dry_run", True))
+        refreshed_data["artifacts"] = _patch_compatibility_artifacts(result_payload) if exit_code == 0 else []
+        merged["data"] = refreshed_data
+    elif exit_code and isinstance(data, Mapping):
+        failed_data = dict(data)
+        failed_data["status"] = result_status
+        if "valid" in failed_data:
+            failed_data["valid"] = False
+        merged["data"] = failed_data
+
+    if exit_code:
+        merged["error"] = _capability_compatibility_error(
+            result_payload,
+            capability_payload.get("validation"),
+        ) or merged.get("error")
+
+    # Capability fields remain authoritative even when a legacy payload uses
+    # similarly named keys such as ``artifacts``.
+    for key in (
+        "session_id",
+        "out_dir",
+        "capability",
+        "action",
+        "provider",
+        "validation",
+        "result",
+        "rollback",
+        "artifacts",
+    ):
+        if key in capability_payload:
+            merged[key] = capability_payload[key]
+    return merged
+
+
+def _patch_apply_artifact_dir(out_path: str | Path, artifact_dir: str | Path | None) -> Path:
+    destination = Path(out_path).expanduser().resolve()
+    return (
+        Path(artifact_dir).expanduser().resolve()
+        if artifact_dir is not None
+        else destination.parent / f"{destination.name}.patch-artifacts"
+    )
+
+
+def _patch_rollback_artifact_dir(out_path: str | Path, artifact_dir: str | Path | None) -> Path:
+    destination = Path(out_path).expanduser().resolve()
+    return (
+        Path(artifact_dir).expanduser().resolve()
+        if artifact_dir is not None
+        else destination.parent / f"{destination.name}.rollback-artifacts"
+    )
+
+
+def _run_patch_capability(
+    *,
+    sample: str | Path,
+    action: str,
+    out_dir: str | Path,
+    params: Mapping[str, Any],
+    compatibility_payload: Mapping[str, Any],
+    preserve_success_status: bool = False,
+    refresh_patch_data: bool = False,
+    supplemental_artifact_results: Sequence[Mapping[str, Any]] = (),
+    entrypoint: str,
+) -> int:
+    encoded_params = [
+        f"{name}={json.dumps(value, ensure_ascii=False, default=str)}"
+        for name, value in params.items()
+        if value is not None
+    ]
+    forwarded = argparse.Namespace(
+        capability="patch_executor",
+        action=action,
+        sample=str(sample),
+        pid=None,
+        out=str(out_dir),
+        provider="local_verified_patch",
+        param=encoded_params,
+        rollback=False,
+        compatibility_payload=dict(compatibility_payload),
+        compatibility_preserve_success_status=preserve_success_status,
+        compatibility_refresh_patch_data=refresh_patch_data,
+        supplemental_artifact_results=[dict(item) for item in supplemental_artifact_results],
+        entrypoint=entrypoint,
+    )
+    return capability_run_command(forwarded)
+
+
 def binary_patch_command(args: argparse.Namespace) -> int:
     """Apply a guarded offline patch plan to a copied output binary."""
 
@@ -333,16 +580,28 @@ def binary_patch_command(args: argparse.Namespace) -> int:
     except ImportError:
         from reverse_analyzer.tools import binary_patch_apply_plan
 
-    result = binary_patch_apply_plan(
+    preflight = binary_patch_apply_plan(
         args.sample,
         plan=args.plan,
         out_path=args.out,
-        apply=bool(args.apply),
+        apply=False,
         artifact_dir=args.artifact_dir,
     )
-    payload = result.to_dict() if hasattr(result, "to_dict") else result
-    _print_json_payload(payload if isinstance(payload, Mapping) else {"status": "failed", "error": str(payload)})
-    return 0 if getattr(result, "status", "failed") in {"ok", "planned"} else 2
+    artifact_dir = _patch_apply_artifact_dir(args.out, args.artifact_dir)
+    return _run_patch_capability(
+        sample=args.sample,
+        action="apply" if args.apply else "plan",
+        out_dir=artifact_dir,
+        params={
+            "plan": str(Path(args.plan).expanduser().resolve()),
+            "out_path": str(Path(args.out).expanduser().resolve()),
+            "artifact_dir": str(artifact_dir),
+            "plan_source_path": str(Path(args.plan).expanduser().resolve()),
+        },
+        compatibility_payload=_legacy_result_payload(preflight),
+        refresh_patch_data=bool(args.apply),
+        entrypoint="cli.patch-binary.apply",
+    )
 
 
 def binary_patch_rollback_command(args: argparse.Namespace) -> int:
@@ -353,29 +612,472 @@ def binary_patch_rollback_command(args: argparse.Namespace) -> int:
     except ImportError:
         from reverse_analyzer.tools import binary_patch_rollback_plan
 
-    result = binary_patch_rollback_plan(
+    preflight = binary_patch_rollback_plan(
         args.patched,
         rollback=args.rollback,
         out_path=args.out,
-        apply=bool(args.apply),
+        apply=False,
         artifact_dir=args.artifact_dir,
     )
-    payload = result.to_dict() if hasattr(result, "to_dict") else result
-    _print_json_payload(payload if isinstance(payload, Mapping) else {"status": "failed", "error": str(payload)})
-    return 0 if getattr(result, "status", "failed") in {"ok", "planned"} else 2
+    compatibility_payload = _legacy_result_payload(preflight)
+    if not args.apply:
+        _print_json_payload(compatibility_payload)
+        return 0 if getattr(preflight, "status", "failed") in {"ok", "planned"} else 2
+
+    artifact_dir = _patch_rollback_artifact_dir(args.out, args.artifact_dir)
+    return _run_patch_capability(
+        sample=args.patched,
+        action="rollback",
+        out_dir=artifact_dir,
+        params={
+            "rollback": str(Path(args.rollback).expanduser().resolve()),
+            "out_path": str(Path(args.out).expanduser().resolve()),
+            "artifact_dir": str(artifact_dir),
+        },
+        compatibility_payload=compatibility_payload,
+        refresh_patch_data=True,
+        entrypoint="cli.patch-binary.rollback",
+    )
 
 
 def validate_patch_plan_command(args: argparse.Namespace) -> int:
-    """Validate a patch plan without creating a patched binary or artifacts."""
+    """Validate a patch plan without creating a patched binary."""
 
     try:
         from .tools import validate_patch_plan
     except ImportError:
         from reverse_analyzer.tools import validate_patch_plan
 
-    result = validate_patch_plan(args.sample, plan=args.plan)
-    payload = result.to_dict() if hasattr(result, "to_dict") else result
-    _print_json_payload(payload if isinstance(payload, Mapping) else {"status": "failed", "error": str(payload)})
+    preflight = validate_patch_plan(args.sample, plan=args.plan)
+    plan_path = Path(args.plan).expanduser().resolve()
+    out_dir = plan_path.parent / f"{plan_path.stem}.validate-session"
+    return _run_patch_capability(
+        sample=args.sample,
+        action="validate",
+        out_dir=out_dir,
+        params={
+            "plan": str(plan_path),
+            "artifact_dir": str(out_dir),
+        },
+        compatibility_payload=_legacy_result_payload(preflight),
+        entrypoint="cli.validate-patch-plan",
+    )
+
+
+def pe_patch_plan_command(args: argparse.Namespace) -> int:
+    """Build PE-aware planning artifacts from one explicit patch intent."""
+
+    try:
+        from .patch import plan_pe_patch
+    except ImportError:
+        from reverse_analyzer.patch import plan_pe_patch
+
+    requested_out = Path(args.out).resolve()
+    patch_dir = requested_out if requested_out.name.casefold() == "patch" else requested_out / "patch"
+    result = plan_pe_patch(
+        args.sample,
+        out_dir=patch_dir,
+        strategy=args.strategy,
+        offset=args.offset,
+        rva=args.rva,
+        aob=args.aob,
+        replacement=args.replacement,
+        occurrence=args.occurrence,
+        operation_id=args.operation_id,
+    )
+    compatibility_payload = _legacy_result_payload(result)
+    data = compatibility_payload.get("data")
+    plan_path = data.get("plan_path") if isinstance(data, Mapping) else None
+    if getattr(result, "status", "failed") != "ok" or not plan_path:
+        _print_json_payload(compatibility_payload)
+        return 2
+
+    sample_path = Path(args.sample).expanduser().resolve()
+    planned_output = patch_dir / f"{sample_path.stem}.patched{sample_path.suffix}"
+    return _run_patch_capability(
+        sample=sample_path,
+        action="plan",
+        out_dir=requested_out,
+        params={
+            "plan": str(Path(str(plan_path)).expanduser().resolve()),
+            "out_path": str(planned_output),
+            "artifact_dir": str(patch_dir),
+            "plan_source_path": str(Path(str(plan_path)).expanduser().resolve()),
+        },
+        compatibility_payload=compatibility_payload,
+        preserve_success_status=True,
+        entrypoint="cli.patch.plan",
+    )
+
+
+def pe_patch_verify_command(args: argparse.Namespace) -> int:
+    """Re-verify one PE-aware patch plan without writing a binary."""
+
+    try:
+        from .patch import verify_pe_patch
+    except ImportError:
+        from reverse_analyzer.patch import verify_pe_patch
+
+    result = verify_pe_patch(args.sample, plan=args.plan, out_dir=args.out)
+    compatibility_payload = _legacy_result_payload(result)
+    if getattr(result, "status", "failed") != "ok":
+        _print_json_payload(compatibility_payload)
+        return 2
+
+    plan_path = Path(args.plan).expanduser().resolve()
+    out_dir = Path(args.out).expanduser().resolve() if args.out else plan_path.parent
+    return _run_patch_capability(
+        sample=args.sample,
+        action="validate",
+        out_dir=out_dir,
+        params={
+            "plan": str(plan_path),
+            "artifact_dir": str(out_dir),
+            "plan_source_path": str(plan_path),
+        },
+        compatibility_payload=compatibility_payload,
+        preserve_success_status=True,
+        entrypoint="cli.patch.verify",
+    )
+
+
+def pe_patch_apply_command(args: argparse.Namespace) -> int:
+    """Verify and apply a PE patch plan to an explicit output copy."""
+
+    try:
+        from .patch import verify_pe_patch
+        from .tools import binary_patch_apply_plan
+    except ImportError:
+        from reverse_analyzer.patch import verify_pe_patch
+        from reverse_analyzer.tools import binary_patch_apply_plan
+
+    plan_path = Path(args.plan).resolve()
+    artifact_dir = Path(args.artifact_dir).resolve() if args.artifact_dir else plan_path.parent
+    try:
+        plan_payload = json.loads(plan_path.read_text(encoding="utf-8-sig"))
+        if not isinstance(plan_payload, Mapping):
+            raise ValueError("PE patch plan JSON must be an object")
+        bound_plan = dict(plan_payload)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        _print_json_payload(
+            {
+                "tool": "pe_patch_apply",
+                "status": "failed",
+                "error": f"{type(exc).__name__}: {exc}",
+                "data": {"status": "failed", "plan_path": str(plan_path), "artifacts": []},
+            }
+        )
+        return 2
+
+    verification = verify_pe_patch(args.sample, plan=bound_plan, out_dir=artifact_dir)
+    verification_payload = _legacy_result_payload(verification)
+    if getattr(verification, "status", "failed") != "ok":
+        _print_json_payload(verification_payload)
+        return 2
+
+    preflight = binary_patch_apply_plan(
+        args.sample,
+        plan=bound_plan,
+        out_path=args.out,
+        apply=False,
+        artifact_dir=artifact_dir,
+        plan_source_path=plan_path,
+    )
+    return _run_patch_capability(
+        sample=args.sample,
+        action="apply",
+        out_dir=artifact_dir,
+        params={
+            "plan": str(plan_path),
+            "out_path": str(Path(args.out).expanduser().resolve()),
+            "artifact_dir": str(artifact_dir),
+            "plan_source_path": str(plan_path),
+        },
+        compatibility_payload=_legacy_result_payload(preflight),
+        refresh_patch_data=True,
+        supplemental_artifact_results=(verification_payload,),
+        entrypoint="cli.patch.apply",
+    )
+
+
+def pe_patch_rollback_command(args: argparse.Namespace) -> int:
+    """Restore a patched copy using a hash-bound PE rollback plan."""
+
+    try:
+        from .tools import binary_patch_rollback_plan
+    except ImportError:
+        from reverse_analyzer.tools import binary_patch_rollback_plan
+
+    rollback_path = Path(args.rollback_plan).resolve()
+    artifact_dir = Path(args.artifact_dir).resolve() if args.artifact_dir else rollback_path.parent
+    preflight = binary_patch_rollback_plan(
+        args.patched,
+        rollback=rollback_path,
+        out_path=args.out,
+        apply=False,
+        artifact_dir=artifact_dir,
+    )
+    return _run_patch_capability(
+        sample=args.patched,
+        action="rollback",
+        out_dir=artifact_dir,
+        params={
+            "rollback": str(rollback_path),
+            "out_path": str(Path(args.out).expanduser().resolve()),
+            "artifact_dir": str(artifact_dir),
+        },
+        compatibility_payload=_legacy_result_payload(preflight),
+        refresh_patch_data=True,
+        entrypoint="cli.patch.rollback",
+    )
+
+
+def android_elf_patch_plan_command(args: argparse.Namespace) -> int:
+    """Build an audited ARM/AArch64 ELF patch plan from explicit intent."""
+
+    try:
+        from .patch import plan_android_elf_patch
+    except ImportError:
+        from reverse_analyzer.patch import plan_android_elf_patch
+
+    requested_out = Path(args.out).expanduser().resolve()
+    patch_dir = requested_out if requested_out.name.casefold() == "patch" else requested_out / "patch"
+    result = plan_android_elf_patch(
+        args.sample,
+        out_dir=patch_dir,
+        virtual_address=args.virtual_address,
+        file_offset=args.file_offset,
+        replacement=args.replacement,
+        instruction_mode=args.instruction_mode,
+        operation_id=args.operation_id,
+    )
+    compatibility_payload = _legacy_result_payload(result)
+    data = compatibility_payload.get("data")
+    plan_path = data.get("plan_path") if isinstance(data, Mapping) else None
+    if getattr(result, "status", "failed") != "ok" or not plan_path:
+        _print_json_payload(compatibility_payload)
+        return 2
+
+    sample_path = Path(args.sample).expanduser().resolve()
+    planned_output = patch_dir / f"{sample_path.stem}.patched{sample_path.suffix}"
+    return _run_patch_capability(
+        sample=sample_path,
+        action="plan",
+        out_dir=requested_out,
+        params={
+            "plan": str(Path(str(plan_path)).expanduser().resolve()),
+            "out_path": str(planned_output),
+            "artifact_dir": str(patch_dir),
+            "plan_source_path": str(Path(str(plan_path)).expanduser().resolve()),
+        },
+        compatibility_payload=compatibility_payload,
+        preserve_success_status=True,
+        entrypoint="cli.patch.android-elf-plan",
+    )
+
+
+def android_elf_patch_verify_command(args: argparse.Namespace) -> int:
+    """Re-verify an Android ELF plan without modifying the target."""
+
+    try:
+        from .patch import verify_android_elf_patch
+    except ImportError:
+        from reverse_analyzer.patch import verify_android_elf_patch
+
+    plan_path = Path(args.plan).expanduser().resolve()
+    out_dir = Path(args.out).expanduser().resolve() if args.out else plan_path.parent
+    result = verify_android_elf_patch(args.sample, plan=plan_path, out_dir=out_dir)
+    compatibility_payload = _legacy_result_payload(result)
+    if getattr(result, "status", "failed") != "ok":
+        _print_json_payload(compatibility_payload)
+        return 2
+    return _run_patch_capability(
+        sample=args.sample,
+        action="validate",
+        out_dir=out_dir,
+        params={
+            "plan": str(plan_path),
+            "artifact_dir": str(out_dir),
+            "plan_source_path": str(plan_path),
+        },
+        compatibility_payload=compatibility_payload,
+        preserve_success_status=True,
+        entrypoint="cli.patch.android-elf-verify",
+    )
+
+
+def android_elf_patch_apply_command(args: argparse.Namespace) -> int:
+    """Verify and apply an Android ELF patch to a separate output copy."""
+
+    try:
+        from .patch import verify_android_elf_patch
+        from .tools import binary_patch_apply_plan
+    except ImportError:
+        from reverse_analyzer.patch import verify_android_elf_patch
+        from reverse_analyzer.tools import binary_patch_apply_plan
+
+    plan_path = Path(args.plan).expanduser().resolve()
+    artifact_dir = Path(args.artifact_dir).expanduser().resolve() if args.artifact_dir else plan_path.parent
+    verification = verify_android_elf_patch(args.sample, plan=plan_path, out_dir=artifact_dir)
+    verification_payload = _legacy_result_payload(verification)
+    if getattr(verification, "status", "failed") != "ok":
+        _print_json_payload(verification_payload)
+        return 2
+    preflight = binary_patch_apply_plan(
+        args.sample,
+        plan=plan_path,
+        out_path=args.out,
+        apply=False,
+        artifact_dir=artifact_dir,
+        plan_source_path=plan_path,
+    )
+    return _run_patch_capability(
+        sample=args.sample,
+        action="apply",
+        out_dir=artifact_dir,
+        params={
+            "plan": str(plan_path),
+            "out_path": str(Path(args.out).expanduser().resolve()),
+            "artifact_dir": str(artifact_dir),
+            "plan_source_path": str(plan_path),
+        },
+        compatibility_payload=_legacy_result_payload(preflight),
+        refresh_patch_data=True,
+        supplemental_artifact_results=(verification_payload,),
+        entrypoint="cli.patch.android-elf-apply",
+    )
+
+
+def android_elf_patch_rollback_command(args: argparse.Namespace) -> int:
+    """Restore a patched Android ELF to a separate output copy."""
+
+    try:
+        from .tools import binary_patch_rollback_plan
+    except ImportError:
+        from reverse_analyzer.tools import binary_patch_rollback_plan
+
+    rollback_path = Path(args.rollback_plan).expanduser().resolve()
+    artifact_dir = Path(args.artifact_dir).expanduser().resolve() if args.artifact_dir else rollback_path.parent
+    preflight = binary_patch_rollback_plan(
+        args.patched,
+        rollback=rollback_path,
+        out_path=args.out,
+        apply=False,
+        artifact_dir=artifact_dir,
+    )
+    return _run_patch_capability(
+        sample=args.patched,
+        action="rollback",
+        out_dir=artifact_dir,
+        params={
+            "rollback": str(rollback_path),
+            "out_path": str(Path(args.out).expanduser().resolve()),
+            "artifact_dir": str(artifact_dir),
+        },
+        compatibility_payload=_legacy_result_payload(preflight),
+        refresh_patch_data=True,
+        entrypoint="cli.patch.android-elf-rollback",
+    )
+
+
+def dll_proxy_command(args: argparse.Namespace) -> int:
+    """Generate a forwarding-DLL project inside an explicit copy root."""
+
+    try:
+        from .tools import dll_proxy_generate
+    except ImportError:
+        from reverse_analyzer.tools import dll_proxy_generate
+
+    result = dll_proxy_generate(
+        args.sample,
+        copy_dir=args.copy_dir,
+        project_dir=args.project_dir,
+        expected_architecture=args.architecture,
+        proxy_name=args.proxy_name,
+    )
+    payload = _legacy_result_payload(result)
+    _print_json_payload(payload)
+    return 0 if getattr(result, "status", "failed") == "ok" else 2
+
+
+def _load_cli_json(
+    value: str | None,
+    *,
+    label: str,
+    default: Any,
+    allow_text: bool = False,
+) -> Any:
+    if value is None:
+        return default
+    text = str(value).strip()
+    if not text:
+        return default
+    if text.startswith(("[", "{")):
+        return json.loads(text)
+    path = Path(text).expanduser()
+    if path.is_file():
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+    if allow_text:
+        return text
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} must be inline JSON or a readable JSON file") from exc
+
+
+def gui_world_projection_command(args: argparse.Namespace) -> int:
+    """Project explicit world geometry into a viewport evidence artifact."""
+
+    try:
+        from .tools import gui_world_projection
+    except ImportError:
+        from reverse_analyzer.tools import gui_world_projection
+
+    try:
+        matrix = _load_cli_json(args.matrix, label="matrix", default=[])
+        viewport = _load_cli_json(args.viewport, label="viewport", default={})
+        points = _load_cli_json(args.points, label="points", default=[])
+        aabbs = _load_cli_json(args.aabbs, label="aabbs", default=[])
+        matrix_source = _load_cli_json(
+            args.matrix_source,
+            label="matrix source",
+            default="explicit-cli-input",
+            allow_text=True,
+        ) if args.matrix_source else "explicit-cli-input"
+        coordinate_system = _load_cli_json(
+            args.coordinate_system,
+            label="coordinate system",
+            default="world",
+            allow_text=True,
+        ) if args.coordinate_system else "world"
+        metadata = _load_cli_json(args.metadata, label="metadata", default={}) if args.metadata else None
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        _print_json_payload(
+            {
+                "tool": "gui_world_projection",
+                "status": "failed",
+                "error": f"{type(exc).__name__}: {exc}",
+                "data": {"status": "failed", "artifacts": []},
+            }
+        )
+        return 2
+
+    result = gui_world_projection(
+        matrix=matrix,
+        viewport=viewport,
+        out_dir=args.out,
+        points=points,
+        aabbs=aabbs,
+        matrix_layout=args.matrix_layout,
+        clip_convention=args.clip_convention,
+        handedness=args.handedness,
+        reversed_z=bool(args.reversed_z),
+        matrix_source=matrix_source,
+        coordinate_system=coordinate_system,
+        metadata=metadata,
+    )
+    payload = _legacy_result_payload(result)
+    _print_json_payload(payload)
     return 0 if getattr(result, "status", "failed") == "ok" else 2
 
 
@@ -392,21 +1094,150 @@ def evidence_verify_command(args: argparse.Namespace) -> int:
     return 0 if payload.get("status") == "ok" else 2
 
 
+def environment_validate_command(args: argparse.Namespace) -> int:
+    """Discover optional adapters and optionally execute bounded probes."""
+
+    if validate_external_environment is None or write_environment_report is None:
+        print("Environment validation runtime is unavailable.", file=sys.stderr)
+        return 3
+    try:
+        overrides = _parse_capability_params(args.set)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    report = validate_external_environment(
+        overrides=overrides,
+        execute_probes=bool(args.execute_probes),
+        timeout=float(args.timeout),
+    )
+    acceptance_workspace = getattr(args, "acceptance_workspace", None)
+    if acceptance_workspace and load_acceptance_records is not None and merge_acceptance_records is not None:
+        report = merge_acceptance_records(report, load_acceptance_records(acceptance_workspace))
+    artifact_path = write_environment_report(report, args.out) if args.out else None
+    required = [str(item) for item in (args.require or [])]
+    workflows = report.get("workflows") if isinstance(report, Mapping) else {}
+    unmet = [
+        name
+        for name in required
+        if not isinstance(workflows, Mapping)
+        or not isinstance(workflows.get(name), Mapping)
+        or not bool(workflows[name].get("verified"))
+    ]
+    if args.json or artifact_path is None:
+        payload = dict(report)
+        if artifact_path is not None:
+            payload["artifact_path"] = str(artifact_path)
+        if unmet:
+            payload["unmet_requirements"] = unmet
+        _print_json_payload(payload)
+    else:
+        summary = report.get("summary") if isinstance(report, Mapping) else {}
+        print(
+            "Environment validation: "
+            f"verified={summary.get('verified', 0)} "
+            f"dependency_gated={summary.get('dependency_gated', 0)} "
+            f"unavailable={summary.get('unavailable', 0)}"
+        )
+        print(f"Artifact: {artifact_path}")
+        if unmet:
+            print(f"Unmet required workflows: {', '.join(unmet)}", file=sys.stderr)
+    return 4 if unmet else 0
+
+
+def environment_accept_list_command(args: argparse.Namespace) -> int:
+    """List registered fixture readiness and any retained record history."""
+
+    if list_acceptance_fixtures is None:
+        print("Acceptance runtime is unavailable.", file=sys.stderr)
+        return 3
+    fixtures = list_acceptance_fixtures()
+    records = load_acceptance_records(args.workspace) if load_acceptance_records is not None else []
+    _print_json_payload(
+        {
+            "schema_version": 1,
+            "workspace": str(Path(args.workspace).expanduser().resolve()),
+            "fixtures": fixtures,
+            "records": records,
+        }
+    )
+    return 0
+
+
+def environment_accept_run_command(args: argparse.Namespace) -> int:
+    """Execute one immutable registered fixture and retain its proof record."""
+
+    if run_acceptance_fixture is None:
+        print("Acceptance runtime is unavailable.", file=sys.stderr)
+        return 3
+    target_identity: Mapping[str, Any] | None = None
+    if args.target_identity:
+        try:
+            parsed = _load_cli_json(args.target_identity, label="target identity", default={})
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        if not isinstance(parsed, Mapping):
+            print("target identity must be a JSON object", file=sys.stderr)
+            return 2
+        target_identity = parsed
+    try:
+        record = run_acceptance_fixture(
+            args.fixture,
+            args.workspace,
+            execute=bool(args.execute),
+            timeout=float(args.timeout),
+            target_identity=target_identity,
+        )
+    except (AcceptanceError, OSError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    _print_json_payload(record)
+    outcome = str(record.get("outcome") or "failed")
+    if outcome == "passed":
+        return 0
+    if outcome == "dependency_gated":
+        return 4
+    if outcome == "unsupported_host":
+        return 5
+    return 2
+
+
+def environment_accept_verify_command(args: argparse.Namespace) -> int:
+    """Recompute hashes for one retained acceptance record."""
+
+    if verify_acceptance_record is None:
+        print("Acceptance runtime is unavailable.", file=sys.stderr)
+        return 3
+    payload = verify_acceptance_record(args.record)
+    _print_json_payload(payload)
+    return 0 if payload.get("status") == "ok" else 2
+
+
 _KNOWN_DYNAMIC_PROFILES = {"quick", "behavior", "unpacking", "network", "persistence"}
 _MAX_GUI_INTERACTION_TRACE_BYTES = 1024 * 1024
-_CAPABILITY_COMMAND_CHOICES = (
-    "memory_runtime",
-    "injector",
-    "hook_runtime",
-    "patch_executor",
-    "android_rebuild",
-)
 _CAPABILITY_REPORT_SECTIONS = {
+    "anti_tamper_lab": "evidence_integrity",
     "memory_runtime": "memory_analysis",
-    "injector": "patch_analysis",
+    "dma_memory": "memory_analysis",
+    "kernel_driver_memory_runtime": "memory_analysis",
+    "native_debugger": "memory_analysis",
+    "injector": "memory_analysis",
     "hook_runtime": "memory_analysis",
+    "hook_target_resolver": "memory_analysis",
+    "native_hook": "memory_analysis",
+    "hardware_identity_virtualization": "memory_analysis",
     "patch_executor": "patch_analysis",
     "android_rebuild": "android_analysis",
+    "android_native_patch": "android_analysis",
+    "android_instrumentation": "android_analysis",
+    "ios_rebuild": "ios_analysis",
+    "ios_instrumentation": "ios_analysis",
+    "engine_runtime": "engine_analysis",
+    "protocol_runtime": "protocol_analysis",
+    "graphics_present_runtime": "gui_analysis",
+    "imgui_renderer_runtime": "gui_analysis",
+    "render_overlay_runtime": "gui_analysis",
+    "target_control_simulation": "gui_analysis",
 }
 
 
@@ -737,6 +1568,7 @@ def analyze_command(args: argparse.Namespace) -> int:
             )
         )
 
+    post_stage_start = len(tool_results)
     extra_artifacts.extend(
         _run_engine_analysis(
             tool_executor,
@@ -759,6 +1591,18 @@ def analyze_command(args: argparse.Namespace) -> int:
             out_dir,
         )
     )
+    if sample.suffix.casefold() == ".ipa" or getattr(args, "require_ios", False):
+        extra_artifacts.extend(
+            _run_ios_analysis(
+                tool_executor,
+                tool_results,
+                result,
+                session,
+                session_store,
+                sample,
+                out_dir,
+            )
+        )
     extra_artifacts.extend(
         _run_protocol_analysis(
             tool_executor,
@@ -817,6 +1661,11 @@ def analyze_command(args: argparse.Namespace) -> int:
             path=str(sample),
             out_dir=str(out_dir),
             analysis=analysis,
+            validate=True,
+            validation_options={},
+            runtime_validation_spec=getattr(args, "runtime_validation_spec", None),
+            behavior_validation_spec=getattr(args, "behavior_validation_spec", None),
+            behavior_original_dir=getattr(args, "behavior_original_dir", None),
         )
         _append_observation(
             tool_results,
@@ -828,6 +1677,9 @@ def analyze_command(args: argparse.Namespace) -> int:
                 "path": str(sample),
                 "out_dir": str(out_dir),
                 "analysis": analysis,
+                "runtime_validation_spec": getattr(args, "runtime_validation_spec", None),
+                "behavior_validation_spec": getattr(args, "behavior_validation_spec", None),
+                "behavior_original_dir": getattr(args, "behavior_original_dir", None),
             },
             reconstruct_result,
         )
@@ -851,6 +1703,34 @@ def analyze_command(args: argparse.Namespace) -> int:
                 verification_result,
             )
             extra_artifacts.extend(_record_artifacts(session, session_store, verification_result))
+
+    required_post_tools: set[str] = set()
+    if args.reconstruct_gui:
+        required_post_tools.update({"reconstruct_gui_project", "reconstruction_verify"})
+    if args.reconstruct:
+        required_post_tools.update({"reconstruct_project", "reconstruction_verify"})
+    if getattr(args, "require_ios", False):
+        required_post_tools.add("ios_analyze")
+    analysis_outcome = _aggregate_stage_outcome(
+        tool_results[post_stage_start:],
+        required_tools=required_post_tools,
+        optional_tools={"engine_analyze", "android_analyze", "ios_analyze", "protocol_analyze"},
+    )
+    _ensure_session_metadata(session)["analysis_outcome"] = dict(analysis_outcome)
+    _mark_flow_task(
+        session,
+        session_store,
+        flow_name="binary-analysis",
+        task_name="analyze",
+        status="failed" if analysis_outcome["hard_failure"] else "succeeded",
+        result={
+            "tool_count": len(tool_results),
+            "tools": [item.get("tool_name") for item in tool_results if isinstance(item, Mapping)],
+            "analysis_outcome": analysis_outcome,
+        },
+        error=_stage_outcome_error(analysis_outcome),
+        message="analysis_failed" if analysis_outcome["hard_failure"] else "analysis_completed",
+    )
 
     if session_store is not None:
         session_store.save(session)
@@ -884,6 +1764,7 @@ def analyze_command(args: argparse.Namespace) -> int:
     if refreshed_manifest is not None and str(refreshed_manifest) not in extra_artifacts:
         extra_artifacts.append(str(refreshed_manifest))
     report_data["evidence_integrity"] = _session_evidence_integrity(session)
+    report_data["analysis_outcome"] = dict(analysis_outcome)
     _persist_knowledge(config, sample, session, out_dir, report_data, tool_results)
 
     report_json = out_dir / "report.json"
@@ -917,6 +1798,8 @@ def analyze_command(args: argparse.Namespace) -> int:
             {
                 "session_id": session.session_id,
                 "out_dir": str(out_dir),
+                "status": analysis_outcome["status"],
+                "analysis_outcome": analysis_outcome,
                 "result": result.to_dict() if hasattr(result, "to_dict") else result,
                 "artifacts": [str(report_json), str(report_md), *extra_artifacts],
             },
@@ -925,7 +1808,7 @@ def analyze_command(args: argparse.Namespace) -> int:
             indent=2,
         )
     )
-    return 0
+    return 2 if analysis_outcome["hard_failure"] else 0
 
 
 
@@ -1056,7 +1939,217 @@ def list_tools_command(args: argparse.Namespace) -> int:
 
 
 def _capability_section_name(capability_name: str) -> str:
-    return _CAPABILITY_REPORT_SECTIONS.get(str(capability_name or "").lower(), "patch_analysis")
+    return _CAPABILITY_REPORT_SECTIONS.get(str(capability_name or "").lower(), "capability_analysis")
+
+
+def _capability_precondition_hash(request: Any) -> str:
+    target = getattr(request, "target", None)
+    target_hash = getattr(target, "sha256", None)
+    if target_hash:
+        return str(target_hash)
+    payload = {
+        "capability": getattr(request, "capability", None),
+        "action": getattr(request, "action", None),
+        "session_id": getattr(request, "session_id", None),
+        "target": target.to_dict() if hasattr(target, "to_dict") else dict(target or {}),
+        "params": dict(getattr(request, "params", {}) or {}),
+    }
+    encoded = json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _capability_synthetic_failure(
+    request: Any,
+    *,
+    provider_name: str,
+    phase: str,
+    reason: str,
+    status: str = "failed",
+    plan: Any = None,
+    validation: Any = None,
+    prior_result: Any = None,
+) -> tuple[Any, Any, Any, Any]:
+    if any(
+        model is None
+        for model in (
+            CapabilityArtifact,
+            CapabilityArtifactBundle,
+            CapabilityExecutionResult,
+            CapabilityPlan,
+            CapabilityValidation,
+        )
+    ):
+        raise RuntimeError("Capability result models are unavailable")
+
+    precondition_hash = (
+        getattr(plan, "precondition_hash", None) if plan is not None else None
+    ) or _capability_precondition_hash(request)
+    before_snapshot = dict(getattr(prior_result, "before_snapshot", {}) or {}) if prior_result is not None else {}
+    if not before_snapshot and plan is not None:
+        before_snapshot = dict(getattr(plan, "before_snapshot", {}) or {})
+    if not before_snapshot:
+        before_snapshot = {
+            "status": "not_captured",
+            "phase": phase,
+            "reason": reason,
+        }
+    rollback_plan = dict(getattr(prior_result, "rollback_plan", {}) or {}) if prior_result is not None else {}
+    if not rollback_plan and plan is not None:
+        rollback_plan = dict(getattr(plan, "rollback_plan", {}) or {})
+    if not rollback_plan:
+        rollback_plan = {
+            "supported": False,
+            "status": "not_required",
+            "reason": "execution did not complete",
+        }
+    if plan is None:
+        plan = CapabilityPlan(
+            capability=str(request.capability),
+            provider=provider_name,
+            session_id=str(request.session_id),
+            target=request.target,
+            action=str(request.action),
+            parameters=dict(request.params or {}),
+            steps=[{"phase": phase, "status": "failed", "reason": reason}],
+            precondition_hash=precondition_hash,
+            before_snapshot=before_snapshot,
+            rollback_plan=rollback_plan,
+            provenance=dict(request.provenance or {}),
+        )
+    if validation is None:
+        validation = CapabilityValidation(
+            capability=str(request.capability),
+            provider=provider_name,
+            session_id=str(request.session_id),
+            ok=False,
+            checks=[{"name": phase, "status": "failed", "reason": reason}],
+            errors=[reason],
+        )
+
+    safe_capability = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in str(request.capability))
+    safe_action = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in str(request.action))
+    artifact_path = f"capabilities/{safe_capability}_{safe_action}_{phase}_{status}.json"
+    artifact = CapabilityArtifact(
+        path=artifact_path,
+        kind="json",
+        description="Structured capability failure evidence",
+        metadata={"phase": phase, "reason": reason},
+    )
+    report_section = {
+        "capability": str(request.capability),
+        "provider": provider_name,
+        "action": str(request.action),
+        "status": status,
+        "phase": phase,
+        "reason": reason,
+    }
+    dashboard_trace = [
+        {
+            "kind": "capability_execution",
+            "capability": str(request.capability),
+            "provider": provider_name,
+            "action": str(request.action),
+            "status": status,
+            "phase": phase,
+            "reason": reason,
+        }
+    ]
+    provenance = dict(request.provenance or {})
+    provenance.update(
+        {
+            "precondition_hash": precondition_hash,
+            "plan": plan.to_dict() if hasattr(plan, "to_dict") else dict(plan or {}),
+            "validation": (
+                validation.to_dict() if hasattr(validation, "to_dict") else dict(validation or {})
+            ),
+            "failure": {"phase": phase, "reason": reason, "status": status},
+        }
+    )
+    if prior_result is not None:
+        provenance["prior_result"] = (
+            prior_result.to_dict() if hasattr(prior_result, "to_dict") else dict(prior_result or {})
+        )
+    after_snapshot = dict(getattr(prior_result, "after_snapshot", {}) or {}) if prior_result is not None else {}
+    if not after_snapshot:
+        after_snapshot = {"status": "not_executed", "phase": phase, "reason": reason}
+    result = CapabilityExecutionResult(
+        capability=str(request.capability),
+        provider=provider_name,
+        session_id=str(request.session_id),
+        status=status,
+        action=str(request.action),
+        target=request.target,
+        before_snapshot=before_snapshot,
+        after_snapshot=after_snapshot,
+        rollback_plan=rollback_plan,
+        artifacts=[artifact],
+        evidence_manifest_entries=[{"path": artifact_path, "kind": "json", "role": "failure_evidence"}],
+        report_section=report_section,
+        dashboard_trace=dashboard_trace,
+        provenance=provenance,
+    )
+    bundle = CapabilityArtifactBundle(
+        capability=str(request.capability),
+        provider=provider_name,
+        session_id=str(request.session_id),
+        artifacts=[artifact],
+        manifest_entries=list(result.evidence_manifest_entries),
+    )
+    return plan, validation, result, bundle
+
+
+def _capability_result_outcome(result: Any, rollback_result: Any = None) -> tuple[str, int]:
+    if rollback_result is not None:
+        rollback_ok = (
+            rollback_result.get("ok")
+            if isinstance(rollback_result, Mapping)
+            else getattr(rollback_result, "ok", False)
+        )
+        if not bool(rollback_ok):
+            return "failed", 2
+    raw_status = getattr(result, "status", None)
+    if raw_status is None and isinstance(result, Mapping):
+        raw_status = result.get("status")
+    status = str(raw_status or "unknown").strip().lower().replace("-", "_")
+    if status in {
+        "ok",
+        "success",
+        "succeeded",
+        "complete",
+        "completed",
+        "executed",
+        "planned",
+        "validated",
+        "verified",
+        "applied",
+        "restored",
+        "rebuilt",
+        "rolled_back",
+    }:
+        return "succeeded", 0
+    if status in {"mock", "mocked", "dry_run", "simulated"}:
+        return "skipped", 0
+    if status in {
+        "unavailable",
+        "unsupported",
+        "not_supported",
+        "not_available",
+        "not_run",
+        "skipped",
+    }:
+        return "skipped", 3
+    return "failed", 2
+
+
+def _capability_failure_phase(result: Any) -> str | None:
+    provenance = getattr(result, "provenance", None)
+    if provenance is None and isinstance(result, Mapping):
+        provenance = result.get("provenance")
+    failure = provenance.get("failure") if isinstance(provenance, Mapping) else None
+    if not isinstance(failure, Mapping):
+        return None
+    phase = str(failure.get("phase") or "").strip()
+    return phase or None
 
 
 def _capability_section_payload(
@@ -1222,7 +2315,7 @@ def capability_run_command(args: argparse.Namespace) -> int:
         session_id=session.session_id,
         requested_provider=args.provider,
         provenance={
-            "entrypoint": "cli.capability.run",
+            "entrypoint": getattr(args, "entrypoint", "cli.capability.run"),
             "out_dir": str(out_dir),
             "sample_path": str(sample_path) if sample_path is not None else None,
             "pid": args.pid,
@@ -1269,6 +2362,42 @@ def capability_run_command(args: argparse.Namespace) -> int:
         print(f"error: capability execution failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
 
+    terminal_status, exit_code = _capability_result_outcome(execution_result, rollback_result)
+    _record_capability_lifecycle_knowledge(
+        config,
+        session,
+        execution_result,
+        rollback_result,
+    )
+    compatibility_payload = getattr(args, "compatibility_payload", None)
+    supplemental_results = getattr(args, "supplemental_artifact_results", ()) or ()
+    extra_results: list[dict[str, Any]] = []
+    if isinstance(compatibility_payload, Mapping):
+        extra_results.append(dict(compatibility_payload))
+    extra_results.extend(dict(item) for item in supplemental_results if isinstance(item, Mapping))
+    for extra_result in extra_results:
+        tool_results.append(extra_result)
+        for artifact_path in _record_artifacts(session, session_store, extra_result):
+            if artifact_path not in artifact_paths:
+                artifact_paths.append(artifact_path)
+
+    failure_phase = _capability_failure_phase(execution_result)
+    plan_task_status = "succeeded"
+    if failure_phase in {"resolve", "support", "plan"}:
+        plan_task_status = "skipped" if terminal_status == "skipped" else "failed"
+    validation_task_status = "succeeded"
+    if failure_phase in {"resolve", "support", "plan"}:
+        validation_task_status = "skipped"
+    elif failure_phase == "validate":
+        validation_task_status = "failed"
+    execute_task_status = "succeeded"
+    if failure_phase in {"resolve", "support", "plan", "validate"}:
+        execute_task_status = "skipped"
+    elif failure_phase == "execute" or (terminal_status == "failed" and failure_phase != "collect_artifacts"):
+        execute_task_status = "failed"
+    elif terminal_status == "skipped":
+        execute_task_status = "skipped"
+
     _append_observation(
         tool_results,
         None,
@@ -1283,14 +2412,18 @@ def capability_run_command(args: argparse.Namespace) -> int:
             "pid": args.pid,
             "params": params,
         },
-        {"tool": "capability_plan", "status": "ok", "data": plan.to_dict() if hasattr(plan, "to_dict") else dict(plan or {})},
+        {
+            "tool": "capability_plan",
+            "status": "ok" if plan_task_status == "succeeded" else plan_task_status,
+            "data": plan.to_dict() if hasattr(plan, "to_dict") else dict(plan or {}),
+        },
     )
     _mark_flow_task(
         session,
         session_store,
         flow_name="capability-execution",
         task_name="plan",
-        status="succeeded",
+        status=plan_task_status,
         result={"provider": getattr(provider, "provider_name", None), "step_count": len(getattr(plan, "steps", []) or [])},
         message="capability_plan_completed",
     )
@@ -1308,7 +2441,7 @@ def capability_run_command(args: argparse.Namespace) -> int:
         },
         {
             "tool": "capability_validate",
-            "status": "ok" if getattr(validation, "ok", False) else "failed",
+            "status": "ok" if validation_task_status == "succeeded" else validation_task_status,
             "data": validation.to_dict() if hasattr(validation, "to_dict") else dict(validation or {}),
         },
     )
@@ -1317,7 +2450,7 @@ def capability_run_command(args: argparse.Namespace) -> int:
         session_store,
         flow_name="capability-execution",
         task_name="validate",
-        status="succeeded",
+        status=validation_task_status,
         result={
             "ok": bool(getattr(validation, "ok", False)),
             "warning_count": len(getattr(validation, "warnings", []) or []),
@@ -1345,7 +2478,7 @@ def capability_run_command(args: argparse.Namespace) -> int:
         session_store,
         flow_name="capability-execution",
         task_name="execute",
-        status="succeeded",
+        status=execute_task_status,
         result={
             "status": getattr(execution_result, "status", "unknown"),
             "artifact_count": len(artifact_paths),
@@ -1379,10 +2512,28 @@ def capability_run_command(args: argparse.Namespace) -> int:
         session_store,
         flow_name="capability-execution",
         task_name="collect-artifacts",
-        status="succeeded",
+        status="failed" if failure_phase == "collect_artifacts" else "succeeded",
         result={"artifact_count": len(artifact_paths), "artifacts": [str(item) for item in artifact_paths]},
+        error=(
+            str((getattr(execution_result, "provenance", {}) or {}).get("failure", {}).get("reason") or "")
+            if failure_phase == "collect_artifacts"
+            else None
+        ),
         message="capability_artifacts_collected",
     )
+
+    flow = _find_flow(session, "capability-execution")
+    if flow is not None and hasattr(flow, "set_status"):
+        flow.set_status(terminal_status)
+    if hasattr(session, "set_status"):
+        session.set_status(terminal_status)
+    outcome_metadata = _ensure_session_metadata(session)
+    outcome_metadata["capability_outcome"] = {
+        "provider_status": getattr(execution_result, "status", "unknown"),
+        "session_status": terminal_status,
+        "exit_code": exit_code,
+        "failure_phase": failure_phase,
+    }
 
     evidence_manifest = _write_evidence_manifest(
         session,
@@ -1428,6 +2579,8 @@ def capability_run_command(args: argparse.Namespace) -> int:
         tool_results,
     )
     report_data["evidence_integrity"] = _session_evidence_integrity(session)
+    if sample_path is not None and terminal_status == "succeeded":
+        _persist_knowledge(config, sample_path, session, out_dir, report_data, tool_results)
 
     report_json = out_dir / "report.json"
     report_md = out_dir / "report.md"
@@ -1445,9 +2598,12 @@ def capability_run_command(args: argparse.Namespace) -> int:
         result={"report_json": str(report_json), "report_md": str(report_md)},
         message="capability_report_generated",
     )
-    if hasattr(session, "set_status"):
-        session.set_status("succeeded")
     _finalize_session_status(session, session_store, stopped_reason="final_answer")
+    flow = _find_flow(session, "capability-execution")
+    if flow is not None and hasattr(flow, "set_status"):
+        flow.set_status(terminal_status)
+    if hasattr(session, "set_status"):
+        session.set_status(terminal_status)
 
     session.artifacts.extend(
         [
@@ -1463,7 +2619,11 @@ def capability_run_command(args: argparse.Namespace) -> int:
         "out_dir": str(out_dir),
         "capability": args.capability,
         "action": args.action,
-        "provider": getattr(provider, "provider_name", None),
+        "provider": (
+            getattr(execution_result, "provider", None)
+            or getattr(provider, "provider_name", None)
+            or getattr(args, "provider", None)
+        ),
         "validation": validation.to_dict() if hasattr(validation, "to_dict") else dict(validation or {}),
         "result": execution_result.to_dict() if hasattr(execution_result, "to_dict") else dict(execution_result or {}),
         "rollback": (
@@ -1477,8 +2637,470 @@ def capability_run_command(args: argparse.Namespace) -> int:
         payload["artifacts"].append(str(evidence_manifest))
     if refreshed_manifest is not None and str(refreshed_manifest) not in payload["artifacts"]:
         payload["artifacts"].append(str(refreshed_manifest))
-    _print_json_payload(payload)
-    return 0
+    output_payload = payload
+    if isinstance(compatibility_payload, Mapping):
+        output_payload = _merge_capability_compatibility_payload(
+            payload,
+            compatibility_payload,
+            preserve_success_status=bool(getattr(args, "compatibility_preserve_success_status", False)),
+            refresh_patch_data=bool(getattr(args, "compatibility_refresh_patch_data", False)),
+        )
+    _print_json_payload(output_payload)
+    if exit_code:
+        result_payload = payload["result"] if isinstance(payload.get("result"), Mapping) else {}
+        report_section = (
+            result_payload.get("report_section")
+            if isinstance(result_payload.get("report_section"), Mapping)
+            else {}
+        )
+        reason = report_section.get("reason") or result_payload.get("reason") or getattr(
+            execution_result,
+            "status",
+            "capability execution did not succeed",
+        )
+        print(f"error: capability execution did not succeed: {reason}", file=sys.stderr)
+    return exit_code
+
+
+def _dedicated_capability_command(args: argparse.Namespace) -> int:
+    """Normalize ergonomic command groups into the audited capability runner."""
+
+    params = list(getattr(args, "param", None) or [])
+    for argument_name, parameter_name in getattr(args, "capability_param_fields", ()):
+        value = getattr(args, argument_name, None)
+        if value is None:
+            continue
+        if getattr(args, "capability", None) == "memory_runtime":
+            try:
+                value = _normalize_memory_cli_parameter(args, parameter_name, value)
+            except (UnicodeEncodeError, ValueError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+        params.append(f"{parameter_name}={json.dumps(value, ensure_ascii=False)}")
+    forwarded = argparse.Namespace(
+        capability=args.capability,
+        action=args.action,
+        sample=getattr(args, "sample", None),
+        pid=getattr(args, "pid", None),
+        out=args.out,
+        provider=getattr(args, "provider", None),
+        param=params,
+        rollback=bool(getattr(args, "rollback", False)),
+    )
+    return capability_run_command(forwarded)
+
+
+_MEMORY_PROTECTION_ALIASES = {
+    "none": "PAGE_NOACCESS",
+    "r": "PAGE_READONLY",
+    "rw": "PAGE_READWRITE",
+    "wc": "PAGE_WRITECOPY",
+    "x": "PAGE_EXECUTE",
+    "rx": "PAGE_EXECUTE_READ",
+    "rwx": "PAGE_EXECUTE_READWRITE",
+    "xwc": "PAGE_EXECUTE_WRITECOPY",
+}
+
+
+def _normalize_memory_cli_parameter(
+    args: argparse.Namespace,
+    parameter_name: str,
+    value: Any,
+) -> Any:
+    """Translate human-oriented memory CLI values into provider inputs."""
+
+    action = str(getattr(args, "action", "") or "").casefold()
+    if action == "scan" and parameter_name == "pattern":
+        pattern_type = str(getattr(args, "pattern_type", "aob") or "aob").casefold()
+        if pattern_type == "ascii":
+            return _format_memory_cli_bytes(str(value).encode("ascii"))
+        if pattern_type == "utf16":
+            return _format_memory_cli_bytes(str(value).encode("utf-16-le"))
+        if pattern_type == "pointer":
+            pointer_size = int(getattr(args, "pointer_size", 8))
+            pointer = int(str(value).strip(), 0)
+            if pointer < 0 or pointer >= 1 << (pointer_size * 8):
+                raise ValueError(f"pointer value does not fit in {pointer_size} bytes")
+            return _format_memory_cli_bytes(
+                pointer.to_bytes(pointer_size, byteorder="little", signed=False)
+            )
+    if action == "write" and parameter_name == "data":
+        encoding = str(getattr(args, "encoding", "hex") or "hex").casefold()
+        codecs = {
+            "ascii": "ascii",
+            "utf8": "utf-8",
+            "utf16le": "utf-16-le",
+        }
+        if encoding in codecs:
+            return _format_memory_cli_bytes(str(value).encode(codecs[encoding]))
+    if parameter_name in {"protection", "expected_protection"}:
+        normalized = str(value).strip()
+        alias = _MEMORY_PROTECTION_ALIASES.get(normalized.casefold())
+        if alias is not None:
+            return alias
+        if normalized.casefold().startswith("page_"):
+            return normalized.upper()
+    return value
+
+
+def _format_memory_cli_bytes(value: bytes) -> str:
+    if not value:
+        raise ValueError("memory byte pattern must be non-empty")
+    return " ".join(f"{octet:02X}" for octet in value)
+
+
+def _hook_capability_command(args: argparse.Namespace) -> int:
+    """Translate the hook CLI contract into the hook provider contract."""
+
+    try:
+        hook_specification = _load_json_object(args.plan, label="hook plan")
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    duration_ms = int(round(float(args.duration) * 1000.0))
+    requested_backend = str(args.backend or "auto").casefold()
+    provider = getattr(args, "provider", None)
+    if requested_backend == "frida":
+        provider = "frida_hook_runtime"
+    elif requested_backend == "win32":
+        # No Win32 backend is registered. Resolving this explicit provider
+        # produces a durable failed capability record instead of using Frida.
+        provider = "win32_hook_runtime"
+
+    params = list(getattr(args, "param", None) or [])
+    params.extend(
+        (
+            f"hook_specification={json.dumps(hook_specification, ensure_ascii=False)}",
+            f"duration_ms={json.dumps(duration_ms)}",
+            f"requested_backend={json.dumps(requested_backend)}",
+        )
+    )
+    forwarded = argparse.Namespace(
+        capability="hook_runtime",
+        action="hook-trace",
+        sample=getattr(args, "sample", None),
+        pid=getattr(args, "pid", None),
+        out=args.out,
+        provider=provider,
+        param=params,
+        rollback=bool(getattr(args, "rollback", False)),
+    )
+    return capability_run_command(forwarded)
+
+
+def _analysis_alias_command(args: argparse.Namespace) -> int:
+    """Run the normal evidence pipeline for a domain-specific CLI alias."""
+
+    forwarded = ["analyze", str(args.sample), "--out", str(args.out)]
+    for option in getattr(args, "analysis_options", ()):
+        if bool(getattr(args, option.replace("-", "_"), False)):
+            forwarded.append(f"--{option}")
+    for option in getattr(args, "analysis_value_options", ()):
+        value = getattr(args, option.replace("-", "_"), None)
+        if value is None:
+            continue
+        values = value if isinstance(value, (list, tuple)) else (value,)
+        for item in values:
+            forwarded.extend((f"--{option}", str(item)))
+    return main(forwarded)
+
+
+def _protocol_stage_args(args: argparse.Namespace, out_dir: Path) -> dict[str, Any]:
+    """Return the shared bounded-import arguments for protocol CLI stages."""
+
+    requested_format = getattr(args, "format", "auto")
+    return {
+        "source_format": None if requested_format == "auto" else requested_format,
+        "max_bytes": int(args.max_bytes),
+        "max_packets": int(args.max_packets),
+        "max_messages": int(args.max_messages),
+        "max_message_bytes": int(args.max_message_bytes),
+        "out_dir": str(out_dir),
+    }
+
+
+def _protocol_message_artifact_result(inference: Mapping[str, Any], out_dir: Path) -> dict[str, Any]:
+    """Persist one bounded JSON artifact per normalized protocol message."""
+
+    message_dir = out_dir / "protocol" / "messages"
+    message_dir.mkdir(parents=True, exist_ok=True)
+    messages = [dict(item) for item in inference.get("messages") or [] if isinstance(item, Mapping)]
+    artifacts: list[dict[str, Any]] = []
+    if messages:
+        for index, message in enumerate(messages, start=1):
+            path = message_dir / f"message-{index:04d}.json"
+            path.write_text(
+                json.dumps(message, ensure_ascii=False, indent=2, default=str) + "\n",
+                encoding="utf-8",
+            )
+            artifacts.append(
+                {
+                    "name": f"protocol/messages/{path.name}",
+                    "path": str(path),
+                    "kind": "protocol-message",
+                }
+            )
+    else:
+        path = message_dir / "index.json"
+        path.write_text(
+            json.dumps({"schema_version": 1, "message_count": 0, "messages": []}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        artifacts.append(
+            {
+                "name": "protocol/messages/index.json",
+                "path": str(path),
+                "kind": "protocol-message-index",
+            }
+        )
+    return {
+        "status": "ok",
+        "message_count": len(messages),
+        "artifacts": artifacts,
+    }
+
+
+def _platform_core_artifact_result(platform_core: Mapping[str, Any]) -> dict[str, Any]:
+    artifacts: list[dict[str, Any]] = []
+    for key, kind in (("semantic_ir", "semantic-ir"), ("evidence_graph", "evidence-graph")):
+        section = platform_core.get(key)
+        if not isinstance(section, Mapping) or not section.get("path"):
+            continue
+        path = Path(str(section["path"]))
+        artifacts.append({"name": path.name, "path": str(path), "kind": kind})
+    return {
+        "status": "ok" if artifacts else "unavailable",
+        "artifacts": artifacts,
+    }
+
+
+def protocol_command(args: argparse.Namespace) -> int:
+    """Run the complete passive protocol evidence pipeline for one source."""
+
+    config = load_config()
+    ensure_runtime_dirs(config)
+    source = Path(args.source).resolve()
+    out_dir = Path(args.out).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    session = _new_session(source, out_dir, 4)
+    missing: list[str] = []
+    loaded: dict[str, Any] = {}
+    for symbol in ("ToolExecutor", "ReportBuilder"):
+        try:
+            loaded[symbol] = _load_symbol(symbol)
+        except RuntimeError as exc:
+            missing.append(str(exc))
+    if missing:
+        print("error: protocol runtime is incomplete.", file=sys.stderr)
+        for item in missing:
+            print(f"- {item}", file=sys.stderr)
+        return 3
+
+    trace_logger = TraceLogger(out_dir / "trace.jsonl") if TraceLogger is not None else None
+    session_store = SessionStore(out_dir, trace_logger=trace_logger) if SessionStore is not None else None
+    if session_store is not None:
+        session_store.save(session)
+
+    tool_executor = _instantiate(loaded["ToolExecutor"], config=config, out_dir=out_dir)
+    if register_builtin_tools is not None:
+        register_builtin_tools(tool_executor)
+
+    tool_results: list[dict[str, Any]] = []
+    result_container = argparse.Namespace(tool_results=tool_results, stopped_reason="protocol_cli")
+    artifact_paths: list[str] = []
+    shared = _protocol_stage_args(args, out_dir)
+
+    capture_args = {"path": str(source), **shared}
+    capture_result = tool_executor.execute("protocol_capture", **capture_args)
+    _append_observation(
+        tool_results,
+        result_container,
+        session,
+        session_store,
+        "protocol_capture",
+        capture_args,
+        capture_result,
+    )
+    artifact_paths.extend(_record_artifacts(session, session_store, capture_result))
+    capture_payload = _result_payload(capture_result)
+    if not isinstance(capture_payload, Mapping):
+        capture_payload = {}
+
+    infer_args = {"capture": dict(capture_payload), **shared}
+    infer_result = tool_executor.execute("protocol_infer", **infer_args)
+    _append_observation(
+        tool_results,
+        result_container,
+        session,
+        session_store,
+        "protocol_infer",
+        {**shared, "capture": "protocol_capture"},
+        infer_result,
+    )
+    artifact_paths.extend(_record_artifacts(session, session_store, infer_result))
+    inference = _result_payload(infer_result)
+    if not isinstance(inference, Mapping):
+        inference = {}
+
+    summarize_args = {"inference": dict(inference), **shared}
+    summarize_result = tool_executor.execute("protocol_summarize", **summarize_args)
+    _append_observation(
+        tool_results,
+        result_container,
+        session,
+        session_store,
+        "protocol_summarize",
+        {**shared, "inference": "protocol_infer"},
+        summarize_result,
+    )
+    artifact_paths.extend(_record_artifacts(session, session_store, summarize_result))
+
+    analyze_args = {
+        "path": str(source),
+        "capture": dict(inference),
+        **shared,
+    }
+    analyze_result = tool_executor.execute("protocol_analyze", **analyze_args)
+    _append_observation(
+        tool_results,
+        result_container,
+        session,
+        session_store,
+        "protocol_analyze",
+        {**shared, "path": str(source), "capture": "protocol_infer"},
+        analyze_result,
+    )
+    artifact_paths.extend(_record_artifacts(session, session_store, analyze_result))
+
+    message_result = _protocol_message_artifact_result(inference, out_dir)
+    _append_observation(
+        tool_results,
+        result_container,
+        session,
+        session_store,
+        "protocol_message_artifacts",
+        {"source": "protocol_infer", "out_dir": str(out_dir)},
+        message_result,
+    )
+    artifact_paths.extend(_record_artifacts(session, session_store, message_result))
+
+    protocol_outcome = _aggregate_stage_outcome(
+        tool_results,
+        required_tools={
+            "protocol_capture",
+            "protocol_infer",
+            "protocol_summarize",
+            "protocol_analyze",
+        },
+        require_all=True,
+    )
+    _ensure_session_metadata(session)["protocol_outcome"] = dict(protocol_outcome)
+
+    _mark_flow_task(
+        session,
+        session_store,
+        flow_name="binary-analysis",
+        task_name="identify",
+        status="succeeded",
+        result={"source": str(source), "exists": source.exists()},
+        message="protocol_source_identified",
+    )
+    _mark_flow_task(
+        session,
+        session_store,
+        flow_name="binary-analysis",
+        task_name="analyze",
+        status="failed" if protocol_outcome["hard_failure"] else "succeeded",
+        result={
+            "tool_count": len(tool_results),
+            "requested_command": args.protocol_command,
+            "protocol_outcome": protocol_outcome,
+        },
+        error=_stage_outcome_error(protocol_outcome),
+        message="protocol_analysis_failed" if protocol_outcome["hard_failure"] else "protocol_analysis_completed",
+    )
+
+    report_builder = _instantiate(
+        loaded["ReportBuilder"],
+        session,
+        tool_results,
+        {},
+        config=config,
+        out_dir=out_dir,
+    )
+    report_data = _call_first(report_builder, ("build", "render"))
+    platform_core = _finalize_platform_core_artifacts(
+        report_data,
+        out_dir,
+        sample_path=str(source),
+    )
+    core_result = _platform_core_artifact_result(platform_core)
+    _append_observation(
+        tool_results,
+        result_container,
+        session,
+        session_store,
+        "platform_core_finalize",
+        {"out_dir": str(out_dir)},
+        core_result,
+    )
+    artifact_paths.extend(_record_artifacts(session, session_store, core_result))
+
+    report_data = _call_first(report_builder, ("build", "render"))
+    _finalize_platform_core_artifacts(report_data, out_dir, sample_path=str(source))
+    evidence_manifest = _write_evidence_manifest(session, session_store, source, out_dir, tool_results)
+    if evidence_manifest is not None:
+        artifact_paths.append(str(evidence_manifest))
+    report_data["evidence_integrity"] = _session_evidence_integrity(session)
+    report_data["protocol_outcome"] = dict(protocol_outcome)
+
+    if source.exists():
+        _persist_knowledge(config, source, session, out_dir, report_data, tool_results)
+
+    report_json = out_dir / "report.json"
+    report_md = out_dir / "report.md"
+    report_json.write_text(
+        json.dumps(report_data, default=str, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    if hasattr(report_builder, "to_markdown"):
+        report_md.write_text(report_builder.to_markdown(), encoding="utf-8")
+
+    _mark_flow_task(
+        session,
+        session_store,
+        flow_name="binary-analysis",
+        task_name="report",
+        status="succeeded",
+        result={"report_json": str(report_json), "report_md": str(report_md)},
+        message="protocol_report_generated",
+    )
+    if hasattr(session, "set_status"):
+        session.set_status("failed" if protocol_outcome["hard_failure"] else "succeeded")
+    _finalize_session_status(session, session_store, stopped_reason="protocol_cli")
+    session.artifacts.extend(
+        [
+            {"name": "report.json", "path": str(report_json), "kind": "report"},
+            {"name": "report.md", "path": str(report_md), "kind": "report"},
+        ]
+    )
+    if session_store is not None:
+        session_store.save(session)
+
+    _print_json_payload(
+        {
+            "session_id": session.session_id,
+            "command": args.protocol_command,
+            "source": str(source),
+            "status": protocol_outcome["status"],
+            "protocol_outcome": protocol_outcome,
+            "out_dir": str(out_dir),
+            "artifacts": [str(report_json), str(report_md), *artifact_paths],
+        }
+    )
+    return 2 if protocol_outcome["hard_failure"] else 0
 
 
 def _experiment_context(args: argparse.Namespace) -> tuple[AnalyzerConfig, Any] | None:
@@ -1550,6 +3172,26 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _sha256_directory(path: Path) -> str:
+    """Hash a directory tree deterministically for rebuild preconditions."""
+
+    digest = hashlib.sha256()
+    for child in sorted(path.rglob("*"), key=lambda item: item.relative_to(path).as_posix()):
+        relative = child.relative_to(path).as_posix().encode("utf-8", errors="surrogateescape")
+        if child.is_symlink():
+            digest.update(b"L\0" + relative + b"\0")
+            digest.update(os.readlink(child).encode("utf-8", errors="surrogateescape"))
+        elif child.is_dir():
+            digest.update(b"D\0" + relative + b"\0")
+        elif child.is_file():
+            size = child.stat().st_size
+            digest.update(b"F\0" + relative + b"\0" + str(size).encode("ascii") + b"\0")
+            with child.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _ensure_session_metadata(session: Any) -> dict[str, Any]:
     metadata = getattr(session, "metadata", None)
     if not isinstance(metadata, dict):
@@ -1583,6 +3225,67 @@ def _append_capability_audit_record(session: Any, record: Any) -> dict[str, Any]
         "summary": dict(summary),
     }
     return capability_audit
+
+
+def _latest_capability_audit_record(session: Any) -> Mapping[str, Any] | None:
+    metadata = _ensure_session_metadata(session)
+    capability_audit = metadata.get("capability_audit")
+    records = capability_audit.get("records") if isinstance(capability_audit, Mapping) else None
+    if not isinstance(records, Sequence) or isinstance(records, (str, bytes, bytearray)):
+        return None
+    for record in reversed(records):
+        if isinstance(record, Mapping):
+            return record
+    return None
+
+
+def _record_capability_lifecycle_knowledge(
+    config: AnalyzerConfig,
+    session: Any,
+    execution_result: Any,
+    rollback_result: Any,
+) -> Mapping[str, Any] | None:
+    """Record exactly one finalized provider lifecycle outcome in the KB."""
+
+    metadata = _ensure_session_metadata(session)
+    if KnowledgeBase is None or not callable(record_capability_lifecycle_outcome):
+        metadata["capability_knowledge"] = {"status": "unavailable"}
+        return None
+
+    result_payload = _tool_result_dict(execution_result)
+    result_mapping = result_payload if isinstance(result_payload, Mapping) else {}
+    artifact_bundle = {
+        "artifacts": list(result_mapping.get("artifacts") or []),
+        "manifest_entries": list(result_mapping.get("evidence_manifest_entries") or []),
+    }
+    try:
+        outcome = record_capability_lifecycle_outcome(
+            KnowledgeBase(config.knowledge_dir),
+            execution_result,
+            artifact_bundle=artifact_bundle,
+            rollback_result=rollback_result,
+            audit_record=_latest_capability_audit_record(session),
+        )
+    except Exception as exc:  # noqa: BLE001 - knowledge persistence must not replace the provider outcome
+        metadata["capability_knowledge"] = {
+            "status": "failed",
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+        print(f"capability_knowledge.failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return None
+
+    if not isinstance(outcome, Mapping):
+        metadata["capability_knowledge"] = {"status": "ignored"}
+        return None
+    metadata["capability_knowledge"] = {
+        "status": "recorded",
+        "capability": result_mapping.get("capability"),
+        "provider": result_mapping.get("provider"),
+        "action": result_mapping.get("action"),
+        "lifecycle_status": result_mapping.get("status"),
+        "outcome": dict(outcome),
+    }
+    return outcome
 
 
 def _parse_capability_params(values: Sequence[str] | None) -> dict[str, Any]:
@@ -1619,9 +3322,14 @@ def _capability_target_identity(sample: str | None, pid: int | None) -> Any:
     metadata: dict[str, Any] = {}
     sha256 = None
     if sample_path is not None:
-        if sample_path.exists():
+        if sample_path.is_file():
             sha256 = _sha256_file(sample_path)
             metadata["exists"] = True
+            metadata["target_type"] = "file"
+        elif sample_path.is_dir():
+            sha256 = _sha256_directory(sample_path)
+            metadata["exists"] = True
+            metadata["target_type"] = "directory"
         else:
             metadata["exists"] = False
     if pid is not None:
@@ -1709,7 +3417,15 @@ def _materialize_capability_artifacts(
             "artifact": payload,
             "provenance": dict(getattr(result, "provenance", {}) or {}),
         }
-        destination.write_text(json.dumps(content, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
+        metadata = payload.get("metadata") if isinstance(payload.get("metadata"), Mapping) else {}
+        provider_materialized = bool(metadata.get("materialized"))
+        if provider_materialized and not destination.is_file():
+            raise FileNotFoundError(f"provider artifact was not materialized: {destination}")
+        if not destination.exists():
+            destination.write_text(
+                json.dumps(content, ensure_ascii=False, indent=2, default=str) + "\n",
+                encoding="utf-8",
+            )
         artifact_record = {
             **payload,
             "path": str(destination),
@@ -1776,28 +3492,27 @@ def _execute_capability_request(
     audit_builder: Any,
     rollback: bool = False,
 ) -> tuple[Any, Any, Any, Any, Any, list[str]]:
-    provider = registry.resolve(request.capability, preferred=request.requested_provider)
     context = {
         "out_dir": str(out_dir),
         "session": session,
         "session_store": session_store,
     }
-    if hasattr(provider, "supports") and not provider.supports(request, context=context):
-        raise RuntimeError(
-            f"Provider '{provider.provider_name}' does not support capability '{request.capability}:{request.action}'"
+
+    def persist(
+        plan: Any,
+        validation: Any,
+        result: Any,
+        bundle: Any,
+        rollback_result: Any = None,
+    ) -> list[str]:
+        artifact_paths = _materialize_capability_artifacts(
+            result,
+            bundle,
+            out_dir,
+            session,
+            session_store,
         )
-    plan = provider.plan(request, context=context)
-    validation = provider.validate(plan, context=context)
-    if not getattr(validation, "ok", False):
-        errors = ", ".join(getattr(validation, "errors", []) or []) or "validation failed"
-        raise RuntimeError(errors)
-    result = provider.execute(plan, context=context)
-    bundle = provider.collect_artifacts(result, str(out_dir), context=context)
-    artifact_paths = _materialize_capability_artifacts(result, bundle, out_dir, session, session_store)
-    record = audit_builder.build_record(plan=plan, result=result, validation=validation)
-    rollback_result = None
-    if rollback:
-        rollback_result = provider.rollback(result, context=context)
+        record = audit_builder.build_record(plan=plan, result=result, validation=validation)
         if rollback_result is not None and hasattr(record, "add_event"):
             record.add_event(
                 "rollback",
@@ -1806,9 +3521,130 @@ def _execute_capability_request(
                 restored=getattr(rollback_result, "restored", False),
                 details=dict(getattr(rollback_result, "details", {}) or {}),
             )
-    _append_capability_audit_record(session, record)
-    audit_path = _write_capability_audit_artifact(record, out_dir, session, session_store)
-    artifact_paths.append(audit_path)
+        _append_capability_audit_record(session, record)
+        audit_path = _write_capability_audit_artifact(record, out_dir, session, session_store)
+        artifact_paths.append(audit_path)
+        return artifact_paths
+
+    try:
+        provider = registry.resolve(request.capability, preferred=request.requested_provider)
+    except Exception as exc:  # noqa: BLE001 - unresolved providers still need a durable audit record
+        reason = str(exc) or type(exc).__name__
+        provider_name = str(request.requested_provider or "unresolved")
+        plan, validation, result, bundle = _capability_synthetic_failure(
+            request,
+            provider_name=provider_name,
+            phase="resolve",
+            reason=reason,
+        )
+        return None, plan, validation, result, None, persist(plan, validation, result, bundle)
+
+    provider_name = str(getattr(provider, "provider_name", None) or type(provider).__name__)
+    try:
+        supported = not hasattr(provider, "supports") or bool(provider.supports(request, context=context))
+    except Exception as exc:  # noqa: BLE001 - provider boundary must be represented as evidence
+        reason = f"{type(exc).__name__}: {exc}"
+        plan, validation, result, bundle = _capability_synthetic_failure(
+            request,
+            provider_name=provider_name,
+            phase="support",
+            reason=reason,
+        )
+        return provider, plan, validation, result, None, persist(plan, validation, result, bundle)
+    if not supported:
+        reason = (
+            f"Provider '{provider_name}' does not support capability "
+            f"'{request.capability}:{request.action}'"
+        )
+        plan, validation, result, bundle = _capability_synthetic_failure(
+            request,
+            provider_name=provider_name,
+            phase="support",
+            reason=reason,
+            status="unavailable",
+        )
+        return provider, plan, validation, result, None, persist(plan, validation, result, bundle)
+
+    try:
+        plan = provider.plan(request, context=context)
+    except Exception as exc:  # noqa: BLE001 - provider boundary must be represented as evidence
+        reason = f"{type(exc).__name__}: {exc}"
+        plan, validation, result, bundle = _capability_synthetic_failure(
+            request,
+            provider_name=provider_name,
+            phase="plan",
+            reason=reason,
+        )
+        return provider, plan, validation, result, None, persist(plan, validation, result, bundle)
+
+    try:
+        validation = provider.validate(plan, context=context)
+    except Exception as exc:  # noqa: BLE001 - provider boundary must be represented as evidence
+        reason = f"{type(exc).__name__}: {exc}"
+        plan, validation, result, bundle = _capability_synthetic_failure(
+            request,
+            provider_name=provider_name,
+            phase="validate",
+            reason=reason,
+            plan=plan,
+        )
+        return provider, plan, validation, result, None, persist(plan, validation, result, bundle)
+    if not getattr(validation, "ok", False):
+        reason = ", ".join(getattr(validation, "errors", []) or []) or "validation failed"
+        plan, validation, result, bundle = _capability_synthetic_failure(
+            request,
+            provider_name=provider_name,
+            phase="validate",
+            reason=reason,
+            plan=plan,
+            validation=validation,
+        )
+        return provider, plan, validation, result, None, persist(plan, validation, result, bundle)
+
+    try:
+        result = provider.execute(plan, context=context)
+    except Exception as exc:  # noqa: BLE001 - provider boundary must be represented as evidence
+        reason = f"{type(exc).__name__}: {exc}"
+        plan, validation, result, bundle = _capability_synthetic_failure(
+            request,
+            provider_name=provider_name,
+            phase="execute",
+            reason=reason,
+            plan=plan,
+            validation=validation,
+        )
+        return provider, plan, validation, result, None, persist(plan, validation, result, bundle)
+
+    rollback_result = None
+    if rollback:
+        try:
+            rollback_result = provider.rollback(result, context=context)
+        except Exception as exc:  # noqa: BLE001 - preserve the execution result and report rollback failure
+            if CapabilityRollbackResult is None:
+                raise
+            rollback_result = CapabilityRollbackResult(
+                capability=str(request.capability),
+                provider=provider_name,
+                session_id=str(request.session_id),
+                ok=False,
+                restored=False,
+                details={"reason": f"{type(exc).__name__}: {exc}", "phase": "rollback"},
+            )
+    try:
+        bundle = provider.collect_artifacts(result, str(out_dir), context=context)
+        artifact_paths = persist(plan, validation, result, bundle, rollback_result)
+    except Exception as exc:  # noqa: BLE001 - evidence collection failures require their own audit trail
+        reason = f"{type(exc).__name__}: {exc}"
+        plan, validation, result, bundle = _capability_synthetic_failure(
+            request,
+            provider_name=provider_name,
+            phase="collect_artifacts",
+            reason=reason,
+            plan=plan,
+            validation=validation,
+            prior_result=result,
+        )
+        artifact_paths = persist(plan, validation, result, bundle, rollback_result)
     return provider, plan, validation, result, rollback_result, artifact_paths
 
 
@@ -2016,6 +3852,29 @@ def _add_experiment_analysis_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--gui-interaction-trace", default=None)
 
 
+def _add_capability_alias_options(
+    parser: argparse.ArgumentParser,
+    *,
+    target: str,
+    rollback: bool = True,
+) -> None:
+    if target == "process":
+        parser.add_argument("--pid", type=int, required=True, help="Target process ID.")
+        parser.set_defaults(sample=None)
+    elif target == "sample":
+        parser.add_argument("sample", help="Target file or unpacked project directory.")
+        parser.set_defaults(pid=None)
+    else:
+        raise ValueError(f"unsupported capability alias target: {target}")
+    parser.add_argument("--out", required=True, help="Output root for session, audit, report, and evidence artifacts.")
+    parser.add_argument("--provider", default=None, help="Optional provider override.")
+    parser.add_argument("--param", action="append", default=None, help="Additional provider parameter in key=value form.")
+    if rollback:
+        parser.add_argument("--rollback", action="store_true", help="Execute the generated rollback plan after the operation.")
+    else:
+        parser.set_defaults(rollback=False)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="reverse_analyzer",
@@ -2043,6 +3902,22 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("--decompiler-timeout", type=int, default=900, help="Ghidra Headless timeout in seconds.")
     analyze.add_argument("--yara-rules", default=None, help="Optional YARA rule file or directory; defaults to rules/yara.")
     analyze.add_argument("--reconstruct", action="store_true", help="Generate a compilable reconstruction stub project in the output directory.")
+    analyze.add_argument(
+        "--runtime-validation-spec",
+        default=None,
+        help="Optional JSON specification for bounded runtime validation of a reconstructed source project.",
+    )
+    analyze.add_argument(
+        "--behavior-validation-spec",
+        default=None,
+        help="Optional JSON specification for differential execution of the original and reconstructed projects.",
+    )
+    analyze.add_argument(
+        "--behavior-original-dir",
+        default=None,
+        help="Original-project root for differential behavior validation; defaults to the sample directory.",
+    )
+    analyze.add_argument("--require-ios", action="store_true", help=argparse.SUPPRESS)
     analyze.add_argument("--gui", action="store_true", help="Run GUI technology fingerprinting, resource cataloging, and strategy selection.")
     analyze.add_argument("--gui-runtime", action="store_true", help="Attempt optional runtime UI tree probing for GUI reconstruction.")
     analyze.add_argument("--gui-visual", action="store_true", help="Parse supplied GUI screenshots for visual reconstruction evidence.")
@@ -2101,7 +3976,11 @@ def build_parser() -> argparse.ArgumentParser:
     capability_commands = capability.add_subparsers(dest="capability_command", required=True)
 
     capability_run = capability_commands.add_parser("run", help="Execute a registered capability provider and persist audit artifacts.")
-    capability_run.add_argument("--capability", required=True, choices=_CAPABILITY_COMMAND_CHOICES)
+    capability_run.add_argument(
+        "--capability",
+        required=True,
+        help="Capability name from `capability list`; provider availability is validated by the registry at runtime.",
+    )
     capability_run.add_argument("--action", required=True, help="Capability action passed to the provider, e.g. scan or plan.")
     capability_run.add_argument("--sample", default=None, help="Optional sample/file target.")
     capability_run.add_argument("--pid", type=int, default=None, help="Optional process target PID.")
@@ -2118,6 +3997,407 @@ def build_parser() -> argparse.ArgumentParser:
     capability_show_audit = capability_commands.add_parser("show-audit", help="Print the capability_audit section from a report.json file.")
     capability_show_audit.add_argument("--report", required=True, help="Path to report.json generated by capability run or analyze.")
     capability_show_audit.set_defaults(func=show_capability_audit_command)
+
+    memory = subparsers.add_parser("memory", help="Run audited process-memory, injection, and hook capabilities.")
+    memory_commands = memory.add_subparsers(dest="memory_command", required=True)
+
+    memory_scan = memory_commands.add_parser("scan", help="Scan a process using a bounded AOB, text, or pointer pattern.")
+    _add_capability_alias_options(memory_scan, target="process", rollback=False)
+    memory_scan.add_argument("--pattern", default=None)
+    memory_scan.add_argument("--pattern-type", choices=("aob", "ascii", "utf16", "pointer"), default="aob")
+    memory_scan.add_argument(
+        "--pointer-size",
+        type=int,
+        choices=(4, 8),
+        default=8,
+        help="Pointer width used when --pattern-type pointer is selected.",
+    )
+    memory_scan.add_argument("--start-address", default=None)
+    memory_scan.add_argument("--end-address", default=None)
+    memory_scan.add_argument("--max-results", type=int, default=256)
+    memory_scan.set_defaults(
+        func=_dedicated_capability_command,
+        capability="memory_runtime",
+        action="scan",
+        capability_param_fields=(
+            ("pattern", "pattern"),
+            ("pattern_type", "pattern_type"),
+            ("start_address", "start_address"),
+            ("end_address", "end_address"),
+            ("max_results", "max_results"),
+        ),
+    )
+
+    memory_read = memory_commands.add_parser("read", help="Read a bounded process-memory range and persist evidence.")
+    _add_capability_alias_options(memory_read, target="process", rollback=False)
+    memory_read.add_argument("--address", required=True)
+    memory_read.add_argument("--size", type=int, required=True)
+    memory_read.set_defaults(
+        func=_dedicated_capability_command,
+        capability="memory_runtime",
+        action="read",
+        capability_param_fields=(("address", "address"), ("size", "size")),
+    )
+
+    memory_write = memory_commands.add_parser("write", help="Apply a precondition-bound memory write with rollback metadata.")
+    _add_capability_alias_options(memory_write, target="process")
+    memory_write.add_argument("--address", required=True)
+    memory_write.add_argument("--data", required=True, help="Replacement bytes or text payload.")
+    memory_write.add_argument("--encoding", choices=("hex", "ascii", "utf8", "utf16le"), default="hex")
+    memory_write.add_argument("--expected", default=None, help="Expected original bytes encoded as hexadecimal.")
+    memory_write.set_defaults(
+        func=_dedicated_capability_command,
+        capability="memory_runtime",
+        action="write",
+        capability_param_fields=(
+            ("address", "address"),
+            ("data", "data"),
+            ("encoding", "encoding"),
+            ("expected", "expected"),
+        ),
+    )
+
+    memory_protect = memory_commands.add_parser("protect", help="Change page protection through an audited reversible plan.")
+    _add_capability_alias_options(memory_protect, target="process")
+    memory_protect.add_argument("--address", required=True)
+    memory_protect.add_argument("--size", type=int, required=True)
+    memory_protect.add_argument("--protection", required=True)
+    memory_protect.add_argument("--expected-protection", default=None)
+    memory_protect.set_defaults(
+        func=_dedicated_capability_command,
+        capability="memory_runtime",
+        action="protect",
+        capability_param_fields=(
+            ("address", "address"),
+            ("size", "size"),
+            ("protection", "protection"),
+            ("expected_protection", "expected_protection"),
+        ),
+    )
+
+    memory_alloc = memory_commands.add_parser("alloc", help="Allocate remote memory and record a matching free rollback.")
+    _add_capability_alias_options(memory_alloc, target="process")
+    memory_alloc.add_argument("--size", type=int, required=True)
+    memory_alloc.add_argument("--protection", default="rw")
+    memory_alloc.set_defaults(
+        func=_dedicated_capability_command,
+        capability="memory_runtime",
+        action="alloc",
+        capability_param_fields=(("size", "size"), ("protection", "protection")),
+    )
+
+    memory_free = memory_commands.add_parser("free", help="Free a remote allocation after identity and range validation.")
+    _add_capability_alias_options(memory_free, target="process")
+    memory_free.add_argument("--address", required=True)
+    memory_free.add_argument("--size", type=int, default=0)
+    memory_free.set_defaults(
+        func=_dedicated_capability_command,
+        capability="memory_runtime",
+        action="free",
+        capability_param_fields=(("address", "address"), ("size", "size")),
+    )
+
+    memory_inject = memory_commands.add_parser("inject", help="Plan and execute a controlled DLL injection provider.")
+    _add_capability_alias_options(memory_inject, target="process")
+    memory_inject.add_argument("--dll", required=True, help="Absolute path to the DLL payload.")
+    memory_inject.add_argument("--method", choices=("load_library", "manual_map"), default="load_library")
+    memory_inject.add_argument("--timeout-ms", type=int, default=10000)
+    memory_inject.add_argument("--expected-sha256", default=None)
+    memory_inject.set_defaults(
+        func=_dedicated_capability_command,
+        capability="injector",
+        action="inject",
+        capability_param_fields=(
+            ("dll", "dll_path"),
+            ("method", "method"),
+            ("timeout_ms", "timeout_ms"),
+            ("expected_sha256", "expected_sha256"),
+        ),
+    )
+
+    memory_hook = memory_commands.add_parser("hook-trace", help="Install an audited hook plan and collect a bounded trace.")
+    _add_capability_alias_options(memory_hook, target="process")
+    memory_hook.add_argument("--plan", required=True, help="Hook plan JSON path.")
+    memory_hook.add_argument("--duration", type=float, default=10.0)
+    memory_hook.add_argument("--backend", choices=("auto", "frida", "win32"), default="auto")
+    memory_hook.set_defaults(
+        func=_hook_capability_command,
+        capability="hook_runtime",
+        action="hook-trace",
+    )
+
+    engine = subparsers.add_parser("engine", help="Analyze Unity and Unreal engine samples.")
+    engine_commands = engine.add_subparsers(dest="engine_command", required=True)
+    engine_analyze = engine_commands.add_parser(
+        "analyze",
+        help="Run the complete static evidence pipeline with engine analysis.",
+    )
+    engine_analyze.add_argument("sample")
+    engine_analyze.add_argument("--out", required=True)
+    engine_analyze.set_defaults(func=_analysis_alias_command, analysis_options=())
+
+    android = subparsers.add_parser("android", help="Analyze, unpack, rebuild, and verify Android application packages.")
+    android_commands = android.add_subparsers(dest="android_command", required=True)
+    android_analyze = android_commands.add_parser("analyze", help="Run the complete static evidence pipeline for an APK.")
+    android_analyze.add_argument("sample")
+    android_analyze.add_argument("--out", required=True)
+    android_analyze.set_defaults(func=_analysis_alias_command, analysis_options=())
+
+    ios = subparsers.add_parser("ios", help="Analyze iOS IPA application packages without executing or extracting them.")
+    ios_commands = ios.add_subparsers(dest="ios_command", required=True)
+    ios_analyze = ios_commands.add_parser("analyze", help="Run bounded static evidence analysis for an IPA.")
+    ios_analyze.add_argument("sample")
+    ios_analyze.add_argument("--out", required=True)
+    ios_analyze.set_defaults(
+        func=_analysis_alias_command,
+        analysis_options=("require-ios",),
+        require_ios=True,
+    )
+
+    android_unpack = android_commands.add_parser("unpack", help="Unpack an APK through the audited rebuild provider.")
+    _add_capability_alias_options(android_unpack, target="sample", rollback=False)
+    android_unpack.add_argument("--destination", default=None)
+    android_unpack.add_argument("--apktool", default=None)
+    android_unpack.set_defaults(
+        func=_dedicated_capability_command,
+        capability="android_rebuild",
+        action="unpack",
+        capability_param_fields=(("destination", "unpack_dir"), ("apktool", "apktool_path")),
+    )
+
+    android_rebuild = android_commands.add_parser("rebuild", help="Rebuild an APK or decoded Android project into a new APK.")
+    _add_capability_alias_options(android_rebuild, target="sample")
+    android_rebuild.add_argument("--apk-out", default=None)
+    android_rebuild.add_argument("--project-dir", default=None)
+    android_rebuild.add_argument("--strategy", choices=("zip_copy", "apktool_rebuild"), default=None)
+    android_rebuild.add_argument("--apktool", default=None)
+    android_rebuild.add_argument("--apksigner", default=None)
+    android_rebuild.add_argument("--keystore", default=None)
+    android_rebuild.add_argument("--key-alias", default=None)
+    android_rebuild.set_defaults(
+        func=_dedicated_capability_command,
+        capability="android_rebuild",
+        action="rebuild",
+        capability_param_fields=(
+            ("apk_out", "out_path"),
+            ("project_dir", "project_dir"),
+            ("strategy", "strategy"),
+            ("apktool", "apktool_path"),
+            ("apksigner", "apksigner_path"),
+            ("keystore", "keystore"),
+            ("key_alias", "key_alias"),
+        ),
+    )
+
+    android_verify = android_commands.add_parser("verify", help="Verify APK ZIP structure and optional signing metadata.")
+    _add_capability_alias_options(android_verify, target="sample", rollback=False)
+    android_verify.add_argument("--apksigner", default=None)
+    android_verify.set_defaults(
+        func=_dedicated_capability_command,
+        capability="android_rebuild",
+        action="verify",
+        capability_param_fields=(("apksigner", "apksigner_path"),),
+    )
+
+    protocol = subparsers.add_parser(
+        "protocol",
+        help="Import bounded passive captures, infer message formats, and persist protocol evidence.",
+    )
+    protocol_commands = protocol.add_subparsers(dest="protocol_command", required=True)
+    for command_name, command_help in (
+        ("capture", "Import a passive capture and run the complete protocol evidence pipeline."),
+        ("infer", "Infer framing and message formats through the complete protocol evidence pipeline."),
+        ("summarize", "Summarize a passive source through the complete protocol evidence pipeline."),
+    ):
+        protocol_stage = protocol_commands.add_parser(command_name, help=command_help)
+        protocol_stage.add_argument("source", help="PCAP, PCAPNG, JSON, JSONL, or raw passive evidence file.")
+        protocol_stage.add_argument("--out", required=True, help="Output directory for report and protocol artifacts.")
+        protocol_stage.add_argument(
+            "--format",
+            choices=("auto", "pcap", "pcapng", "json", "jsonl", "raw"),
+            default="auto",
+            help="Input format override; auto detects from content and suffix.",
+        )
+        protocol_stage.add_argument("--max-bytes", type=int, default=8 * 1024 * 1024)
+        protocol_stage.add_argument("--max-packets", type=int, default=4096)
+        protocol_stage.add_argument("--max-messages", type=int, default=1024)
+        protocol_stage.add_argument("--max-message-bytes", type=int, default=256 * 1024)
+        protocol_stage.set_defaults(func=protocol_command)
+
+    source = subparsers.add_parser("source", help="Generate provenance-backed source reconstruction projects.")
+    source_commands = source.add_subparsers(dest="source_command", required=True)
+    source_reconstruct = source_commands.add_parser("reconstruct", help="Run analysis and emit an editable reconstructed project skeleton.")
+    source_reconstruct.add_argument("sample")
+    source_reconstruct.add_argument("--out", required=True)
+    source_reconstruct.add_argument("--strategy", choices=("auto",), default="auto")
+    source_reconstruct.add_argument("--decompile", action="store_true")
+    source_reconstruct.add_argument("--gui", action="store_true")
+    source_reconstruct.add_argument(
+        "--runtime-validation-spec",
+        default=None,
+        help="Optional JSON specification for bounded runtime validation of the generated project.",
+    )
+    source_reconstruct.add_argument(
+        "--behavior-validation-spec",
+        default=None,
+        help="Optional JSON specification for original-versus-reconstruction behavior comparison.",
+    )
+    source_reconstruct.add_argument(
+        "--behavior-original-dir",
+        default=None,
+        help="Original-project root for behavior comparison; defaults to the sample directory.",
+    )
+    source_reconstruct.set_defaults(
+        func=_analysis_alias_command,
+        analysis_options=("reconstruct", "decompile", "gui"),
+        analysis_value_options=(
+            "runtime-validation-spec",
+            "behavior-validation-spec",
+            "behavior-original-dir",
+        ),
+        reconstruct=True,
+    )
+
+    pe_patch = subparsers.add_parser("patch", help="Plan, verify, apply, and roll back PE-aware patch operations.")
+    pe_patch_commands = pe_patch.add_subparsers(dest="pe_patch_command", required=True)
+
+    pe_patch_plan = pe_patch_commands.add_parser("plan", help="Create verified PE patch artifacts from one explicit intent.")
+    pe_patch_plan.add_argument("sample", help="Input PE file; it is read only and never modified in place.")
+    pe_patch_plan.add_argument("--out", required=True, help="Session output root; artifacts are written beneath <out>/patch.")
+    pe_patch_plan.add_argument(
+        "--strategy",
+        choices=(
+            "auto",
+            "inline_patch",
+            "code_cave_patch",
+            "section_extend_patch",
+            "resource_replace",
+            "iat_thunk_patch",
+            "entrypoint_redirect",
+            "overlay_preserve_patch",
+        ),
+        default="auto",
+        help="Planning strategy; the current executable implementation is the verified inline strategy.",
+    )
+    pe_patch_selector = pe_patch_plan.add_mutually_exclusive_group()
+    pe_patch_selector.add_argument("--offset", help="Explicit file offset, as decimal or 0x-prefixed integer.")
+    pe_patch_selector.add_argument("--rva", help="Explicit PE RVA, as decimal or 0x-prefixed integer.")
+    pe_patch_selector.add_argument("--aob", help="Explicit AOB pattern such as '74 05 ?? 90'.")
+    pe_patch_plan.add_argument("--replacement", help="Equal-length replacement bytes encoded as hexadecimal.")
+    pe_patch_plan.add_argument("--occurrence", default=0, help="Zero-based AOB occurrence, as decimal or 0x-prefixed integer.")
+    pe_patch_plan.add_argument("--operation-id", default=None, help="Stable operation identifier recorded in audit artifacts.")
+    pe_patch_plan.set_defaults(func=pe_patch_plan_command)
+
+    pe_patch_verify = pe_patch_commands.add_parser("verify", help="Re-verify a PE patch plan without writing a binary.")
+    pe_patch_verify.add_argument("sample", help="Input PE file used for hash, pre-image, layout, and CFG checks.")
+    pe_patch_verify.add_argument("--plan", required=True, help="PE patch plan JSON to verify.")
+    pe_patch_verify.add_argument("--out", default=None, help="Artifact directory; defaults to the plan directory.")
+    pe_patch_verify.set_defaults(func=pe_patch_verify_command)
+
+    pe_patch_apply = pe_patch_commands.add_parser("apply", help="Verify, then apply a PE patch plan to a new output copy.")
+    pe_patch_apply.add_argument("sample", help="Input PE file; it is never modified in place.")
+    pe_patch_apply.add_argument("--plan", required=True, help="PE patch plan JSON produced by patch plan.")
+    pe_patch_apply.add_argument("--out", required=True, help="Patched output file; must differ from the input sample.")
+    pe_patch_apply.add_argument("--artifact-dir", default=None, help="Artifact directory; defaults to the plan directory.")
+    pe_patch_apply.set_defaults(func=pe_patch_apply_command)
+
+    pe_patch_rollback = pe_patch_commands.add_parser("rollback", help="Restore a patched file to a separate output copy.")
+    pe_patch_rollback.add_argument("patched", help="Patched PE file; it is never modified in place.")
+    pe_patch_rollback.add_argument(
+        "--plan",
+        "--rollback",
+        dest="rollback_plan",
+        required=True,
+        help="Rollback plan emitted by patch plan (normally rollback_plan.json).",
+    )
+    pe_patch_rollback.add_argument("--out", required=True, help="Restored output file; must differ from the patched file.")
+    pe_patch_rollback.add_argument("--artifact-dir", default=None, help="Artifact directory; defaults to the rollback-plan directory.")
+    pe_patch_rollback.set_defaults(func=pe_patch_rollback_command)
+
+    android_elf_plan = pe_patch_commands.add_parser(
+        "android-elf-plan",
+        help="Create a verified layout-preserving ARM/AArch64 ELF patch plan.",
+    )
+    android_elf_plan.add_argument("sample", help="Input Android ELF shared object; it is never modified in place.")
+    android_elf_plan.add_argument("--out", required=True, help="Session output root; artifacts are written beneath <out>/patch.")
+    android_elf_selector = android_elf_plan.add_mutually_exclusive_group(required=True)
+    android_elf_selector.add_argument("--virtual-address", help="Virtual address in a file-backed PT_LOAD segment.")
+    android_elf_selector.add_argument("--file-offset", help="File offset in a file-backed PT_LOAD segment.")
+    android_elf_plan.add_argument("--replacement", required=True, help="Equal-length replacement bytes encoded as hexadecimal.")
+    android_elf_plan.add_argument(
+        "--instruction-mode",
+        choices=("auto", "arm", "thumb", "aarch64"),
+        default="auto",
+        help="Instruction-set validation mode.",
+    )
+    android_elf_plan.add_argument("--operation-id", default=None, help="Stable operation identifier recorded in audit artifacts.")
+    android_elf_plan.set_defaults(func=android_elf_patch_plan_command)
+
+    android_elf_verify = pe_patch_commands.add_parser(
+        "android-elf-verify",
+        help="Re-verify an Android ELF patch plan without writing a binary.",
+    )
+    android_elf_verify.add_argument("sample", help="Input Android ELF used for identity and pre-image checks.")
+    android_elf_verify.add_argument("--plan", required=True, help="Android ELF patch plan JSON.")
+    android_elf_verify.add_argument("--out", default=None, help="Artifact directory; defaults to the plan directory.")
+    android_elf_verify.set_defaults(func=android_elf_patch_verify_command)
+
+    android_elf_apply = pe_patch_commands.add_parser(
+        "android-elf-apply",
+        help="Verify and apply an Android ELF patch to a new output copy.",
+    )
+    android_elf_apply.add_argument("sample", help="Input Android ELF; it is never modified in place.")
+    android_elf_apply.add_argument("--plan", required=True, help="Android ELF patch plan JSON.")
+    android_elf_apply.add_argument("--out", required=True, help="Patched output file; must differ from the input sample.")
+    android_elf_apply.add_argument("--artifact-dir", default=None, help="Artifact directory; defaults to the plan directory.")
+    android_elf_apply.set_defaults(func=android_elf_patch_apply_command)
+
+    android_elf_rollback = pe_patch_commands.add_parser(
+        "android-elf-rollback",
+        help="Restore a patched Android ELF to a separate output copy.",
+    )
+    android_elf_rollback.add_argument("patched", help="Patched Android ELF; it is never modified in place.")
+    android_elf_rollback.add_argument(
+        "--plan",
+        "--rollback",
+        dest="rollback_plan",
+        required=True,
+        help="Rollback plan emitted by android-elf-plan.",
+    )
+    android_elf_rollback.add_argument("--out", required=True, help="Restored output file; must differ from the patched file.")
+    android_elf_rollback.add_argument("--artifact-dir", default=None, help="Artifact directory; defaults to the rollback-plan directory.")
+    android_elf_rollback.set_defaults(func=android_elf_patch_rollback_command)
+
+    dll_proxy = pe_patch_commands.add_parser(
+        "dll-proxy",
+        help="Generate a forwarding-DLL project from an explicit DLL copy.",
+    )
+    dll_proxy.add_argument("sample", help="Original DLL used only for identity and export extraction.")
+    dll_proxy.add_argument("--copy-dir", required=True, help="Directory containing or receiving the explicit working copy.")
+    dll_proxy.add_argument("--project-dir", default=None, help="Generated proxy project directory.")
+    dll_proxy.add_argument("--architecture", choices=("x86", "x64", "arm64"), default=None)
+    dll_proxy.add_argument("--proxy-name", default=None, help="Generated proxy DLL filename.")
+    dll_proxy.set_defaults(func=dll_proxy_command)
+
+    gui = subparsers.add_parser("gui", help="Run standalone GUI evidence transforms.")
+    gui_commands = gui.add_subparsers(dest="gui_command", required=True)
+    gui_project_world = gui_commands.add_parser(
+        "project-world",
+        help="Project explicit world coordinates into viewport evidence artifacts.",
+    )
+    gui_project_world.add_argument("--matrix", required=True, help="Inline JSON matrix or path to a JSON file.")
+    gui_project_world.add_argument("--viewport", required=True, help="Inline JSON viewport or path to a JSON file.")
+    gui_project_world.add_argument("--points", default=None, help="Inline JSON point list or path to a JSON file.")
+    gui_project_world.add_argument("--aabbs", default=None, help="Inline JSON AABB list or path to a JSON file.")
+    gui_project_world.add_argument("--out", required=True, help="Output root for gui/world_projection.json.")
+    gui_project_world.add_argument("--matrix-layout", choices=("row-major", "column-major"), default="row-major")
+    gui_project_world.add_argument("--clip-convention", choices=("d3d", "opengl"), default="d3d")
+    gui_project_world.add_argument("--handedness", choices=("left-handed", "right-handed"), default="left-handed")
+    gui_project_world.add_argument("--reversed-z", action="store_true")
+    gui_project_world.add_argument("--matrix-source", default=None, help="Source label, inline JSON, or JSON file.")
+    gui_project_world.add_argument("--coordinate-system", default=None, help="Coordinate-system label, inline JSON, or JSON file.")
+    gui_project_world.add_argument("--metadata", default=None, help="Optional inline metadata JSON or JSON file.")
+    gui_project_world.set_defaults(func=gui_world_projection_command)
 
     patch_binary = subparsers.add_parser("patch-binary", help="Validate/apply a patch plan or restore a patched binary to a new output file.")
     patch_commands = patch_binary.add_subparsers(dest="patch_command", required=True)
@@ -2137,7 +4417,10 @@ def build_parser() -> argparse.ArgumentParser:
     rollback_binary.add_argument("--artifact-dir", default=None, help="Directory for rollback audit artifacts.")
     rollback_binary.set_defaults(func=binary_patch_rollback_command)
 
-    validate_patch = subparsers.add_parser("validate-patch-plan", help="Validate a patch plan against a target without writing files.")
+    validate_patch = subparsers.add_parser(
+        "validate-patch-plan",
+        help="Validate a patch plan without writing a patched binary; persist capability audit artifacts.",
+    )
     validate_patch.add_argument("sample", help="Input binary/file used for target hash and pre-image validation.")
     validate_patch.add_argument("--plan", required=True, help="JSON patch plan to validate.")
     validate_patch.set_defaults(func=validate_patch_plan_command)
@@ -2147,6 +4430,73 @@ def build_parser() -> argparse.ArgumentParser:
     evidence_verify = evidence_commands.add_parser("verify", help="Verify hashes and relative paths recorded by an evidence manifest.")
     evidence_verify.add_argument("--manifest", required=True, help="Path to evidence-manifest.json.")
     evidence_verify.set_defaults(func=evidence_verify_command)
+
+    environment_parser = subparsers.add_parser(
+        "environment",
+        help="Inspect optional adapter dependencies and run bounded readiness probes.",
+    )
+    environment_commands = environment_parser.add_subparsers(dest="environment_command", required=True)
+    environment_validate = environment_commands.add_parser(
+        "validate",
+        help="Separate discovered dependencies from executed E2E readiness probes.",
+    )
+    environment_validate.add_argument(
+        "--out",
+        default=None,
+        help="Optional JSON path or directory; directories receive environment-validation.json.",
+    )
+    environment_validate.add_argument("--json", action="store_true", help="Print the complete validation report.")
+    environment_validate.add_argument(
+        "--execute-probes",
+        action="store_true",
+        help="Execute bounded version/capability probes for discovered tools and bridges.",
+    )
+    environment_validate.add_argument("--timeout", type=float, default=5.0, help="Per-probe timeout in seconds.")
+    environment_validate.add_argument(
+        "--set",
+        action="append",
+        default=None,
+        metavar="KEY=VALUE",
+        help="Override a dependency path or configuration value. Repeatable.",
+    )
+    environment_validate.add_argument(
+        "--require",
+        action="append",
+        default=None,
+        metavar="WORKFLOW",
+        help="Return exit code 4 unless the named workflow has an executed successful probe.",
+    )
+    environment_validate.add_argument(
+        "--acceptance-workspace",
+        default=None,
+        help="Optional workspace whose hash-verified acceptance records are merged into the report.",
+    )
+    environment_validate.set_defaults(func=environment_validate_command)
+
+    environment_accept = environment_commands.add_parser(
+        "accept",
+        help="List, execute, and verify registered P0-P4 acceptance fixtures.",
+    )
+    acceptance_commands = environment_accept.add_subparsers(dest="acceptance_command", required=True)
+    acceptance_list = acceptance_commands.add_parser("list", help="List registered fixtures and retained records.")
+    acceptance_list.add_argument("--workspace", required=True, help="Acceptance workspace root.")
+    acceptance_list.set_defaults(func=environment_accept_list_command)
+
+    acceptance_run = acceptance_commands.add_parser("run", help="Execute one registered fixture without a shell.")
+    acceptance_run.add_argument("--fixture", required=True, help="Registered fixture identifier.")
+    acceptance_run.add_argument("--workspace", required=True, help="Workspace that receives immutable run artifacts and records.")
+    acceptance_run.add_argument("--execute", action="store_true", help="Required explicit confirmation that the registered fixture may run.")
+    acceptance_run.add_argument("--timeout", type=float, default=300.0, help="Fixture timeout in seconds.")
+    acceptance_run.add_argument(
+        "--target-identity",
+        default=None,
+        help="Inline JSON object or JSON file identifying the controlled target.",
+    )
+    acceptance_run.set_defaults(func=environment_accept_run_command)
+
+    acceptance_verify = acceptance_commands.add_parser("verify", help="Recompute all retained artifact hashes for a record.")
+    acceptance_verify.add_argument("--record", required=True, help="Acceptance record JSON path.")
+    acceptance_verify.set_defaults(func=environment_accept_verify_command)
 
     init_knowledge = subparsers.add_parser("init-knowledge", help="Create the local knowledge scaffold.")
     init_knowledge.add_argument("--workspace", default=None, help="Workspace root; defaults to current directory.")
@@ -2702,6 +5052,28 @@ def _run_android_analysis(
     return _record_artifacts(session, session_store, android_result)
 
 
+def _run_ios_analysis(
+    tool_executor: Any,
+    tool_results: list[Any],
+    result: Any,
+    session: Any,
+    session_store: Any,
+    sample: Path,
+    out_dir: Path,
+) -> list[str]:
+    ios_result = tool_executor.execute("ios_analyze", path=str(sample), out_dir=str(out_dir))
+    _append_observation(
+        tool_results,
+        result,
+        session,
+        session_store,
+        "ios_analyze",
+        {"path": str(sample), "out_dir": str(out_dir)},
+        ios_result,
+    )
+    return _record_artifacts(session, session_store, ios_result)
+
+
 def _run_protocol_analysis(
     tool_executor: Any,
     tool_results: list[Any],
@@ -2752,12 +5124,20 @@ def _run_semantic_ir(
     """Build one deterministic IR from collected evidence without executing a sample."""
 
     behavior_graph = _latest_tool_payload(tool_results, "gui_behavior_graph")
+    engine_analysis = _latest_tool_payload(tool_results, "engine_analyze")
+    android_analysis = _latest_tool_payload(tool_results, "android_analyze")
+    ios_analysis = _latest_tool_payload(tool_results, "ios_analyze")
+    protocol_analysis = _latest_tool_payload(tool_results, "protocol_analyze")
     semantic_result = tool_executor.execute(
         "semantic_ir_build",
         behavior_graph=behavior_graph,
         decompiler=_gui_decompiler_payload(tool_results),
         dynamic_analysis=_behavior_dynamic_payload(tool_results),
         gui_analysis=_behavior_gui_analysis(tool_results),
+        engine_analysis=engine_analysis,
+        android_analysis=android_analysis,
+        ios_analysis=ios_analysis,
+        protocol_analysis=protocol_analysis,
         out_dir=str(out_dir),
     )
     _append_observation(
@@ -2771,6 +5151,10 @@ def _run_semantic_ir(
             "decompiler": _gui_decompiler_payload(tool_results),
             "dynamic_analysis": _behavior_dynamic_payload(tool_results),
             "gui_analysis": _behavior_gui_analysis(tool_results),
+            "engine_analysis": engine_analysis,
+            "android_analysis": android_analysis,
+            "ios_analysis": ios_analysis,
+            "protocol_analysis": protocol_analysis,
             "out_dir": str(out_dir),
         },
         semantic_result,
@@ -3194,9 +5578,22 @@ def _write_evidence_manifest(
         from reverse_analyzer.evidence import build_manifest, write_manifest
 
     try:
+        artifact_records = _manifest_artifact_records(session, tool_results)
+        for name, kind in (("semantic_ir.json", "semantic-ir"), ("evidence_graph.json", "evidence-graph")):
+            path = out_dir / name
+            if path.is_file():
+                artifact_records.append(
+                    {
+                        "name": name,
+                        "path": str(path),
+                        "kind": kind,
+                        "tool": "platform_core_finalize",
+                        "status": "ok",
+                    }
+                )
         manifest = build_manifest(
             out_dir,
-            _manifest_artifact_records(session, tool_results),
+            artifact_records,
             sample=sample,
             unavailable_stages=_manifest_unavailable_stages(tool_results),
         )
@@ -3632,6 +6029,24 @@ def _persist_knowledge(
         gui_strategy_records = []
         recommended_gui_strategy = {}
 
+    try:
+        patch_strategy_records = _record_patch_strategy_stats(knowledge, str(sample), report_data)
+        patch_analysis = (
+            report_data.get("patch_analysis")
+            if isinstance(report_data.get("patch_analysis"), Mapping)
+            else {}
+        )
+        patch_target_format = patch_analysis.get("target_format") or patch_analysis.get("format")
+        recommended_patch_strategy = (
+            knowledge.recommend_patch_strategy(target_format=patch_target_format)
+            if hasattr(knowledge, "recommend_patch_strategy")
+            else {}
+        )
+    except Exception as exc:
+        _knowledge_base_warning("patch_strategy_stats", exc)
+        patch_strategy_records = []
+        recommended_patch_strategy = {}
+
     engine_strategy_records = _record_engine_strategy_stats(knowledge, str(sample), report_data)
     protocol_strategy_records = _record_protocol_strategy_stats(knowledge, str(sample), report_data)
     source_strategy_records = _record_source_strategy_stats(knowledge, str(sample), report_data)
@@ -3658,6 +6073,8 @@ def _persist_knowledge(
                 "recommended_dynamic_profile": recommended_dynamic_profile,
                 "gui_strategy_records": gui_strategy_records,
                 "recommended_gui_strategy": recommended_gui_strategy,
+                "patch_strategy_records": patch_strategy_records,
+                "recommended_patch_strategy": recommended_patch_strategy,
                 "engine_strategy_records": engine_strategy_records,
                 "recommended_engine_strategy": recommended_engine_strategy,
                 "protocol_strategy_records": protocol_strategy_records,
@@ -3746,6 +6163,78 @@ def _record_gui_strategy_stats(knowledge: Any, sample_id: str, report_data: Mapp
             control_match_rate=_safe_float(regression.get("control_match_rate"), default=0.0),
             text_match_rate=_safe_float(regression.get("text_match_rate"), default=0.0),
             sample_id=sample_id,
+        )
+    ]
+
+
+def _record_patch_strategy_stats(knowledge: Any, sample_id: str, report_data: Mapping[str, Any]) -> list[Dict[str, Any]]:
+    """Persist a patch lifecycle outcome without treating unattempted stages as failures."""
+
+    patch = report_data.get("patch_analysis")
+    if not isinstance(patch, Mapping) or not hasattr(knowledge, "record_patch_strategy_result"):
+        return []
+    report_section = patch.get("report_section") if isinstance(patch.get("report_section"), Mapping) else {}
+    source = {**report_section, **patch}
+    action = str(source.get("action") or "").strip().lower()
+    capability = str(source.get("capability") or "").strip().lower()
+
+    strategy_value = source.get("strategy") or source.get("patch_strategy")
+    if isinstance(strategy_value, Mapping):
+        strategy_value = strategy_value.get("name") or strategy_value.get("key") or strategy_value.get("strategy")
+    if not strategy_value:
+        if capability != "patch_executor" and action not in {"plan", "validate", "apply", "rollback"}:
+            return []
+        strategy_value = "inline_patch"
+
+    validation = source.get("validation") if isinstance(source.get("validation"), Mapping) else {}
+    verification_status = source.get("verification_status")
+    if verification_status is None and isinstance(validation.get("ok"), bool):
+        verification_status = "ok" if validation["ok"] else "failed"
+    if verification_status is None and isinstance(source.get("valid"), bool):
+        verification_status = "ok" if source["valid"] else "failed"
+
+    apply_status = source.get("apply_status")
+    if apply_status is None and action == "apply":
+        apply_status = source.get("status")
+
+    rollback_status = source.get("rollback_status")
+    rollback = source.get("rollback") if isinstance(source.get("rollback"), Mapping) else {}
+    rollback_verification = (
+        source.get("rollback_verification")
+        if isinstance(source.get("rollback_verification"), Mapping)
+        else {}
+    )
+    if rollback_status is None and isinstance(rollback.get("ok"), bool):
+        rollback_status = "ok" if rollback["ok"] else "failed"
+    if rollback_status is None and rollback_verification.get("status"):
+        rollback_status = rollback_verification.get("status")
+    if rollback_status is None and action == "rollback":
+        rollback_status = source.get("status")
+
+    risk_report = source.get("risk_report") if isinstance(source.get("risk_report"), Mapping) else {}
+    risk_counts = source.get("risk_counts") if isinstance(source.get("risk_counts"), Mapping) else {}
+    if not risk_counts and isinstance(risk_report.get("counts"), Mapping):
+        risk_counts = risk_report["counts"]
+    if not risk_counts and source.get("overall_risk"):
+        risk_counts = {str(source["overall_risk"]): 1}
+
+    after_snapshot = source.get("after_snapshot") if isinstance(source.get("after_snapshot"), Mapping) else {}
+    operation_count = source.get("operation_count")
+    if operation_count is None:
+        operation_count = after_snapshot.get("operation_count")
+
+    return [
+        knowledge.record_patch_strategy_result(
+            str(strategy_value),
+            target_format=str(source.get("target_format") or source.get("format") or "pe"),
+            status=str(source.get("status") or "unknown"),
+            verification_status=str(verification_status) if verification_status is not None else None,
+            apply_status=str(apply_status) if apply_status is not None else None,
+            rollback_status=str(rollback_status) if rollback_status is not None else None,
+            operation_count=_safe_int(operation_count, default=0),
+            risk_counts=dict(risk_counts),
+            sample_id=sample_id,
+            backend=str(source.get("provider") or source.get("engine") or "") or None,
         )
     ]
 
@@ -4262,16 +6751,128 @@ def _result_payload(value: Any) -> Any:
     return raw
 
 
+_HARD_STAGE_STATUSES = frozenset({"failed", "error", "invalid", "cleanup_failed"})
+_UNAVAILABLE_STAGE_STATUSES = frozenset(
+    {"unavailable", "unsupported", "not_supported", "not_available"}
+)
+
+
+def _normalized_stage_status(value: Any) -> str:
+    return str(value or "").strip().casefold().replace("-", "_")
+
+
 def _result_status(value: Any) -> str:
-    if hasattr(value, "status"):
-        return str(getattr(value, "status") or "ok").lower()
-    if isinstance(value, Mapping):
-        if value.get("status"):
-            return str(value.get("status")).lower()
-        nested = value.get("data")
+    raw = _tool_result_dict(value)
+    candidates: list[str] = []
+    if hasattr(value, "status") and getattr(value, "status", None):
+        candidates.append(str(getattr(value, "status")))
+    if isinstance(raw, Mapping):
+        if raw.get("status"):
+            candidates.append(str(raw["status"]))
+        nested = raw.get("data")
         if isinstance(nested, Mapping) and nested.get("status"):
-            return str(nested.get("status")).lower()
-    return "ok"
+            candidates.append(str(nested["status"]))
+        wrapped = raw.get("result") or raw.get("output")
+        if isinstance(wrapped, Mapping):
+            if wrapped.get("status"):
+                candidates.append(str(wrapped["status"]))
+            wrapped_data = wrapped.get("data")
+            if isinstance(wrapped_data, Mapping) and wrapped_data.get("status"):
+                candidates.append(str(wrapped_data["status"]))
+
+    normalized = [_normalized_stage_status(item) for item in candidates if str(item).strip()]
+    for status in normalized:
+        if status in _HARD_STAGE_STATUSES:
+            return status
+    if "partial" in normalized:
+        return "partial"
+    if any(status in _UNAVAILABLE_STAGE_STATUSES for status in normalized):
+        return "unavailable"
+    return normalized[0] if normalized else "ok"
+
+
+def _aggregate_stage_outcome(
+    tool_results: Sequence[Any],
+    *,
+    required_tools: Iterable[str],
+    optional_tools: Iterable[str] = (),
+    require_all: bool = False,
+) -> dict[str, Any]:
+    required = {str(item) for item in required_tools}
+    optional = {str(item) for item in optional_tools}
+    selected = required | optional
+    stages: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for index, observation in enumerate(tool_results):
+        if not isinstance(observation, Mapping):
+            continue
+        tool_name = _trace_tool_name(observation)
+        if tool_name not in selected:
+            continue
+        seen.add(tool_name)
+        raw_result = observation.get("result", observation.get("output", observation))
+        status = _result_status(raw_result)
+        normalized = _normalized_stage_status(status)
+        is_required = tool_name in required
+        hard_failure = normalized in _HARD_STAGE_STATUSES or (
+            is_required and normalized in _UNAVAILABLE_STAGE_STATUSES
+        )
+        stages.append(
+            {
+                "name": tool_name,
+                "index": index,
+                "status": status,
+                "required": is_required,
+                "hard_failure": hard_failure,
+            }
+        )
+
+    if require_all:
+        for tool_name in sorted(required - seen):
+            stages.append(
+                {
+                    "name": tool_name,
+                    "index": None,
+                    "status": "missing",
+                    "required": True,
+                    "hard_failure": True,
+                }
+            )
+
+    failed_stages = [dict(item) for item in stages if item["hard_failure"]]
+    partial_stages = [dict(item) for item in stages if item["status"] == "partial"]
+    optional_unavailable = [
+        dict(item)
+        for item in stages
+        if not item["required"] and _normalized_stage_status(item["status"]) in _UNAVAILABLE_STAGE_STATUSES
+    ]
+    if failed_stages:
+        status = "failed"
+    elif partial_stages:
+        status = "partial"
+    else:
+        status = "succeeded"
+    return {
+        "status": status,
+        "hard_failure": bool(failed_stages),
+        "partial": bool(partial_stages),
+        "stages": stages,
+        "failed_stages": failed_stages,
+        "partial_stages": partial_stages,
+        "optional_unavailable_stages": optional_unavailable,
+    }
+
+
+def _stage_outcome_error(outcome: Mapping[str, Any]) -> str | None:
+    failed = outcome.get("failed_stages")
+    if not isinstance(failed, Sequence) or isinstance(failed, (str, bytes, bytearray)):
+        return None
+    summaries = [
+        f"{item.get('name')}={item.get('status')}"
+        for item in failed
+        if isinstance(item, Mapping)
+    ]
+    return "required analysis stage failed: " + ", ".join(summaries) if summaries else None
 
 
 def _result_error(value: Any) -> Any:

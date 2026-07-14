@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "fixture_id": "p1-hook-target-resolution",
+  "phase": "P1",
+  "capability": "hook_target_resolver",
+  "evidence_level": "live-target",
+  "session_id": "2a9f0d0a661448fc8a0aa3c0aa9744d0",
+  "target_identity": {
+    "kind": "process",
+    "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "pid": 37964,
+    "sha256": "d932e5e2f324d57f392e8fd063dcf6d0185be8a664c57c6d24e7762ed02c28ca",
+    "display_name": "python.exe"
+  },
+  "target_identity_source": "artifact",
+  "started_at": "2026-07-14T13:35:58.150571+00:00",
+  "finished_at": "2026-07-14T13:35:58.773475+00:00",
+  "workspace": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance",
+  "run_directory": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p1-hook-target-resolution\\2a9f0d0a661448fc8a0aa3c0aa9744d0",
+  "record_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\records\\p1-hook-target-resolution--2a9f0d0a661448fc8a0aa3c0aa9744d0.json",
+  "command": [
+    "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "-m",
+    "unittest",
+    "tests.test_hook_target_live.WindowsLiveHookTargetTests.test_acceptance_runner_retains_live_production_artifacts"
+  ],
+  "command_display": "python -m unittest tests.test_hook_target_live.WindowsLiveHookTargetTests.test_acceptance_runner_retains_live_production_artifacts",
+  "contract_sha256": "b3738cecdf75ce33a814daa68c57ee729c03c514047e2fa62eb26930eb0a6e66",
+  "environment_gates": {
+    "status": "ready_to_run",
+    "configured": [],
+    "missing": [],
+    "workflow_states": {}
+  },
+  "provider_versions": {
+    "python": "3.13.7",
+    "platform": "Windows-11-10.0.26100-SP0"
+  },
+  "expected_artifacts": [
+    "hook-targets/*/resolution.json",
+    "hook-targets/*/audit.json",
+    "hook-targets/*/manifest.json",
+    "hook-targets/target-identity.json",
+    "hook-targets/rollback.json"
+  ],
+  "observed_artifacts": [
+    {
+      "path": "environment-validation.json",
+      "size": 31034,
+      "sha256": "24f237fe5539ed57753d88a27b2bdbe23370f9a636de24f04380c02feade621b"
+    },
+    {
+      "path": "hook-targets/2a9f0d0a661448fc8a0aa3c0aa9744d0/audit.json",
+      "size": 17985,
+      "sha256": "4ebbd511eb64fdfb5b9604669538da22e2494d0b6e5ef9c9d5800a28b7d552bc"
+    },
+    {
+      "path": "hook-targets/2a9f0d0a661448fc8a0aa3c0aa9744d0/manifest.json",
+      "size": 869,
+      "sha256": "dcbea1988d65f60cf4a6e8fe06b4292e156290c2812283d2bff17f1017fed3e8"
+    },
+    {
+      "path": "hook-targets/2a9f0d0a661448fc8a0aa3c0aa9744d0/resolution.json",
+      "size": 8079,
+      "sha256": "aaf46a014d7ad8cde4276c4f468dc61b23255c1fc24b6cf296da48f3ea43aef6"
+    },
+    {
+      "path": "hook-targets/execution-proof.json",
+      "size": 254,
+      "sha256": "a7706b754e14bef3cef45541a2eccc2357d0eb54005dc90583dca540652c357a"
+    },
+    {
+      "path": "hook-targets/rollback.json",
+      "size": 127,
+      "sha256": "d49d358e44d4181427b1ca55156ee376e82b1f8d247ad7a704d9c50a16b36b1b"
+    },
+    {
+      "path": "hook-targets/target-identity.json",
+      "size": 246,
+      "sha256": "e4fe2449436c60a8bb39e53479ec3733201660564373dc084c3161dabf7c1b19"
+    },
+    {
+      "path": "stderr.log",
+      "size": 103,
+      "sha256": "627a76e99e744c9c3abda0092a7c8085285f98e689d6e8185557dcaef77c8ffd"
+    },
+    {
+      "path": "stdout.log",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "missing_artifacts": [],
+  "rejected_provenance": [],
+  "execution_proof": {
+    "status": "ok",
+    "provider": "deterministic_hook_target_resolver",
+    "evidence_class": "live_host_proof",
+    "executed_tests": 1,
+    "skipped_tests": 0,
+    "live_operations": 1,
+    "actions": [
+      "resolve_live"
+    ],
+    "synthetic": false
+  },
+  "execution_proof_errors": [],
+  "execution_proof_artifact": "hook-targets/execution-proof.json",
+  "rollback_result": {
+    "status": "not_required",
+    "verified": true,
+    "artifacts": []
+  },
+  "cleanup_result": {
+    "status": "not_required",
+    "verified": true,
+    "artifacts": []
+  },
+  "exit_code": 0,
+  "execution_error": null,
+  "outcome": "passed",
+  "verification_constraints": {
+    "registered_fixture": true,
+    "structured_argv": true,
+    "host_and_dependencies_ready": true,
+    "execution_passed": true,
+    "live_evidence_level": true,
+    "execution_proof_valid": true,
+    "target_identity_present": true,
+    "target_identity_matches_artifact": true,
+    "expected_artifacts_complete": true,
+    "provenance_non_synthetic": true,
+    "rollback_verified": true,
+    "cleanup_verified": true
+  },
+  "live_verified": true
+}

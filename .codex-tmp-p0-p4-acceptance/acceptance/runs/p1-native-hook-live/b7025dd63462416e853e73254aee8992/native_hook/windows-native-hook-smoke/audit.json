@@ -1,0 +1,777 @@
+{
+  "action": "vtable_pointer",
+  "after_snapshot": {
+    "action": {
+      "address": 2518335011608,
+      "after_hex": "2143658700000000",
+      "before_hex": "7856341200000000",
+      "expected_after_hex": "2143658700000000",
+      "kind": "vtable_pointer",
+      "protection_restored": true,
+      "size": 8,
+      "status": "ok",
+      "write_verified": true
+    },
+    "capture_phase": "execute",
+    "captured_at": "2026-07-14T13:11:31.461708+00:00",
+    "operations": [
+      {
+        "address": 2518335011608,
+        "bytes_hex": "7856341200000000",
+        "ok": true,
+        "operation": "read_preimage",
+        "size": 8,
+        "status": "ok"
+      },
+      {
+        "address": 2518335011608,
+        "new_protection": 4,
+        "ok": true,
+        "old_protection": 4,
+        "operation": "VirtualProtectEx(vtable,writable)",
+        "size": 8,
+        "status": "ok"
+      },
+      {
+        "address": 2518335011608,
+        "bytes_hex": "7856341200000000",
+        "ok": true,
+        "operation": "read_locked_preimage",
+        "size": 8,
+        "status": "ok"
+      },
+      {
+        "address": 2518335011608,
+        "bytes_written": 8,
+        "ok": true,
+        "operation": "WriteProcessMemory(vtable)",
+        "status": "ok"
+      },
+      {
+        "address": 2518335011608,
+        "bytes_hex": "2143658700000000",
+        "ok": true,
+        "operation": "verify_vtable_write",
+        "size": 8,
+        "status": "ok"
+      },
+      {
+        "address": 2518335011608,
+        "new_protection": 4,
+        "ok": true,
+        "old_protection": 4,
+        "operation": "VirtualProtectEx(vtable,restore)",
+        "size": 8,
+        "status": "ok"
+      }
+    ],
+    "process_identity": {
+      "architecture": "x64",
+      "creation_time": 134285082914187184,
+      "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "pid": 32800
+    },
+    "rollback": {
+      "actual_hex": "7856341200000000",
+      "address": 2518335011608,
+      "allocation_released": true,
+      "captured_at": "2026-07-14T13:11:31.464593+00:00",
+      "errors": [],
+      "ok": true,
+      "operations": [
+        {
+          "address": 2518335011608,
+          "new_protection": 4,
+          "ok": true,
+          "old_protection": 4,
+          "operation": "VirtualProtectEx(rollback,writable)",
+          "size": 8,
+          "status": "ok"
+        },
+        {
+          "address": 2518335011608,
+          "bytes_hex": "2143658700000000",
+          "ok": true,
+          "operation": "read_rollback_preimage",
+          "size": 8,
+          "status": "ok"
+        },
+        {
+          "address": 2518335011608,
+          "bytes_written": 8,
+          "ok": true,
+          "operation": "WriteProcessMemory(rollback)",
+          "status": "ok"
+        },
+        {
+          "address": 2518335011608,
+          "bytes_hex": "7856341200000000",
+          "ok": true,
+          "operation": "verify_rollback_write",
+          "size": 8,
+          "status": "ok"
+        },
+        {
+          "address": 2518335011608,
+          "new_protection": 4,
+          "ok": true,
+          "old_protection": 4,
+          "operation": "VirtualProtectEx(rollback,restore)",
+          "size": 8,
+          "status": "ok"
+        }
+      ],
+      "pid": 32800,
+      "protection_restored": true,
+      "restored": true,
+      "status": "ok",
+      "target_restored": true
+    },
+    "schema_version": 1,
+    "status": "ok",
+    "target_identity": {
+      "display_name": "smoke-child",
+      "kind": "process",
+      "pid": 32800
+    },
+    "trace_event_count": 0
+  },
+  "before_snapshot": {
+    "capture_phase": "execute_validation",
+    "captured_at": "2026-07-14T13:11:31.461413+00:00",
+    "current": {
+      "memory": {
+        "address": 2518335011608,
+        "bytes_hex": "7856341200000000",
+        "pointer": 305419896,
+        "size": 8
+      },
+      "process": {
+        "accessible": true,
+        "architecture": "x64",
+        "creation_time": 134285082914187184,
+        "exists": true,
+        "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "pid": 32800,
+        "status": "ok"
+      }
+    },
+    "planned": {
+      "action": {
+        "address": 2518335011608,
+        "bytes_hex": "7856341200000000",
+        "matches_expected": true,
+        "pointer": 305419896,
+        "size": 8,
+        "status": "ok"
+      },
+      "backend": {
+        "available": true,
+        "name": "windows_native_hook",
+        "platform": "win32"
+      },
+      "capture_phase": "plan",
+      "process": {
+        "accessible": true,
+        "architecture": "x64",
+        "creation_time": 134285082914187184,
+        "exists": true,
+        "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "pid": 32800,
+        "status": "ok"
+      },
+      "process_identity": {
+        "architecture": "x64",
+        "creation_time": 134285082914187184,
+        "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "pid": 32800
+      },
+      "schema_version": 1,
+      "target_identity": {
+        "display_name": "smoke-child",
+        "kind": "process",
+        "pid": 32800
+      }
+    },
+    "schema_version": 1,
+    "target_identity": {
+      "display_name": "smoke-child",
+      "kind": "process",
+      "pid": 32800
+    },
+    "validation": {
+      "capability": "native_hook",
+      "checks": [
+        {
+          "capability": "native_hook",
+          "message": "plan capability/provider identity does not match native_hook provider",
+          "name": "capability_identity",
+          "provider": "windows_native_hook",
+          "status": "ok"
+        },
+        {
+          "actual": "a125dfc52a0c4d03b0e9e3a82ec55ee1",
+          "expected": "a125dfc52a0c4d03b0e9e3a82ec55ee1",
+          "message": "native hook plan was not issued by this provider instance",
+          "name": "provider_instance",
+          "status": "ok"
+        },
+        {
+          "message": "native hook session_id must be a non-empty string of at most 256 characters",
+          "name": "session_id",
+          "status": "ok"
+        },
+        {
+          "message": "unsupported or non-canonical native_hook action: vtable_pointer",
+          "name": "supported_action",
+          "status": "ok"
+        },
+        {
+          "authorization_source": "params.authorized",
+          "message": "native hook execution requires explicit authorized=True consent",
+          "name": "explicit_authorization",
+          "status": "ok"
+        },
+        {
+          "message": "target PID must be positive, unambiguous, and match target identity",
+          "name": "target_pid",
+          "pid": 32800,
+          "status": "ok",
+          "target_pid": 32800
+        },
+        {
+          "message": "parameters are valid",
+          "name": "parameters",
+          "status": "ok"
+        },
+        {
+          "actual": "fc31eff25327edf683ac8bf5aade135ff9850dff7302c056187a5677e9232aae",
+          "expected": "fc31eff25327edf683ac8bf5aade135ff9850dff7302c056187a5677e9232aae",
+          "message": "native hook plan precondition hash does not match its immutable inputs",
+          "name": "plan_integrity",
+          "status": "ok"
+        },
+        {
+          "message": "native hook plan identity was not issued by this provider instance",
+          "name": "issued_plan",
+          "status": "ok"
+        },
+        {
+          "available": true,
+          "message": "Windows native hook backend is available",
+          "name": "windows_native_hook",
+          "platform": "win32",
+          "status": "ok"
+        },
+        {
+          "message": "target process is not accessible through the native backend",
+          "name": "process_access",
+          "process": {
+            "accessible": true,
+            "architecture": "x64",
+            "creation_time": 134285082914187184,
+            "exists": true,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "pid": 32800,
+            "status": "ok"
+          },
+          "status": "ok"
+        },
+        {
+          "current": {
+            "architecture": "x64",
+            "creation_time": 134285082914187184,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "pid": 32800
+          },
+          "message": "target process identity changed after planning",
+          "name": "process_identity",
+          "planned": {
+            "architecture": "x64",
+            "creation_time": 134285082914187184,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "pid": 32800
+          },
+          "status": "ok"
+        },
+        {
+          "actual_hex": "7856341200000000",
+          "expected_hex": "7856341200000000",
+          "message": "vtable slot matches the explicit expected original pointer",
+          "name": "vtable_preimage",
+          "replacement_hex": "2143658700000000",
+          "status": "ok"
+        }
+      ],
+      "ok": true,
+      "provider": "windows_native_hook",
+      "session_id": "windows-native-hook-smoke"
+    }
+  },
+  "capability": "native_hook",
+  "dashboard_trace": [
+    {
+      "action": "vtable_pointer",
+      "capability": "native_hook",
+      "kind": "native_hook_execution",
+      "operation_count": 6,
+      "pid": 32800,
+      "provider": "windows_native_hook",
+      "rollback_status": "ready",
+      "session_id": "windows-native-hook-smoke",
+      "status": "ok",
+      "trace_event_count": 0
+    },
+    {
+      "action": "vtable_pointer",
+      "capability": "native_hook",
+      "kind": "native_hook_rollback",
+      "provider": "windows_native_hook",
+      "restored": true,
+      "session_id": "windows-native-hook-smoke",
+      "status": "ok"
+    }
+  ],
+  "events": [
+    {
+      "action": "vtable_pointer",
+      "kind": "plan",
+      "message": "native hook plan created",
+      "ts": "2026-07-14T13:11:31.461708+00:00"
+    },
+    {
+      "error_count": 0,
+      "kind": "validate",
+      "message": "native hook plan validated",
+      "ok": true,
+      "ts": "2026-07-14T13:11:31.461708+00:00",
+      "warning_count": 0
+    },
+    {
+      "kind": "execute",
+      "message": "native hook execution completed",
+      "status": "ok",
+      "ts": "2026-07-14T13:11:31.461708+00:00"
+    },
+    {
+      "kind": "rollback",
+      "message": "native hook rollback completed",
+      "restored": true,
+      "status": "ok",
+      "ts": "2026-07-14T13:11:31.464593+00:00"
+    }
+  ],
+  "evidence_manifest_entries": [
+    {
+      "description": "Native hook lifecycle audit record",
+      "kind": "native-hook-audit",
+      "path": "native_hook/windows-native-hook-smoke/audit.json",
+      "session_id": "windows-native-hook-smoke",
+      "status": "ok"
+    },
+    {
+      "description": "Native hook lifecycle and bounded trace events",
+      "kind": "native-hook-events",
+      "path": "native_hook/windows-native-hook-smoke/events.json",
+      "session_id": "windows-native-hook-smoke",
+      "status": "ok"
+    },
+    {
+      "description": "Native hook session artifact manifest",
+      "kind": "native-hook-manifest",
+      "path": "native_hook/windows-native-hook-smoke/manifest.json",
+      "session_id": "windows-native-hook-smoke",
+      "status": "ok"
+    }
+  ],
+  "precondition_hash": "fc31eff25327edf683ac8bf5aade135ff9850dff7302c056187a5677e9232aae",
+  "provenance": {
+    "action": "vtable_pointer",
+    "audit_schema_version": 1,
+    "authorization_source": "params.authorized",
+    "backend": {
+      "available": true,
+      "name": "windows_native_hook",
+      "platform": "win32"
+    },
+    "frida": false,
+    "lifecycle_events": [
+      {
+        "action": "vtable_pointer",
+        "kind": "plan",
+        "message": "native hook plan created",
+        "ts": "2026-07-14T13:11:31.461708+00:00"
+      },
+      {
+        "error_count": 0,
+        "kind": "validate",
+        "message": "native hook plan validated",
+        "ok": true,
+        "ts": "2026-07-14T13:11:31.461708+00:00",
+        "warning_count": 0
+      },
+      {
+        "kind": "execute",
+        "message": "native hook execution completed",
+        "status": "ok",
+        "ts": "2026-07-14T13:11:31.461708+00:00"
+      },
+      {
+        "kind": "rollback",
+        "message": "native hook rollback completed",
+        "restored": true,
+        "status": "ok",
+        "ts": "2026-07-14T13:11:31.464593+00:00"
+      }
+    ],
+    "native_win32": true,
+    "plan": {
+      "action": "vtable_pointer",
+      "before_snapshot": {
+        "action": {
+          "address": 2518335011608,
+          "bytes_hex": "7856341200000000",
+          "matches_expected": true,
+          "pointer": 305419896,
+          "size": 8,
+          "status": "ok"
+        },
+        "backend": {
+          "available": true,
+          "name": "windows_native_hook",
+          "platform": "win32"
+        },
+        "capture_phase": "plan",
+        "process": {
+          "accessible": true,
+          "architecture": "x64",
+          "creation_time": 134285082914187184,
+          "exists": true,
+          "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "pid": 32800,
+          "status": "ok"
+        },
+        "process_identity": {
+          "architecture": "x64",
+          "creation_time": 134285082914187184,
+          "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "pid": 32800
+        },
+        "schema_version": 1,
+        "target_identity": {
+          "display_name": "smoke-child",
+          "kind": "process",
+          "pid": 32800
+        }
+      },
+      "capability": "native_hook",
+      "parameters": {
+        "architecture": "x64",
+        "authorization_scope": "program repair/diagnostics",
+        "authorization_source": "params.authorized",
+        "authorized": true,
+        "expected_original_pointer": 305419896,
+        "pid": 32800,
+        "pid_conflict": false,
+        "pointer_size": 8,
+        "replacement_pointer": 2271560481,
+        "requested_action": "vtable_pointer",
+        "slot_address": 2518335011608
+      },
+      "precondition_hash": "fc31eff25327edf683ac8bf5aade135ff9850dff7302c056187a5677e9232aae",
+      "provenance": {
+        "action": "vtable_pointer",
+        "audit_schema_version": 1,
+        "authorization_source": "params.authorized",
+        "backend": {
+          "available": true,
+          "name": "windows_native_hook",
+          "platform": "win32"
+        },
+        "frida": false,
+        "native_win32": true,
+        "precondition_hash": "fc31eff25327edf683ac8bf5aade135ff9850dff7302c056187a5677e9232aae",
+        "process_identity": {
+          "architecture": "x64",
+          "creation_time": 134285082914187184,
+          "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "pid": 32800
+        },
+        "provider": "windows_native_hook",
+        "provider_instance": "a125dfc52a0c4d03b0e9e3a82ec55ee1",
+        "requested_action": "vtable_pointer",
+        "target_identity": {
+          "display_name": "smoke-child",
+          "kind": "process",
+          "pid": 32800
+        }
+      },
+      "provider": "windows_native_hook",
+      "rollback_plan": {
+        "active": false,
+        "address": 2518335011608,
+        "completed": false,
+        "mode": "restore_original_bytes",
+        "original_hex": "7856341200000000",
+        "patched_hex": "2143658700000000",
+        "pid": 32800,
+        "precondition_hash": "fc31eff25327edf683ac8bf5aade135ff9850dff7302c056187a5677e9232aae",
+        "restored": false,
+        "schema_version": 1,
+        "supported": true
+      },
+      "session_id": "windows-native-hook-smoke",
+      "steps": [
+        {
+          "index": 1,
+          "operation": "verify process identity and expected pointer"
+        },
+        {
+          "index": 2,
+          "operation": "make the vtable slot writable"
+        },
+        {
+          "index": 3,
+          "operation": "write and verify the replacement pointer"
+        },
+        {
+          "index": 4,
+          "operation": "restore page protection"
+        }
+      ],
+      "target": {
+        "display_name": "smoke-child",
+        "kind": "process",
+        "pid": 32800
+      }
+    },
+    "precondition_hash": "fc31eff25327edf683ac8bf5aade135ff9850dff7302c056187a5677e9232aae",
+    "process_identity": {
+      "architecture": "x64",
+      "creation_time": 134285082914187184,
+      "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "pid": 32800
+    },
+    "provider": "windows_native_hook",
+    "provider_instance": "a125dfc52a0c4d03b0e9e3a82ec55ee1",
+    "requested_action": "vtable_pointer",
+    "target_identity": {
+      "display_name": "smoke-child",
+      "kind": "process",
+      "pid": 32800
+    },
+    "validation": {
+      "capability": "native_hook",
+      "checks": [
+        {
+          "capability": "native_hook",
+          "message": "plan capability/provider identity does not match native_hook provider",
+          "name": "capability_identity",
+          "provider": "windows_native_hook",
+          "status": "ok"
+        },
+        {
+          "actual": "a125dfc52a0c4d03b0e9e3a82ec55ee1",
+          "expected": "a125dfc52a0c4d03b0e9e3a82ec55ee1",
+          "message": "native hook plan was not issued by this provider instance",
+          "name": "provider_instance",
+          "status": "ok"
+        },
+        {
+          "message": "native hook session_id must be a non-empty string of at most 256 characters",
+          "name": "session_id",
+          "status": "ok"
+        },
+        {
+          "message": "unsupported or non-canonical native_hook action: vtable_pointer",
+          "name": "supported_action",
+          "status": "ok"
+        },
+        {
+          "authorization_source": "params.authorized",
+          "message": "native hook execution requires explicit authorized=True consent",
+          "name": "explicit_authorization",
+          "status": "ok"
+        },
+        {
+          "message": "target PID must be positive, unambiguous, and match target identity",
+          "name": "target_pid",
+          "pid": 32800,
+          "status": "ok",
+          "target_pid": 32800
+        },
+        {
+          "message": "parameters are valid",
+          "name": "parameters",
+          "status": "ok"
+        },
+        {
+          "actual": "fc31eff25327edf683ac8bf5aade135ff9850dff7302c056187a5677e9232aae",
+          "expected": "fc31eff25327edf683ac8bf5aade135ff9850dff7302c056187a5677e9232aae",
+          "message": "native hook plan precondition hash does not match its immutable inputs",
+          "name": "plan_integrity",
+          "status": "ok"
+        },
+        {
+          "message": "native hook plan identity was not issued by this provider instance",
+          "name": "issued_plan",
+          "status": "ok"
+        },
+        {
+          "available": true,
+          "message": "Windows native hook backend is available",
+          "name": "windows_native_hook",
+          "platform": "win32",
+          "status": "ok"
+        },
+        {
+          "message": "target process is not accessible through the native backend",
+          "name": "process_access",
+          "process": {
+            "accessible": true,
+            "architecture": "x64",
+            "creation_time": 134285082914187184,
+            "exists": true,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "pid": 32800,
+            "status": "ok"
+          },
+          "status": "ok"
+        },
+        {
+          "current": {
+            "architecture": "x64",
+            "creation_time": 134285082914187184,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "pid": 32800
+          },
+          "message": "target process identity changed after planning",
+          "name": "process_identity",
+          "planned": {
+            "architecture": "x64",
+            "creation_time": 134285082914187184,
+            "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "pid": 32800
+          },
+          "status": "ok"
+        },
+        {
+          "actual_hex": "7856341200000000",
+          "expected_hex": "7856341200000000",
+          "message": "vtable slot matches the explicit expected original pointer",
+          "name": "vtable_preimage",
+          "replacement_hex": "2143658700000000",
+          "status": "ok"
+        }
+      ],
+      "ok": true,
+      "provider": "windows_native_hook",
+      "session_id": "windows-native-hook-smoke"
+    }
+  },
+  "provider": "windows_native_hook",
+  "report_section": {
+    "action": "vtable_pointer",
+    "capability": "native_hook",
+    "frida": false,
+    "native_win32": true,
+    "operation_count": 6,
+    "provider": "windows_native_hook",
+    "restored": true,
+    "rollback_status": "ok",
+    "rollback_supported": true,
+    "session_id": "windows-native-hook-smoke",
+    "status": "ok",
+    "target_identity": {
+      "display_name": "smoke-child",
+      "kind": "process",
+      "pid": 32800
+    },
+    "trace_event_count": 0
+  },
+  "rollback_plan": {
+    "active": false,
+    "address": 2518335011608,
+    "allocation_active": null,
+    "allocation_released": null,
+    "completed": true,
+    "cross_process_supported": false,
+    "idempotent": true,
+    "mode": "restore_original_bytes",
+    "old_protection": 4,
+    "original_hex": "7856341200000000",
+    "patched_hex": "2143658700000000",
+    "pid": 32800,
+    "precondition_hash": "fc31eff25327edf683ac8bf5aade135ff9850dff7302c056187a5677e9232aae",
+    "provider_instance": "a125dfc52a0c4d03b0e9e3a82ec55ee1",
+    "restored": true,
+    "rollback_at": "2026-07-14T13:11:31.464593+00:00",
+    "rollback_details": {
+      "actual_hex": "7856341200000000",
+      "address": 2518335011608,
+      "allocation_released": true,
+      "errors": [],
+      "operations": [
+        {
+          "address": 2518335011608,
+          "new_protection": 4,
+          "ok": true,
+          "old_protection": 4,
+          "operation": "VirtualProtectEx(rollback,writable)",
+          "size": 8,
+          "status": "ok"
+        },
+        {
+          "address": 2518335011608,
+          "bytes_hex": "2143658700000000",
+          "ok": true,
+          "operation": "read_rollback_preimage",
+          "size": 8,
+          "status": "ok"
+        },
+        {
+          "address": 2518335011608,
+          "bytes_written": 8,
+          "ok": true,
+          "operation": "WriteProcessMemory(rollback)",
+          "status": "ok"
+        },
+        {
+          "address": 2518335011608,
+          "bytes_hex": "7856341200000000",
+          "ok": true,
+          "operation": "verify_rollback_write",
+          "size": 8,
+          "status": "ok"
+        },
+        {
+          "address": 2518335011608,
+          "new_protection": 4,
+          "ok": true,
+          "old_protection": 4,
+          "operation": "VirtualProtectEx(rollback,restore)",
+          "size": 8,
+          "status": "ok"
+        }
+      ],
+      "pid": 32800,
+      "protection_restored": true,
+      "target_restored": true
+    },
+    "schema_version": 1,
+    "size": 8,
+    "status": "completed",
+    "supported": true
+  },
+  "schema_version": 1,
+  "session_id": "windows-native-hook-smoke",
+  "status": "ok",
+  "target_identity": {
+    "display_name": "smoke-child",
+    "kind": "process",
+    "metadata": {},
+    "path": null,
+    "pid": 32800,
+    "sha256": null
+  }
+}

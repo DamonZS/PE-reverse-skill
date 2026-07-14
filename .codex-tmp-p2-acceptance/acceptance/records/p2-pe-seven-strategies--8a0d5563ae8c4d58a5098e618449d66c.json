@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "fixture_id": "p2-pe-seven-strategies",
+  "phase": "P2",
+  "capability": "patch_planner",
+  "evidence_level": "repository-production-backend",
+  "session_id": "8a0d5563ae8c4d58a5098e618449d66c",
+  "target_identity": {},
+  "target_identity_source": "missing",
+  "started_at": "2026-07-14T13:21:41.680509+00:00",
+  "finished_at": "2026-07-14T13:22:01.593845+00:00",
+  "workspace": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p2-acceptance",
+  "run_directory": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p2-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\8a0d5563ae8c4d58a5098e618449d66c",
+  "record_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p2-acceptance\\acceptance\\records\\p2-pe-seven-strategies--8a0d5563ae8c4d58a5098e618449d66c.json",
+  "command": [
+    "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "-m",
+    "unittest",
+    "tests.test_patch_planner",
+    "tests.test_patch_capability_provider"
+  ],
+  "command_display": "python -m unittest tests.test_patch_planner tests.test_patch_capability_provider",
+  "contract_sha256": "a4d2a437ec5b8d340dbd822711ca3cf9ce2ff20eee8a02e8de71bb231d146a8f",
+  "environment_gates": {
+    "status": "repository_ready",
+    "configured": [],
+    "missing": [],
+    "workflow_states": {}
+  },
+  "provider_versions": {
+    "python": "3.13.7",
+    "platform": "Windows-11-10.0.26100-SP0"
+  },
+  "expected_artifacts": [
+    "patch/plan.json",
+    "patch/verify.json",
+    "patch/rollback_plan.json"
+  ],
+  "observed_artifacts": [
+    {
+      "path": "environment-validation.json",
+      "size": 29315,
+      "sha256": "97c4ea79b0293d8f18d74a601f7d3c404b1c7093d4ef5fedf306134d243699a4"
+    },
+    {
+      "path": "patch/plan.json",
+      "size": 1066,
+      "sha256": "7a37c3a871aba18a37e8f92245b269baa9e40cdbe1645da78c74960055847b33"
+    },
+    {
+      "path": "patch/rollback_plan.json",
+      "size": 725,
+      "sha256": "b63ed91b45c78697f22860830dca97d86a1be0c47b4b9430bd50179be76d0990"
+    },
+    {
+      "path": "patch/verify.json",
+      "size": 5777,
+      "sha256": "e2d4a183f7d602721d1855481168d74d949eb84b3a95f959e84c25b67457711a"
+    },
+    {
+      "path": "stderr.log",
+      "size": 919,
+      "sha256": "c7478bf92f6aea599095f4e6c0bf690efd7deab582f92ee23c2a249b4fb665f2"
+    },
+    {
+      "path": "stdout.log",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "missing_artifacts": [],
+  "rejected_provenance": [],
+  "execution_proof": {},
+  "execution_proof_errors": [],
+  "execution_proof_artifact": null,
+  "rollback_result": {
+    "status": "not_required",
+    "verified": true,
+    "artifacts": []
+  },
+  "cleanup_result": {
+    "status": "not_required",
+    "verified": true,
+    "artifacts": []
+  },
+  "exit_code": 1,
+  "execution_error": null,
+  "outcome": "failed",
+  "verification_constraints": {
+    "registered_fixture": true,
+    "structured_argv": true,
+    "host_and_dependencies_ready": true,
+    "execution_passed": false,
+    "live_evidence_level": false,
+    "execution_proof_valid": true,
+    "target_identity_present": false,
+    "target_identity_matches_artifact": true,
+    "expected_artifacts_complete": true,
+    "provenance_non_synthetic": true,
+    "rollback_verified": true,
+    "cleanup_verified": true
+  },
+  "live_verified": false
+}

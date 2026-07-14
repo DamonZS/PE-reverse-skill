@@ -1,0 +1,330 @@
+{
+  "action": "apply",
+  "after_snapshot": {
+    "applied": true,
+    "effective_status": "ok",
+    "operation_count": 1,
+    "output": {
+      "exists": true,
+      "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\patched.bin",
+      "sha256": "681eb12d5a6743cb4dd72cf1bedd197c7cfd97444a56aecee697b50e81b9cdc9",
+      "size": 34
+    },
+    "restored": false,
+    "target": {
+      "exists": true,
+      "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\sample.bin",
+      "sha256": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e",
+      "size": 34
+    },
+    "tool_status": "ok"
+  },
+  "before_snapshot": {
+    "exists": true,
+    "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\sample.bin",
+    "sha256": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e",
+    "size": 34
+  },
+  "capability": "patch_executor",
+  "dashboard_trace": [
+    {
+      "action": "apply",
+      "applied": true,
+      "capability": "patch_executor",
+      "kind": "patch_execution",
+      "operation_count": 1,
+      "output_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\patched.bin",
+      "provider": "local_verified_patch",
+      "restored": false,
+      "status": "ok",
+      "target_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\sample.bin"
+    }
+  ],
+  "events": [
+    {
+      "data": {
+        "action": "apply",
+        "provider": "local_verified_patch"
+      },
+      "kind": "plan",
+      "message": "capability plan created",
+      "ts": "2026-07-14T13:36:16.532637+00:00"
+    },
+    {
+      "data": {
+        "error_count": 0,
+        "ok": true,
+        "warning_count": 0
+      },
+      "kind": "validate",
+      "message": "capability plan validated",
+      "ts": "2026-07-14T13:36:16.532671+00:00"
+    },
+    {
+      "data": {
+        "status": "ok"
+      },
+      "kind": "execute",
+      "message": "capability execution completed",
+      "ts": "2026-07-14T13:36:16.532677+00:00"
+    }
+  ],
+  "evidence_manifest_entries": [
+    {
+      "kind": "patched-binary",
+      "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\patched.bin",
+      "role": "patch-evidence",
+      "status": "ok",
+      "tool": "patch_executor"
+    },
+    {
+      "kind": "patch-manifest",
+      "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\patch_manifest.json",
+      "role": "patch-evidence",
+      "status": "ok",
+      "tool": "patch_executor"
+    },
+    {
+      "kind": "patch-rollback",
+      "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\rollback.json",
+      "role": "patch-evidence",
+      "status": "ok",
+      "tool": "patch_executor"
+    },
+    {
+      "kind": "patch-capability-result",
+      "path": "patch/e329b97085044effa2ef199d53837d27/capability-result.json",
+      "role": "patch-evidence",
+      "status": "ok",
+      "tool": "patch_executor"
+    }
+  ],
+  "precondition_hash": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e",
+  "provenance": {
+    "engine_result": {
+      "effective_status": "ok",
+      "status": "ok",
+      "tool": "binary_patch_apply"
+    },
+    "patch_executor_plan_identity": {
+      "action": "apply",
+      "capability": "patch_executor",
+      "digest": "9a0b6a7466f1ae7043730e8e01e509102d3ba0642db0a99fa3b796115b8d2768",
+      "input_snapshots": {
+        "plan": {
+          "exists": true,
+          "kind": "file",
+          "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\input-plan.json",
+          "sha256": "e54162213e4e85281a0c4b4c56ce1d51b7097a3152aae7b02d6b7fc59dae89bd",
+          "size": 207
+        }
+      },
+      "parameters_sha256": "90562c2d04178ab1e310af0492205074502c2897e18a5f1ad7bbcd45b97c1a08",
+      "provider": "local_verified_patch",
+      "schema_version": 1,
+      "session_id": "e329b97085044effa2ef199d53837d27",
+      "target_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\sample.bin",
+      "target_sha256": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e"
+    },
+    "patch_executor_result_identity": {
+      "action": "apply",
+      "capability": "patch_executor",
+      "digest": "09ab7970cdf325c7660665344746f8a456349a038c7848b1015bab5bf99e9610",
+      "plan_digest": "9a0b6a7466f1ae7043730e8e01e509102d3ba0642db0a99fa3b796115b8d2768",
+      "provider": "local_verified_patch",
+      "schema_version": 1,
+      "session_id": "e329b97085044effa2ef199d53837d27"
+    },
+    "plan": {
+      "action": "apply",
+      "before_snapshot": {
+        "exists": true,
+        "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\sample.bin",
+        "sha256": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e",
+        "size": 34
+      },
+      "capability": "patch_executor",
+      "parameters": {
+        "artifact_dir": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider",
+        "out_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\patched.bin",
+        "plan": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\input-plan.json",
+        "rollback_out_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\rollback-check\\sample.restored.bin"
+      },
+      "precondition_hash": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e",
+      "provenance": {
+        "patch_executor_plan_identity": {
+          "action": "apply",
+          "capability": "patch_executor",
+          "digest": "9a0b6a7466f1ae7043730e8e01e509102d3ba0642db0a99fa3b796115b8d2768",
+          "input_snapshots": {
+            "plan": {
+              "exists": true,
+              "kind": "file",
+              "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\input-plan.json",
+              "sha256": "e54162213e4e85281a0c4b4c56ce1d51b7097a3152aae7b02d6b7fc59dae89bd",
+              "size": 207
+            }
+          },
+          "parameters_sha256": "90562c2d04178ab1e310af0492205074502c2897e18a5f1ad7bbcd45b97c1a08",
+          "provider": "local_verified_patch",
+          "schema_version": 1,
+          "session_id": "e329b97085044effa2ef199d53837d27",
+          "target_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\sample.bin",
+          "target_sha256": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e"
+        },
+        "provider": "local_verified_patch",
+        "source": "test_patch_capability_provider",
+        "target_declared_sha256": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e"
+      },
+      "provider": "local_verified_patch",
+      "rollback_plan": {
+        "mode": "restored_copy",
+        "status": "pending",
+        "supported": false,
+        "verification_out_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\rollback-check\\sample.restored.bin"
+      },
+      "session_id": "e329b97085044effa2ef199d53837d27",
+      "steps": [
+        {
+          "status": "planned",
+          "step": "verify_target_identity"
+        },
+        {
+          "status": "planned",
+          "step": "validate_patch_inputs"
+        },
+        {
+          "status": "planned",
+          "step": "apply_verified_copy"
+        },
+        {
+          "status": "planned",
+          "step": "collect_patch_evidence"
+        }
+      ],
+      "target": {
+        "display_name": "sample.bin",
+        "kind": "sample",
+        "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\sample.bin",
+        "sha256": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e"
+      }
+    },
+    "precondition_hash": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e",
+    "provider": "local_verified_patch",
+    "source": "test_patch_capability_provider",
+    "target_declared_sha256": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e",
+    "validation": {
+      "capability": "patch_executor",
+      "checks": [
+        {
+          "actual_digest": "9a0b6a7466f1ae7043730e8e01e509102d3ba0642db0a99fa3b796115b8d2768",
+          "expected_digest": "9a0b6a7466f1ae7043730e8e01e509102d3ba0642db0a99fa3b796115b8d2768",
+          "input_snapshots": {
+            "plan": {
+              "exists": true,
+              "kind": "file",
+              "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\input-plan.json",
+              "sha256": "e54162213e4e85281a0c4b4c56ce1d51b7097a3152aae7b02d6b7fc59dae89bd",
+              "size": 207
+            }
+          },
+          "name": "issued_plan_identity",
+          "status": "ok"
+        },
+        {
+          "actual": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e",
+          "expected": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e",
+          "name": "target_precondition_hash",
+          "status": "ok"
+        },
+        {
+          "actual": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e",
+          "expected": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e",
+          "name": "declared_target_hash",
+          "status": "ok"
+        },
+        {
+          "name": "copy_output_path",
+          "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\patched.bin",
+          "status": "ok"
+        },
+        {
+          "name": "rollback_output_path",
+          "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\rollback-check\\sample.restored.bin",
+          "status": "ok"
+        },
+        {
+          "details": {
+            "dry_run": true,
+            "operations": [
+              {
+                "expected_hex": "9090",
+                "file_offset": "0x2",
+                "file_offset_value": 2,
+                "id": "replace-nops",
+                "kind": "replace_bytes",
+                "replacement_hex": "cccc",
+                "size": 2
+              }
+            ],
+            "patched_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\patched.bin",
+            "patched_sha256": "681eb12d5a6743cb4dd72cf1bedd197c7cfd97444a56aecee697b50e81b9cdc9",
+            "patched_size": 34,
+            "plan_schema_version": 1,
+            "rollback_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\rollback.json",
+            "schema_version": 1,
+            "source_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\sample.bin",
+            "source_sha256": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e",
+            "source_size": 34,
+            "status": "planned",
+            "strategy": "inline_patch"
+          },
+          "name": "patch_engine_validation",
+          "status": "ok",
+          "tool": "binary_patch_apply",
+          "tool_status": "planned"
+        }
+      ],
+      "ok": true,
+      "provider": "local_verified_patch",
+      "session_id": "e329b97085044effa2ef199d53837d27"
+    }
+  },
+  "provider": "local_verified_patch",
+  "report_section": {
+    "action": "apply",
+    "applied": true,
+    "capability": "patch_executor",
+    "dry_run": false,
+    "engine": "binary_patch_apply",
+    "operation_count": 1,
+    "output_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\patched.bin",
+    "output_sha256": "681eb12d5a6743cb4dd72cf1bedd197c7cfd97444a56aecee697b50e81b9cdc9",
+    "provider": "local_verified_patch",
+    "restored": false,
+    "source_sha256": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e",
+    "status": "ok",
+    "strategy": "inline_patch",
+    "target_format": "pe",
+    "target_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\sample.bin"
+  },
+  "rollback_plan": {
+    "mode": "restored_copy",
+    "patched_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\patched.bin",
+    "patched_sha256": "681eb12d5a6743cb4dd72cf1bedd197c7cfd97444a56aecee697b50e81b9cdc9",
+    "rollback_manifest": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\rollback.json",
+    "rollback_manifest_sha256": "1a8f24cae3047a3668b007c91993ef6d5fb2a784d8d7650209fc87ddcbc220ea",
+    "source_sha256": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e",
+    "status": "ready",
+    "supported": true,
+    "verification_out_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\rollback-check\\sample.restored.bin"
+  },
+  "session_id": "e329b97085044effa2ef199d53837d27",
+  "status": "ok",
+  "target_identity": {
+    "display_name": "sample.bin",
+    "kind": "sample",
+    "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\provider\\sample.bin",
+    "sha256": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e"
+  }
+}

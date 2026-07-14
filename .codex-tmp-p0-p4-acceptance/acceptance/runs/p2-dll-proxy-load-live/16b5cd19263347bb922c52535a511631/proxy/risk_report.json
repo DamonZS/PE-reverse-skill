@@ -1,0 +1,62 @@
+{
+  "counts": {
+    "critical": 0,
+    "high": 2,
+    "info": 2,
+    "low": 1,
+    "medium": 1
+  },
+  "findings": [
+    {
+      "category": "deployment",
+      "id": "paired_dll_deployment",
+      "message": "The proxy and renamed backing DLL must be deployed atomically in one directory.",
+      "mitigation": "Verify both hashes from build_manifest.json before replacing a copied deployment.",
+      "severity": "high"
+    },
+    {
+      "category": "trust",
+      "id": "unsigned_proxy_binary",
+      "message": "A newly built proxy does not inherit the source DLL Authenticode signature.",
+      "mitigation": "Sign and verify the built proxy under the deployment policy.",
+      "severity": "high"
+    },
+    {
+      "category": "compatibility",
+      "evidence": {
+        "count": 1
+      },
+      "id": "ordinal_only_exports",
+      "message": "Ordinal-only exports require linker NONAME support and ordinal-preserving verification.",
+      "mitigation": "Parse the built DLL export table before deployment.",
+      "severity": "medium"
+    },
+    {
+      "category": "resolution",
+      "evidence": {
+        "count": 1
+      },
+      "id": "source_forwarder_chain",
+      "message": "Some source exports already forward and will resolve through the backing DLL.",
+      "mitigation": "Validate the final forwarding chain on the target Windows version.",
+      "severity": "low"
+    },
+    {
+      "category": "build",
+      "id": "architecture_locked_build",
+      "message": "The generated project rejects compiler targets other than x64.",
+      "mitigation": "Keep the CMake and preprocessor architecture guards enabled.",
+      "severity": "info"
+    },
+    {
+      "category": "abi",
+      "id": "direct_loader_forwarders",
+      "message": "Direct PE forwarders preserve calling boundaries without generated signature guesses.",
+      "mitigation": "Do not replace DEF forwarders with C wrappers unless exact prototypes are proven.",
+      "severity": "info"
+    }
+  ],
+  "overall_risk": "high",
+  "schema_version": 1,
+  "status": "review_required"
+}

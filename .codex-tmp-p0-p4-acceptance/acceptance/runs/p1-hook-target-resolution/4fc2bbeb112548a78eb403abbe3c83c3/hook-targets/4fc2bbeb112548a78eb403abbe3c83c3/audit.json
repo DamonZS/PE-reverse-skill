@@ -1,0 +1,542 @@
+{
+  "action": "resolve_live",
+  "after_snapshot": {
+    "captured_at": "2026-07-14T13:32:53.445602+00:00",
+    "resolution": {
+      "address": 140720379344608,
+      "address_hex": "0x7ffc043936e0",
+      "ambiguity": {
+        "address_owner_candidate_count": 1,
+        "ambiguous": false,
+        "candidate_count": 1,
+        "source_module_candidate_count": 1
+      },
+      "api": null,
+      "confidence": 1.0,
+      "errors": [],
+      "evidence_plan": {},
+      "evidence_tier": "live-production",
+      "executable_range": {
+        "address": 140720379344608,
+        "address_owner": {
+          "base": 140720379199488,
+          "base_hex": "0x7ffc04370000",
+          "end": 140720380022784,
+          "end_hex": "0x7ffc04439000",
+          "entry_point": 140720379388192,
+          "entry_point_hex": "0x7ffc0439e120",
+          "name": "kernel32.dll",
+          "path": "C:\\Windows\\System32\\kernel32.dll",
+          "size_of_image": 823296
+        },
+        "allocation_base_matches_module": true,
+        "aslr_address_proof": {
+          "aslr_delta": 140713936748544,
+          "computed_address": 140720379344608,
+          "formula": "loaded_base + rva",
+          "loaded_base": 140720379199488,
+          "matches": true,
+          "observed_address": 140720379344608,
+          "preferred_image_base": 6442450944,
+          "rva": 145120,
+          "status": "ok"
+        },
+        "candidate_count": 1,
+        "characteristics": 1610612768,
+        "characteristics_hex": "0x60000020",
+        "executable": true,
+        "module_identity_status": "ok",
+        "range_end": 140720379748352,
+        "range_start": 140720379203584,
+        "reason": null,
+        "section": ".text",
+        "size": 1,
+        "status": "ok",
+        "virtual_memory": {
+          "address": 140720379344608,
+          "allocation_base": 140720379199488,
+          "base_address": 140720379342848,
+          "committed": true,
+          "executable": true,
+          "guarded": false,
+          "image": true,
+          "protect": 32,
+          "protect_hex": "0x20",
+          "reason": null,
+          "region_end": 140720379752448,
+          "region_size": 409600,
+          "size": 1,
+          "state": 4096,
+          "state_hex": "0x1000",
+          "status": "ok",
+          "type": 16777216,
+          "type_hex": "0x1000000"
+        }
+      },
+      "method": "module_export",
+      "module": "kernel32.dll",
+      "production_ready": true,
+      "provenance": {
+        "backend": "win32-current-process",
+        "evidence_sources": [
+          "EnumProcessModulesEx",
+          "GetModuleInformation",
+          "GetProcAddress",
+          "ReadProcessMemory",
+          "VirtualQuery",
+          "on_disk_pe_sha256"
+        ],
+        "forwarded_export": false,
+        "injected_backend": false,
+        "kind": "current_process_observation",
+        "loaded_by_resolver": false,
+        "pid": 30132,
+        "platform": "win32",
+        "platform_machine": "AMD64",
+        "requested_module": "kernel32.dll",
+        "synthetic": false
+      },
+      "rva": 145120,
+      "rva_hex": "0x236e0",
+      "schema_version": 1,
+      "slot_address": null,
+      "slot_address_hex": null,
+      "source": {
+        "architecture": "x64",
+        "aslr_address_proof": {
+          "aslr_delta": 140713936748544,
+          "computed_address": 140720379344608,
+          "formula": "loaded_base + rva",
+          "loaded_base": 140720379199488,
+          "matches": true,
+          "observed_address": 140720379344608,
+          "preferred_image_base": 6442450944,
+          "rva": 145120,
+          "status": "ok"
+        },
+        "forwarder": null,
+        "kind": "live_pe_export",
+        "loader_resolution": {
+          "api": "GetProcAddress",
+          "module_handle": 140720379199488,
+          "owner_module": "kernel32.dll",
+          "owner_rva": 145120,
+          "resolved_address": 140720379344608
+        },
+        "module_base": 140720379199488,
+        "ordinal": 578,
+        "path": "C:\\Windows\\System32\\kernel32.dll",
+        "requested_export": {
+          "forwarder": null,
+          "module": "kernel32.dll",
+          "name": "GetCurrentProcessId",
+          "ordinal": 578,
+          "target_rva": 145120
+        },
+        "resolved_module_identity": {
+          "architecture": "x64",
+          "architecture_matches_process": true,
+          "aslr_applied": true,
+          "aslr_delta": 140713936748544,
+          "checksum": 880212,
+          "checksum_hex": "0x000d6e54",
+          "dll_characteristics": 16736,
+          "dll_characteristics_hex": "0x4160",
+          "dynamic_base": true,
+          "entry_point": 140720379388192,
+          "executable_ranges": [
+            {
+              "address_end": 140720379748352,
+              "address_start": 140720379203584,
+              "characteristics": 1610612768,
+              "characteristics_hex": "0x60000020",
+              "rva_end": 548864,
+              "rva_start": 4096,
+              "section": ".text"
+            },
+            {
+              "address_end": 140720379752448,
+              "address_start": 140720379748352,
+              "characteristics": 1610612768,
+              "characteristics_hex": "0x60000020",
+              "rva_end": 552960,
+              "rva_start": 548864,
+              "section": "fothk"
+            }
+          ],
+          "file_sha256": "f8bcedbe9edfbb8d8a215a024ab8d5b9949dfb7e7175bd80ed89f305fa81e87b",
+          "file_size": 836152,
+          "kind": "loaded_pe_image",
+          "loaded_base": 140720379199488,
+          "loaded_end": 140720380022784,
+          "loader_size_matches_pe": true,
+          "loader_size_of_image": 823296,
+          "machine": 34404,
+          "machine_hex": "0x8664",
+          "memory_header": {
+            "architecture": "x64",
+            "checksum": 880212,
+            "dll_characteristics": 16736,
+            "image_base": 140720379199488,
+            "machine": 34404,
+            "machine_hex": "0x8664",
+            "pe_timestamp": 2842556120,
+            "size_of_image": 823296
+          },
+          "memory_header_base_matches_loader": true,
+          "memory_header_matches_file": true,
+          "name": "kernel32.dll",
+          "path": "C:\\Windows\\System32\\kernel32.dll",
+          "pe_identity_sha256": "d6e8fff955d69230c9dfb64c33a312919993df0ec6ec94445a22e7b14b07a8b7",
+          "pe_timestamp": 2842556120,
+          "pe_timestamp_hex": "0xa96df6d8",
+          "preferred_image_base": 6442450944,
+          "process_architecture": "x64",
+          "reason": null,
+          "size_of_image": 823296,
+          "status": "ok"
+        },
+        "sha256": "f8bcedbe9edfbb8d8a215a024ab8d5b9949dfb7e7175bd80ed89f305fa81e87b",
+        "source_module_identity": {
+          "architecture": "x64",
+          "architecture_matches_process": true,
+          "aslr_applied": true,
+          "aslr_delta": 140713936748544,
+          "checksum": 880212,
+          "checksum_hex": "0x000d6e54",
+          "dll_characteristics": 16736,
+          "dll_characteristics_hex": "0x4160",
+          "dynamic_base": true,
+          "entry_point": 140720379388192,
+          "executable_ranges": [
+            {
+              "address_end": 140720379748352,
+              "address_start": 140720379203584,
+              "characteristics": 1610612768,
+              "characteristics_hex": "0x60000020",
+              "rva_end": 548864,
+              "rva_start": 4096,
+              "section": ".text"
+            },
+            {
+              "address_end": 140720379752448,
+              "address_start": 140720379748352,
+              "characteristics": 1610612768,
+              "characteristics_hex": "0x60000020",
+              "rva_end": 552960,
+              "rva_start": 548864,
+              "section": "fothk"
+            }
+          ],
+          "file_sha256": "f8bcedbe9edfbb8d8a215a024ab8d5b9949dfb7e7175bd80ed89f305fa81e87b",
+          "file_size": 836152,
+          "kind": "loaded_pe_image",
+          "loaded_base": 140720379199488,
+          "loaded_end": 140720380022784,
+          "loader_size_matches_pe": true,
+          "loader_size_of_image": 823296,
+          "machine": 34404,
+          "machine_hex": "0x8664",
+          "memory_header": {
+            "architecture": "x64",
+            "checksum": 880212,
+            "dll_characteristics": 16736,
+            "image_base": 140720379199488,
+            "machine": 34404,
+            "machine_hex": "0x8664",
+            "pe_timestamp": 2842556120,
+            "size_of_image": 823296
+          },
+          "memory_header_base_matches_loader": true,
+          "memory_header_matches_file": true,
+          "name": "kernel32.dll",
+          "path": "C:\\Windows\\System32\\kernel32.dll",
+          "pe_identity_sha256": "d6e8fff955d69230c9dfb64c33a312919993df0ec6ec94445a22e7b14b07a8b7",
+          "pe_timestamp": 2842556120,
+          "pe_timestamp_hex": "0xa96df6d8",
+          "preferred_image_base": 6442450944,
+          "process_architecture": "x64",
+          "reason": null,
+          "size_of_image": 823296,
+          "status": "ok"
+        }
+      },
+      "status": "ok",
+      "symbol": "GetCurrentProcessId",
+      "target": null,
+      "warnings": []
+    },
+    "status": "ok",
+    "target_mutated": false
+  },
+  "before_snapshot": {
+    "captured_at": "2026-07-14T13:32:53.383052+00:00",
+    "catalogue_target_count": 10,
+    "live_capability": {
+      "architecture": "x64",
+      "backend": "win32-current-process",
+      "injected_backend": false,
+      "pid": 30132,
+      "platform": "win32",
+      "pointer_size": 8,
+      "production_ready": true,
+      "status": "available"
+    },
+    "target_identity": {
+      "display_name": "python.exe",
+      "kind": "process",
+      "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "pid": 30132,
+      "sha256": "d932e5e2f324d57f392e8fd063dcf6d0185be8a664c57c6d24e7762ed02c28ca"
+    },
+    "target_mutation": false
+  },
+  "capability": "hook_target_resolver",
+  "dashboard_trace": [
+    {
+      "action": "resolve_live",
+      "capability": "hook_target_resolver",
+      "kind": "hook_target_resolution",
+      "method": "module_export",
+      "production_ready": true,
+      "provider": "deterministic_hook_target_resolver",
+      "session_id": "4fc2bbeb112548a78eb403abbe3c83c3",
+      "status": "ok",
+      "target": null
+    },
+    {
+      "kind": "hook_target_rollback",
+      "restored": true,
+      "session_id": "4fc2bbeb112548a78eb403abbe3c83c3",
+      "status": "completed"
+    }
+  ],
+  "events": [
+    {
+      "kind": "plan",
+      "message": "hook target resolution planned",
+      "ts": "2026-07-14T13:32:53.445602+00:00"
+    },
+    {
+      "kind": "validate",
+      "message": "hook target plan validated",
+      "ok": true,
+      "ts": "2026-07-14T13:32:53.445602+00:00"
+    },
+    {
+      "kind": "execute",
+      "message": "hook target resolution completed",
+      "status": "ok",
+      "ts": "2026-07-14T13:32:53.445602+00:00"
+    }
+  ],
+  "evidence_manifest_entries": [
+    {
+      "description": "Resolved hook target and executable-range evidence.",
+      "kind": "hook-target-resolution",
+      "path": "hook-targets/4fc2bbeb112548a78eb403abbe3c83c3/resolution.json",
+      "session_id": "4fc2bbeb112548a78eb403abbe3c83c3",
+      "status": "ok"
+    },
+    {
+      "description": "Read-only capability lifecycle audit record.",
+      "kind": "hook-target-audit",
+      "path": "hook-targets/4fc2bbeb112548a78eb403abbe3c83c3/audit.json",
+      "session_id": "4fc2bbeb112548a78eb403abbe3c83c3",
+      "status": "ok"
+    },
+    {
+      "description": "Materialized hook target artifact manifest.",
+      "kind": "hook-target-manifest",
+      "path": "hook-targets/4fc2bbeb112548a78eb403abbe3c83c3/manifest.json",
+      "session_id": "4fc2bbeb112548a78eb403abbe3c83c3",
+      "status": "ok"
+    }
+  ],
+  "precondition_hash": "2a062b001252be93b13f1bea931dd899920aa9debcfaecb51786cef1178646fe",
+  "provenance": {
+    "evidence_class": "live_host_proof",
+    "lifecycle_events": [
+      {
+        "kind": "plan",
+        "message": "hook target resolution planned",
+        "ts": "2026-07-14T13:32:53.445602+00:00"
+      },
+      {
+        "kind": "validate",
+        "message": "hook target plan validated",
+        "ok": true,
+        "ts": "2026-07-14T13:32:53.445602+00:00"
+      },
+      {
+        "kind": "execute",
+        "message": "hook target resolution completed",
+        "status": "ok",
+        "ts": "2026-07-14T13:32:53.445602+00:00"
+      }
+    ],
+    "plan": {
+      "action": "resolve_live",
+      "before_snapshot": {
+        "captured_at": "2026-07-14T13:32:53.383052+00:00",
+        "catalogue_target_count": 10,
+        "live_capability": {
+          "architecture": "x64",
+          "backend": "win32-current-process",
+          "injected_backend": false,
+          "pid": 30132,
+          "platform": "win32",
+          "pointer_size": 8,
+          "production_ready": true,
+          "status": "available"
+        },
+        "target_identity": {
+          "display_name": "python.exe",
+          "kind": "process",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "pid": 30132,
+          "sha256": "d932e5e2f324d57f392e8fd063dcf6d0185be8a664c57c6d24e7762ed02c28ca"
+        },
+        "target_mutation": false
+      },
+      "capability": "hook_target_resolver",
+      "parameters": {
+        "load_if_missing": false,
+        "read_only": true,
+        "specification": {
+          "export": "GetCurrentProcessId",
+          "method": "module_export",
+          "module": "kernel32.dll"
+        }
+      },
+      "precondition_hash": "2a062b001252be93b13f1bea931dd899920aa9debcfaecb51786cef1178646fe",
+      "provenance": {
+        "evidence_class": "live_host_proof",
+        "provider_instance": "31897dc1295147e0952da1450d8812cc",
+        "read_only": true,
+        "resolver": "reverse_analyzer.providers.hook_targets",
+        "source": "p1-acceptance",
+        "synthetic": false
+      },
+      "provider": "deterministic_hook_target_resolver",
+      "rollback_plan": {
+        "active": false,
+        "precondition_hash": "2a062b001252be93b13f1bea931dd899920aa9debcfaecb51786cef1178646fe",
+        "required": false,
+        "strategy": "read_only_noop",
+        "supported": true
+      },
+      "session_id": "4fc2bbeb112548a78eb403abbe3c83c3",
+      "steps": [
+        {
+          "mutates_target": false,
+          "name": "validate_specification"
+        },
+        {
+          "mutates_target": false,
+          "name": "resolve_live"
+        },
+        {
+          "mutates_target": false,
+          "name": "persist_resolution_evidence"
+        }
+      ],
+      "target": {
+        "display_name": "python.exe",
+        "kind": "process",
+        "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "pid": 30132,
+        "sha256": "d932e5e2f324d57f392e8fd063dcf6d0185be8a664c57c6d24e7762ed02c28ca"
+      }
+    },
+    "precondition_hash": "2a062b001252be93b13f1bea931dd899920aa9debcfaecb51786cef1178646fe",
+    "provider_instance": "31897dc1295147e0952da1450d8812cc",
+    "read_only": true,
+    "resolver": "reverse_analyzer.providers.hook_targets",
+    "source": "p1-acceptance",
+    "synthetic": false,
+    "target_mutation": false,
+    "validation": {
+      "capability": "hook_target_resolver",
+      "checks": [
+        {
+          "message": "plan capability/provider identity must match hook target resolver",
+          "name": "capability_identity",
+          "status": "ok"
+        },
+        {
+          "message": "plan was not issued by this provider instance",
+          "name": "provider_instance",
+          "status": "ok"
+        },
+        {
+          "message": "unsupported hook target resolver action",
+          "name": "action",
+          "status": "ok"
+        },
+        {
+          "message": "hook target specification must be a non-empty object",
+          "name": "specification",
+          "status": "ok"
+        },
+        {
+          "message": "modules must be a list of objects",
+          "name": "modules",
+          "status": "ok"
+        },
+        {
+          "message": "precondition hash must be a SHA-256 digest",
+          "name": "precondition_hash",
+          "status": "ok"
+        }
+      ],
+      "ok": true,
+      "provider": "deterministic_hook_target_resolver",
+      "session_id": "4fc2bbeb112548a78eb403abbe3c83c3"
+    }
+  },
+  "provider": "deterministic_hook_target_resolver",
+  "report_section": {
+    "action": "resolve_live",
+    "address": 140720379344608,
+    "capability": "hook_target_resolver",
+    "confidence": 1.0,
+    "errors": [],
+    "evidence_tier": "live-production",
+    "method": "module_export",
+    "production_ready": true,
+    "provider": "deterministic_hook_target_resolver",
+    "read_only": true,
+    "resolved_target": null,
+    "rva": 145120,
+    "session_id": "4fc2bbeb112548a78eb403abbe3c83c3",
+    "status": "ok",
+    "target_identity": {
+      "display_name": "python.exe",
+      "kind": "process",
+      "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "pid": 30132,
+      "sha256": "d932e5e2f324d57f392e8fd063dcf6d0185be8a664c57c6d24e7762ed02c28ca"
+    },
+    "warnings": []
+  },
+  "rollback_plan": {
+    "active": false,
+    "precondition_hash": "2a062b001252be93b13f1bea931dd899920aa9debcfaecb51786cef1178646fe",
+    "required": false,
+    "restored": true,
+    "status": "completed",
+    "strategy": "read_only_noop",
+    "supported": true
+  },
+  "schema_version": 1,
+  "session_id": "4fc2bbeb112548a78eb403abbe3c83c3",
+  "status": "ok",
+  "target_identity": {
+    "display_name": "python.exe",
+    "kind": "process",
+    "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "pid": 30132,
+    "sha256": "d932e5e2f324d57f392e8fd063dcf6d0185be8a664c57c6d24e7762ed02c28ca"
+  }
+}

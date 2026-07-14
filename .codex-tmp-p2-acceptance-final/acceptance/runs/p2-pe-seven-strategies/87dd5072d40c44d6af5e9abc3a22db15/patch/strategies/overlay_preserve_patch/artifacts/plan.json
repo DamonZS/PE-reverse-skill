@@ -1,0 +1,42 @@
+{
+  "operations": [
+    {
+      "expected": "50",
+      "id": "overlay-preserve",
+      "kind": "replace_offset",
+      "offset": 1024,
+      "replacement": "51",
+      "role": "overlay_preserving_patch"
+    }
+  ],
+  "planner": {
+    "explicit_intent": true,
+    "layout_preserving": true,
+    "name": "pe_aware_patch_planner",
+    "operation_model": "checked_equal_length_byte_replacements",
+    "schema_version": 1
+  },
+  "schema_version": 1,
+  "strategy": "overlay_preserve_patch",
+  "strategy_details": {
+    "mode": "equal_length_image_patch_with_immutable_overlay",
+    "overlay_offset": 1536,
+    "overlay_sha256": "4cbeb345b602c991a70b14507e9463f7af45b4fd55f5dabc24ec126b0031c577",
+    "overlay_size": 21,
+    "patch_offset": 1024,
+    "patch_size": 1
+  },
+  "target": {
+    "bits": 32,
+    "entrypoint_rva": 4096,
+    "format": "pe",
+    "has_overlay": true,
+    "image_base": 4194304,
+    "machine": "0x014C",
+    "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p2-acceptance-final\\acceptance\\runs\\p2-pe-seven-strategies\\87dd5072d40c44d6af5e9abc3a22db15\\patch\\strategies\\overlay_preserve_patch\\fixture.exe",
+    "section_count": 2,
+    "sha256": "048a30269f2eaad1d2b1af8f6932fbfbb6d554b27f622fd2a90f03041641a51a",
+    "size": 1557
+  },
+  "target_sha256": "048a30269f2eaad1d2b1af8f6932fbfbb6d554b27f622fd2a90f03041641a51a"
+}

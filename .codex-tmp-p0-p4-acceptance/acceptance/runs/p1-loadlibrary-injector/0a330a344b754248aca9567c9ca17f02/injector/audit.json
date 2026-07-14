@@ -1,0 +1,2932 @@
+{
+  "action": "load_library",
+  "after_snapshot": {
+    "capture_phase": "after",
+    "dll": {
+      "absolute": true,
+      "exists": true,
+      "is_file": true,
+      "magic": "4d5a",
+      "mz": true,
+      "path": "C:\\Windows\\System32\\winhttp.dll",
+      "readable": true,
+      "sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+      "size": 1187344
+    },
+    "module_evidence": {
+      "added_modules": [
+        {
+          "base_address": 140720235937792,
+          "name": "winhttp.dll",
+          "path": "C:\\Windows\\System32\\winhttp.dll",
+          "size": 1171456
+        }
+      ],
+      "after_count": 16,
+      "before_count": 15,
+      "expected_path": "C:\\Windows\\System32\\winhttp.dll",
+      "loaded_module": {
+        "base_address": 140720235937792,
+        "name": "winhttp.dll",
+        "path": "C:\\Windows\\System32\\winhttp.dll",
+        "size": 1171456
+      },
+      "observed_transition": true,
+      "present_after": true,
+      "present_before": false
+    },
+    "modules": [
+      {
+        "base_address": 140697503727616,
+        "name": "python.exe",
+        "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "size": 106496
+      },
+      {
+        "base_address": 140719090892800,
+        "name": "python313.dll",
+        "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+        "size": 6639616
+      },
+      {
+        "base_address": 140719586082816,
+        "name": "VCRUNTIME140.dll",
+        "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+        "size": 122880
+      },
+      {
+        "base_address": 140720380116992,
+        "name": "ADVAPI32.dll",
+        "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+        "size": 737280
+      },
+      {
+        "base_address": 140720363667456,
+        "name": "bcrypt.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+        "size": 155648
+      },
+      {
+        "base_address": 140720369631232,
+        "name": "bcryptprimitives.dll",
+        "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+        "size": 626688
+      },
+      {
+        "base_address": 140720379199488,
+        "name": "KERNEL32.DLL",
+        "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+        "size": 823296
+      },
+      {
+        "base_address": 140720371793920,
+        "name": "KERNELBASE.dll",
+        "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+        "size": 4128768
+      },
+      {
+        "base_address": 140720378281984,
+        "name": "msvcrt.dll",
+        "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+        "size": 692224
+      },
+      {
+        "base_address": 140720413868032,
+        "name": "ntdll.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+        "size": 2519040
+      },
+      {
+        "base_address": 140720386342912,
+        "name": "RPCRT4.dll",
+        "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+        "size": 1146880
+      },
+      {
+        "base_address": 140720395845632,
+        "name": "sechost.dll",
+        "path": "C:\\WINDOWS\\System32\\sechost.dll",
+        "size": 679936
+      },
+      {
+        "base_address": 140720367665152,
+        "name": "ucrtbase.dll",
+        "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+        "size": 1355776
+      },
+      {
+        "base_address": 140720135405568,
+        "name": "VERSION.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+        "size": 45056
+      },
+      {
+        "base_address": 140720235937792,
+        "name": "winhttp.dll",
+        "path": "C:\\Windows\\System32\\winhttp.dll",
+        "size": 1171456
+      },
+      {
+        "base_address": 140720396566528,
+        "name": "WS2_32.dll",
+        "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+        "size": 475136
+      }
+    ],
+    "operation": {
+      "api_calls": [
+        {
+          "api": "OpenProcess",
+          "status": "ok"
+        },
+        {
+          "address": 1903551381504,
+          "api": "VirtualAllocEx",
+          "size": 64,
+          "status": "ok"
+        },
+        {
+          "api": "WriteProcessMemory",
+          "bytes_written": 64,
+          "status": "ok"
+        },
+        {
+          "api": "GetProcAddress",
+          "export": "LoadLibraryW",
+          "export_offset": 260032,
+          "export_owner_module": "KERNEL32.DLL",
+          "export_owner_path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+          "local_export_owner_base": 140720379199488,
+          "local_module_base": 140720379199488,
+          "module": "kernel32.dll",
+          "remote_export_address": 140720379459520,
+          "remote_module_base": 140720379199488,
+          "status": "ok"
+        },
+        {
+          "api": "CreateRemoteThread",
+          "start_address": 140720379459520,
+          "status": "ok",
+          "thread_id": 19292
+        },
+        {
+          "api": "WaitForSingleObject",
+          "status": "ok",
+          "timeout_ms": 10000,
+          "wait_status": 0
+        },
+        {
+          "api": "GetExitCodeThread",
+          "exit_code": 4222418944,
+          "status": "ok"
+        }
+      ],
+      "bytes_written": 64,
+      "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+      "method": "load_library",
+      "ok": true,
+      "payload_encoding": "utf-16-le",
+      "payload_size": 64,
+      "pid": 40456,
+      "remote_allocation": 1903551381504,
+      "safe_to_release": true,
+      "status": "ok",
+      "temporary_memory_released": false,
+      "temporary_memory_retained": true,
+      "thread_exit_code": 4222418944,
+      "thread_id": 19292
+    },
+    "rollback": {
+      "after_modules": [
+        {
+          "base_address": 140697503727616,
+          "name": "python.exe",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "size": 106496
+        },
+        {
+          "base_address": 140719090892800,
+          "name": "python313.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+          "size": 6639616
+        },
+        {
+          "base_address": 140719586082816,
+          "name": "VCRUNTIME140.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+          "size": 122880
+        },
+        {
+          "base_address": 140720380116992,
+          "name": "ADVAPI32.dll",
+          "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+          "size": 737280
+        },
+        {
+          "base_address": 140720363667456,
+          "name": "bcrypt.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+          "size": 155648
+        },
+        {
+          "base_address": 140720369631232,
+          "name": "bcryptprimitives.dll",
+          "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+          "size": 626688
+        },
+        {
+          "base_address": 140720379199488,
+          "name": "KERNEL32.DLL",
+          "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+          "size": 823296
+        },
+        {
+          "base_address": 140720371793920,
+          "name": "KERNELBASE.dll",
+          "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+          "size": 4128768
+        },
+        {
+          "base_address": 140720378281984,
+          "name": "msvcrt.dll",
+          "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+          "size": 692224
+        },
+        {
+          "base_address": 140720413868032,
+          "name": "ntdll.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+          "size": 2519040
+        },
+        {
+          "base_address": 140720386342912,
+          "name": "RPCRT4.dll",
+          "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+          "size": 1146880
+        },
+        {
+          "base_address": 140720395845632,
+          "name": "sechost.dll",
+          "path": "C:\\WINDOWS\\System32\\sechost.dll",
+          "size": 679936
+        },
+        {
+          "base_address": 140720367665152,
+          "name": "ucrtbase.dll",
+          "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+          "size": 1355776
+        },
+        {
+          "base_address": 140720135405568,
+          "name": "VERSION.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+          "size": 45056
+        },
+        {
+          "base_address": 140720396566528,
+          "name": "WS2_32.dll",
+          "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+          "size": 475136
+        }
+      ],
+      "before_modules": [
+        {
+          "base_address": 140697503727616,
+          "name": "python.exe",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "size": 106496
+        },
+        {
+          "base_address": 140719090892800,
+          "name": "python313.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+          "size": 6639616
+        },
+        {
+          "base_address": 140719586082816,
+          "name": "VCRUNTIME140.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+          "size": 122880
+        },
+        {
+          "base_address": 140720380116992,
+          "name": "ADVAPI32.dll",
+          "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+          "size": 737280
+        },
+        {
+          "base_address": 140720363667456,
+          "name": "bcrypt.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+          "size": 155648
+        },
+        {
+          "base_address": 140720369631232,
+          "name": "bcryptprimitives.dll",
+          "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+          "size": 626688
+        },
+        {
+          "base_address": 140720379199488,
+          "name": "KERNEL32.DLL",
+          "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+          "size": 823296
+        },
+        {
+          "base_address": 140720371793920,
+          "name": "KERNELBASE.dll",
+          "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+          "size": 4128768
+        },
+        {
+          "base_address": 140720378281984,
+          "name": "msvcrt.dll",
+          "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+          "size": 692224
+        },
+        {
+          "base_address": 140720413868032,
+          "name": "ntdll.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+          "size": 2519040
+        },
+        {
+          "base_address": 140720386342912,
+          "name": "RPCRT4.dll",
+          "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+          "size": 1146880
+        },
+        {
+          "base_address": 140720395845632,
+          "name": "sechost.dll",
+          "path": "C:\\WINDOWS\\System32\\sechost.dll",
+          "size": 679936
+        },
+        {
+          "base_address": 140720367665152,
+          "name": "ucrtbase.dll",
+          "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+          "size": 1355776
+        },
+        {
+          "base_address": 140720135405568,
+          "name": "VERSION.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+          "size": 45056
+        },
+        {
+          "base_address": 140720235937792,
+          "name": "winhttp.dll",
+          "path": "C:\\Windows\\System32\\winhttp.dll",
+          "size": 1171456
+        },
+        {
+          "base_address": 140720396566528,
+          "name": "WS2_32.dll",
+          "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+          "size": 475136
+        }
+      ],
+      "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+      "free_library_attempted": true,
+      "free_library_ok": true,
+      "memory_release_attempted": true,
+      "memory_released": true,
+      "method": "load_library",
+      "module_absent_after": true,
+      "module_handle": 140720235937792,
+      "operation": {
+        "api_calls": [
+          {
+            "api": "OpenProcess",
+            "status": "ok"
+          },
+          {
+            "api": "GetProcAddress",
+            "export": "FreeLibrary",
+            "export_offset": 247328,
+            "export_owner_module": "KERNEL32.DLL",
+            "export_owner_path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+            "local_export_owner_base": 140720379199488,
+            "local_module_base": 140720379199488,
+            "module": "kernel32.dll",
+            "remote_export_address": 140720379446816,
+            "remote_module_base": 140720379199488,
+            "status": "ok"
+          },
+          {
+            "api": "CreateRemoteThread",
+            "start_address": 140720379446816,
+            "status": "ok",
+            "thread_id": 13388
+          },
+          {
+            "api": "WaitForSingleObject",
+            "status": "ok",
+            "timeout_ms": 10000,
+            "wait_status": 0
+          },
+          {
+            "api": "GetExitCodeThread",
+            "exit_code": 1,
+            "status": "ok"
+          },
+          {
+            "address": 1903551381504,
+            "api": "VirtualFreeEx",
+            "status": "ok"
+          }
+        ],
+        "free_library_attempted": true,
+        "free_library_ok": true,
+        "memory_release_attempted": true,
+        "memory_released": true,
+        "module_handle": 140720235937792,
+        "ok": true,
+        "pid": 40456,
+        "remote_allocation": 1903551381504,
+        "status": "ok"
+      },
+      "pid": 40456,
+      "remote_allocation": 1903551381504,
+      "schema_version": 1,
+      "status": "ok"
+    },
+    "schema_version": 1,
+    "side_effects": true
+  },
+  "artifacts": [
+    {
+      "description": "Controlled injector audit for load_library",
+      "kind": "injector-audit",
+      "metadata": {
+        "materialized": false,
+        "method": "load_library",
+        "precondition_hash": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+        "schema_version": 1,
+        "session_id": "0a330a344b754248aca9567c9ca17f02",
+        "status": "ok",
+        "target_identity": {
+          "display_name": "python.exe",
+          "kind": "controlled_child_process",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "pid": 40456,
+          "sha256": "d932e5e2f324d57f392e8fd063dcf6d0185be8a664c57c6d24e7762ed02c28ca"
+        }
+      },
+      "path": "injector/0a330a344b754248aca9567c9ca17f02/injection.json"
+    }
+  ],
+  "before_snapshot": {
+    "backend": {
+      "available": true,
+      "name": "windows_ctypes",
+      "platform": "win32"
+    },
+    "capture_phase": "before",
+    "dll": {
+      "absolute": true,
+      "exists": true,
+      "is_file": true,
+      "magic": "4d5a",
+      "mz": true,
+      "path": "C:\\Windows\\System32\\winhttp.dll",
+      "readable": true,
+      "sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+      "size": 1187344
+    },
+    "module_evidence": {
+      "expected_path": "C:\\Windows\\System32\\winhttp.dll",
+      "module_count": 15,
+      "present": false
+    },
+    "modules": [
+      {
+        "base_address": 140697503727616,
+        "name": "python.exe",
+        "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "size": 106496
+      },
+      {
+        "base_address": 140719090892800,
+        "name": "python313.dll",
+        "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+        "size": 6639616
+      },
+      {
+        "base_address": 140719586082816,
+        "name": "VCRUNTIME140.dll",
+        "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+        "size": 122880
+      },
+      {
+        "base_address": 140720380116992,
+        "name": "ADVAPI32.dll",
+        "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+        "size": 737280
+      },
+      {
+        "base_address": 140720363667456,
+        "name": "bcrypt.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+        "size": 155648
+      },
+      {
+        "base_address": 140720369631232,
+        "name": "bcryptprimitives.dll",
+        "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+        "size": 626688
+      },
+      {
+        "base_address": 140720379199488,
+        "name": "KERNEL32.DLL",
+        "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+        "size": 823296
+      },
+      {
+        "base_address": 140720371793920,
+        "name": "KERNELBASE.dll",
+        "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+        "size": 4128768
+      },
+      {
+        "base_address": 140720378281984,
+        "name": "msvcrt.dll",
+        "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+        "size": 692224
+      },
+      {
+        "base_address": 140720413868032,
+        "name": "ntdll.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+        "size": 2519040
+      },
+      {
+        "base_address": 140720386342912,
+        "name": "RPCRT4.dll",
+        "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+        "size": 1146880
+      },
+      {
+        "base_address": 140720395845632,
+        "name": "sechost.dll",
+        "path": "C:\\WINDOWS\\System32\\sechost.dll",
+        "size": 679936
+      },
+      {
+        "base_address": 140720367665152,
+        "name": "ucrtbase.dll",
+        "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+        "size": 1355776
+      },
+      {
+        "base_address": 140720135405568,
+        "name": "VERSION.dll",
+        "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+        "size": 45056
+      },
+      {
+        "base_address": 140720396566528,
+        "name": "WS2_32.dll",
+        "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+        "size": 475136
+      }
+    ],
+    "platform": "win32",
+    "process": {
+      "accessible": true,
+      "architecture": "x64",
+      "creation_time_100ns": 134285094524636345,
+      "exists": true,
+      "identity_status": "ok",
+      "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "injector_architecture": "x64",
+      "injector_machine": 34404,
+      "machine": 34404,
+      "machine_hex": "0x8664",
+      "native_machine": 34404,
+      "pid": 40456,
+      "process_machine": 0,
+      "required_access": 1082,
+      "status": "ok"
+    },
+    "schema_version": 1,
+    "validation": {
+      "ok": true,
+      "warnings": [
+        "LoadLibraryW injection writes target memory and creates a remote thread"
+      ]
+    }
+  },
+  "capability": "injector",
+  "dashboard_trace": [
+    {
+      "action": "load_library",
+      "backend": "windows_ctypes",
+      "capability": "injector",
+      "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+      "dll_sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+      "error_count": 0,
+      "kind": "injector_execution",
+      "method": "load_library",
+      "module_transition_observed": true,
+      "pid": 40456,
+      "platform": "win32",
+      "provider": "windows_controlled_injector",
+      "rollback_supported": true,
+      "schema_version": 1,
+      "status": "ok",
+      "validation_ok": true
+    },
+    {
+      "attempted": true,
+      "capability": "injector",
+      "kind": "injector_rollback",
+      "memory_released": true,
+      "method": "load_library",
+      "pid": 40456,
+      "provider": "windows_controlled_injector",
+      "restored": true,
+      "session_id": "0a330a344b754248aca9567c9ca17f02",
+      "status": "ok"
+    }
+  ],
+  "evidence_manifest_entries": [
+    {
+      "dll_sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+      "kind": "injector-audit",
+      "method": "load_library",
+      "path": "injector/0a330a344b754248aca9567c9ca17f02/injection.json",
+      "pid": 40456,
+      "precondition_hash": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+      "provider": "windows_controlled_injector",
+      "role": "injection-audit",
+      "schema_version": 1,
+      "session_id": "0a330a344b754248aca9567c9ca17f02",
+      "status": "ok",
+      "target_identity": {
+        "display_name": "python.exe",
+        "kind": "controlled_child_process",
+        "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "pid": 40456,
+        "sha256": "d932e5e2f324d57f392e8fd063dcf6d0185be8a664c57c6d24e7762ed02c28ca"
+      },
+      "tool": "injector"
+    }
+  ],
+  "method": "load_library",
+  "precondition_hash": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+  "provenance": {
+    "audit_schema_version": 1,
+    "backend": {
+      "available": true,
+      "name": "windows_ctypes",
+      "platform": "win32"
+    },
+    "backend_operation": {
+      "api_calls": [
+        {
+          "api": "OpenProcess",
+          "status": "ok"
+        },
+        {
+          "address": 1903551381504,
+          "api": "VirtualAllocEx",
+          "size": 64,
+          "status": "ok"
+        },
+        {
+          "api": "WriteProcessMemory",
+          "bytes_written": 64,
+          "status": "ok"
+        },
+        {
+          "api": "GetProcAddress",
+          "export": "LoadLibraryW",
+          "export_offset": 260032,
+          "export_owner_module": "KERNEL32.DLL",
+          "export_owner_path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+          "local_export_owner_base": 140720379199488,
+          "local_module_base": 140720379199488,
+          "module": "kernel32.dll",
+          "remote_export_address": 140720379459520,
+          "remote_module_base": 140720379199488,
+          "status": "ok"
+        },
+        {
+          "api": "CreateRemoteThread",
+          "start_address": 140720379459520,
+          "status": "ok",
+          "thread_id": 19292
+        },
+        {
+          "api": "WaitForSingleObject",
+          "status": "ok",
+          "timeout_ms": 10000,
+          "wait_status": 0
+        },
+        {
+          "api": "GetExitCodeThread",
+          "exit_code": 4222418944,
+          "status": "ok"
+        }
+      ],
+      "bytes_written": 64,
+      "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+      "method": "load_library",
+      "ok": true,
+      "payload_encoding": "utf-16-le",
+      "payload_size": 64,
+      "pid": 40456,
+      "remote_allocation": 1903551381504,
+      "safe_to_release": true,
+      "status": "ok",
+      "temporary_memory_released": false,
+      "temporary_memory_retained": true,
+      "thread_exit_code": 4222418944,
+      "thread_id": 19292
+    },
+    "declared_dll_path": "C:\\Windows\\System32\\winhttp.dll",
+    "declared_sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+    "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+    "dll_sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+    "evidence_class": "live_host_proof",
+    "execution_status": "ok",
+    "method": "load_library",
+    "pid": 40456,
+    "planned_sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+    "platform": "win32",
+    "precondition_hash": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+    "provider": "windows_controlled_injector",
+    "requested_action": "load_library",
+    "risk_assessment": {
+      "acceptance": {
+        "execution_allowed": true,
+        "reason": "allowed only after every required validation passes"
+      },
+      "assumptions": [
+        "target permits required process access",
+        "remote kernel32 export offsets match the local system image"
+      ],
+      "execution": {
+        "available": true,
+        "implemented": true,
+        "side_effects_allowed": true,
+        "status": "guarded"
+      },
+      "method": "load_library",
+      "overall_severity": "high",
+      "required_inputs": [
+        "absolute DLL path",
+        "DLL SHA-256",
+        "positive target PID"
+      ],
+      "risk_level": "high",
+      "risks": [
+        {
+          "category": "memory_safety",
+          "description": "The strategy writes memory and starts a thread in another process.",
+          "id": "remote_process_mutation",
+          "impact": "high",
+          "likelihood": "high",
+          "required_controls": [
+            "least required process access",
+            "bounded wait",
+            "fail-closed validation"
+          ],
+          "residual_risk": "high",
+          "severity": "high",
+          "validation_status": "required"
+        },
+        {
+          "category": "evidence",
+          "description": "A thread exit code alone is insufficient evidence of the loaded DLL identity.",
+          "id": "module_identity",
+          "impact": "high",
+          "likelihood": "medium",
+          "required_controls": [
+            "absolute path",
+            "SHA-256 pin",
+            "before/after exact-path module evidence"
+          ],
+          "residual_risk": "high",
+          "severity": "high",
+          "validation_status": "required"
+        },
+        {
+          "category": "reversibility",
+          "description": "FreeLibrary may not unload a module with additional references.",
+          "id": "rollback_refcount",
+          "impact": "high",
+          "likelihood": "medium",
+          "required_controls": [
+            "reject already-loaded DLL",
+            "verify module absence after rollback"
+          ],
+          "residual_risk": "high",
+          "severity": "high",
+          "validation_status": "required"
+        }
+      ],
+      "rollback": {
+        "implemented": true,
+        "required": true,
+        "required_evidence": [
+          "FreeLibrary result",
+          "module absence",
+          "temporary memory release"
+        ],
+        "residual_risk": "medium"
+      },
+      "schema_version": "1.0",
+      "score": 8,
+      "validation_requirements": [
+        {
+          "id": "absolute_path",
+          "required": true
+        },
+        {
+          "id": "mz_signature",
+          "required": true
+        },
+        {
+          "id": "sha256_precondition",
+          "required": true
+        },
+        {
+          "id": "process_access",
+          "required": true
+        },
+        {
+          "id": "before_after_module_evidence",
+          "required": true
+        }
+      ]
+    },
+    "source": "p1-acceptance",
+    "synthetic": false,
+    "timeout_ms": 10000,
+    "validation_ok": true
+  },
+  "provider": "windows_controlled_injector",
+  "report_section": {
+    "action": "load_library",
+    "after": {
+      "capture_phase": "after",
+      "dll": {
+        "absolute": true,
+        "exists": true,
+        "is_file": true,
+        "magic": "4d5a",
+        "mz": true,
+        "path": "C:\\Windows\\System32\\winhttp.dll",
+        "readable": true,
+        "sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+        "size": 1187344
+      },
+      "module_evidence": {
+        "added_modules": [
+          {
+            "base_address": 140720235937792,
+            "name": "winhttp.dll",
+            "path": "C:\\Windows\\System32\\winhttp.dll",
+            "size": 1171456
+          }
+        ],
+        "after_count": 16,
+        "before_count": 15,
+        "expected_path": "C:\\Windows\\System32\\winhttp.dll",
+        "loaded_module": {
+          "base_address": 140720235937792,
+          "name": "winhttp.dll",
+          "path": "C:\\Windows\\System32\\winhttp.dll",
+          "size": 1171456
+        },
+        "observed_transition": true,
+        "present_after": true,
+        "present_before": false
+      },
+      "modules": [
+        {
+          "base_address": 140697503727616,
+          "name": "python.exe",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "size": 106496
+        },
+        {
+          "base_address": 140719090892800,
+          "name": "python313.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+          "size": 6639616
+        },
+        {
+          "base_address": 140719586082816,
+          "name": "VCRUNTIME140.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+          "size": 122880
+        },
+        {
+          "base_address": 140720380116992,
+          "name": "ADVAPI32.dll",
+          "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+          "size": 737280
+        },
+        {
+          "base_address": 140720363667456,
+          "name": "bcrypt.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+          "size": 155648
+        },
+        {
+          "base_address": 140720369631232,
+          "name": "bcryptprimitives.dll",
+          "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+          "size": 626688
+        },
+        {
+          "base_address": 140720379199488,
+          "name": "KERNEL32.DLL",
+          "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+          "size": 823296
+        },
+        {
+          "base_address": 140720371793920,
+          "name": "KERNELBASE.dll",
+          "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+          "size": 4128768
+        },
+        {
+          "base_address": 140720378281984,
+          "name": "msvcrt.dll",
+          "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+          "size": 692224
+        },
+        {
+          "base_address": 140720413868032,
+          "name": "ntdll.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+          "size": 2519040
+        },
+        {
+          "base_address": 140720386342912,
+          "name": "RPCRT4.dll",
+          "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+          "size": 1146880
+        },
+        {
+          "base_address": 140720395845632,
+          "name": "sechost.dll",
+          "path": "C:\\WINDOWS\\System32\\sechost.dll",
+          "size": 679936
+        },
+        {
+          "base_address": 140720367665152,
+          "name": "ucrtbase.dll",
+          "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+          "size": 1355776
+        },
+        {
+          "base_address": 140720135405568,
+          "name": "VERSION.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+          "size": 45056
+        },
+        {
+          "base_address": 140720235937792,
+          "name": "winhttp.dll",
+          "path": "C:\\Windows\\System32\\winhttp.dll",
+          "size": 1171456
+        },
+        {
+          "base_address": 140720396566528,
+          "name": "WS2_32.dll",
+          "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+          "size": 475136
+        }
+      ],
+      "operation": {
+        "api_calls": [
+          {
+            "api": "OpenProcess",
+            "status": "ok"
+          },
+          {
+            "address": 1903551381504,
+            "api": "VirtualAllocEx",
+            "size": 64,
+            "status": "ok"
+          },
+          {
+            "api": "WriteProcessMemory",
+            "bytes_written": 64,
+            "status": "ok"
+          },
+          {
+            "api": "GetProcAddress",
+            "export": "LoadLibraryW",
+            "export_offset": 260032,
+            "export_owner_module": "KERNEL32.DLL",
+            "export_owner_path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+            "local_export_owner_base": 140720379199488,
+            "local_module_base": 140720379199488,
+            "module": "kernel32.dll",
+            "remote_export_address": 140720379459520,
+            "remote_module_base": 140720379199488,
+            "status": "ok"
+          },
+          {
+            "api": "CreateRemoteThread",
+            "start_address": 140720379459520,
+            "status": "ok",
+            "thread_id": 19292
+          },
+          {
+            "api": "WaitForSingleObject",
+            "status": "ok",
+            "timeout_ms": 10000,
+            "wait_status": 0
+          },
+          {
+            "api": "GetExitCodeThread",
+            "exit_code": 4222418944,
+            "status": "ok"
+          }
+        ],
+        "bytes_written": 64,
+        "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+        "method": "load_library",
+        "ok": true,
+        "payload_encoding": "utf-16-le",
+        "payload_size": 64,
+        "pid": 40456,
+        "remote_allocation": 1903551381504,
+        "safe_to_release": true,
+        "status": "ok",
+        "temporary_memory_released": false,
+        "temporary_memory_retained": true,
+        "thread_exit_code": 4222418944,
+        "thread_id": 19292
+      },
+      "rollback": {
+        "after_modules": [
+          {
+            "base_address": 140697503727616,
+            "name": "python.exe",
+            "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "size": 106496
+          },
+          {
+            "base_address": 140719090892800,
+            "name": "python313.dll",
+            "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+            "size": 6639616
+          },
+          {
+            "base_address": 140719586082816,
+            "name": "VCRUNTIME140.dll",
+            "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+            "size": 122880
+          },
+          {
+            "base_address": 140720380116992,
+            "name": "ADVAPI32.dll",
+            "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+            "size": 737280
+          },
+          {
+            "base_address": 140720363667456,
+            "name": "bcrypt.dll",
+            "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+            "size": 155648
+          },
+          {
+            "base_address": 140720369631232,
+            "name": "bcryptprimitives.dll",
+            "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+            "size": 626688
+          },
+          {
+            "base_address": 140720379199488,
+            "name": "KERNEL32.DLL",
+            "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+            "size": 823296
+          },
+          {
+            "base_address": 140720371793920,
+            "name": "KERNELBASE.dll",
+            "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+            "size": 4128768
+          },
+          {
+            "base_address": 140720378281984,
+            "name": "msvcrt.dll",
+            "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+            "size": 692224
+          },
+          {
+            "base_address": 140720413868032,
+            "name": "ntdll.dll",
+            "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+            "size": 2519040
+          },
+          {
+            "base_address": 140720386342912,
+            "name": "RPCRT4.dll",
+            "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+            "size": 1146880
+          },
+          {
+            "base_address": 140720395845632,
+            "name": "sechost.dll",
+            "path": "C:\\WINDOWS\\System32\\sechost.dll",
+            "size": 679936
+          },
+          {
+            "base_address": 140720367665152,
+            "name": "ucrtbase.dll",
+            "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+            "size": 1355776
+          },
+          {
+            "base_address": 140720135405568,
+            "name": "VERSION.dll",
+            "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+            "size": 45056
+          },
+          {
+            "base_address": 140720396566528,
+            "name": "WS2_32.dll",
+            "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+            "size": 475136
+          }
+        ],
+        "before_modules": [
+          {
+            "base_address": 140697503727616,
+            "name": "python.exe",
+            "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "size": 106496
+          },
+          {
+            "base_address": 140719090892800,
+            "name": "python313.dll",
+            "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+            "size": 6639616
+          },
+          {
+            "base_address": 140719586082816,
+            "name": "VCRUNTIME140.dll",
+            "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+            "size": 122880
+          },
+          {
+            "base_address": 140720380116992,
+            "name": "ADVAPI32.dll",
+            "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+            "size": 737280
+          },
+          {
+            "base_address": 140720363667456,
+            "name": "bcrypt.dll",
+            "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+            "size": 155648
+          },
+          {
+            "base_address": 140720369631232,
+            "name": "bcryptprimitives.dll",
+            "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+            "size": 626688
+          },
+          {
+            "base_address": 140720379199488,
+            "name": "KERNEL32.DLL",
+            "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+            "size": 823296
+          },
+          {
+            "base_address": 140720371793920,
+            "name": "KERNELBASE.dll",
+            "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+            "size": 4128768
+          },
+          {
+            "base_address": 140720378281984,
+            "name": "msvcrt.dll",
+            "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+            "size": 692224
+          },
+          {
+            "base_address": 140720413868032,
+            "name": "ntdll.dll",
+            "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+            "size": 2519040
+          },
+          {
+            "base_address": 140720386342912,
+            "name": "RPCRT4.dll",
+            "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+            "size": 1146880
+          },
+          {
+            "base_address": 140720395845632,
+            "name": "sechost.dll",
+            "path": "C:\\WINDOWS\\System32\\sechost.dll",
+            "size": 679936
+          },
+          {
+            "base_address": 140720367665152,
+            "name": "ucrtbase.dll",
+            "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+            "size": 1355776
+          },
+          {
+            "base_address": 140720135405568,
+            "name": "VERSION.dll",
+            "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+            "size": 45056
+          },
+          {
+            "base_address": 140720235937792,
+            "name": "winhttp.dll",
+            "path": "C:\\Windows\\System32\\winhttp.dll",
+            "size": 1171456
+          },
+          {
+            "base_address": 140720396566528,
+            "name": "WS2_32.dll",
+            "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+            "size": 475136
+          }
+        ],
+        "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+        "free_library_attempted": true,
+        "free_library_ok": true,
+        "memory_release_attempted": true,
+        "memory_released": true,
+        "method": "load_library",
+        "module_absent_after": true,
+        "module_handle": 140720235937792,
+        "operation": {
+          "api_calls": [
+            {
+              "api": "OpenProcess",
+              "status": "ok"
+            },
+            {
+              "api": "GetProcAddress",
+              "export": "FreeLibrary",
+              "export_offset": 247328,
+              "export_owner_module": "KERNEL32.DLL",
+              "export_owner_path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+              "local_export_owner_base": 140720379199488,
+              "local_module_base": 140720379199488,
+              "module": "kernel32.dll",
+              "remote_export_address": 140720379446816,
+              "remote_module_base": 140720379199488,
+              "status": "ok"
+            },
+            {
+              "api": "CreateRemoteThread",
+              "start_address": 140720379446816,
+              "status": "ok",
+              "thread_id": 13388
+            },
+            {
+              "api": "WaitForSingleObject",
+              "status": "ok",
+              "timeout_ms": 10000,
+              "wait_status": 0
+            },
+            {
+              "api": "GetExitCodeThread",
+              "exit_code": 1,
+              "status": "ok"
+            },
+            {
+              "address": 1903551381504,
+              "api": "VirtualFreeEx",
+              "status": "ok"
+            }
+          ],
+          "free_library_attempted": true,
+          "free_library_ok": true,
+          "memory_release_attempted": true,
+          "memory_released": true,
+          "module_handle": 140720235937792,
+          "ok": true,
+          "pid": 40456,
+          "remote_allocation": 1903551381504,
+          "status": "ok"
+        },
+        "pid": 40456,
+        "remote_allocation": 1903551381504,
+        "schema_version": 1,
+        "status": "ok"
+      },
+      "schema_version": 1,
+      "side_effects": true
+    },
+    "after_snapshot": {
+      "capture_phase": "after",
+      "dll": {
+        "absolute": true,
+        "exists": true,
+        "is_file": true,
+        "magic": "4d5a",
+        "mz": true,
+        "path": "C:\\Windows\\System32\\winhttp.dll",
+        "readable": true,
+        "sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+        "size": 1187344
+      },
+      "module_evidence": {
+        "added_modules": [
+          {
+            "base_address": 140720235937792,
+            "name": "winhttp.dll",
+            "path": "C:\\Windows\\System32\\winhttp.dll",
+            "size": 1171456
+          }
+        ],
+        "after_count": 16,
+        "before_count": 15,
+        "expected_path": "C:\\Windows\\System32\\winhttp.dll",
+        "loaded_module": {
+          "base_address": 140720235937792,
+          "name": "winhttp.dll",
+          "path": "C:\\Windows\\System32\\winhttp.dll",
+          "size": 1171456
+        },
+        "observed_transition": true,
+        "present_after": true,
+        "present_before": false
+      },
+      "modules": [
+        {
+          "base_address": 140697503727616,
+          "name": "python.exe",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "size": 106496
+        },
+        {
+          "base_address": 140719090892800,
+          "name": "python313.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+          "size": 6639616
+        },
+        {
+          "base_address": 140719586082816,
+          "name": "VCRUNTIME140.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+          "size": 122880
+        },
+        {
+          "base_address": 140720380116992,
+          "name": "ADVAPI32.dll",
+          "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+          "size": 737280
+        },
+        {
+          "base_address": 140720363667456,
+          "name": "bcrypt.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+          "size": 155648
+        },
+        {
+          "base_address": 140720369631232,
+          "name": "bcryptprimitives.dll",
+          "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+          "size": 626688
+        },
+        {
+          "base_address": 140720379199488,
+          "name": "KERNEL32.DLL",
+          "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+          "size": 823296
+        },
+        {
+          "base_address": 140720371793920,
+          "name": "KERNELBASE.dll",
+          "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+          "size": 4128768
+        },
+        {
+          "base_address": 140720378281984,
+          "name": "msvcrt.dll",
+          "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+          "size": 692224
+        },
+        {
+          "base_address": 140720413868032,
+          "name": "ntdll.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+          "size": 2519040
+        },
+        {
+          "base_address": 140720386342912,
+          "name": "RPCRT4.dll",
+          "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+          "size": 1146880
+        },
+        {
+          "base_address": 140720395845632,
+          "name": "sechost.dll",
+          "path": "C:\\WINDOWS\\System32\\sechost.dll",
+          "size": 679936
+        },
+        {
+          "base_address": 140720367665152,
+          "name": "ucrtbase.dll",
+          "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+          "size": 1355776
+        },
+        {
+          "base_address": 140720135405568,
+          "name": "VERSION.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+          "size": 45056
+        },
+        {
+          "base_address": 140720235937792,
+          "name": "winhttp.dll",
+          "path": "C:\\Windows\\System32\\winhttp.dll",
+          "size": 1171456
+        },
+        {
+          "base_address": 140720396566528,
+          "name": "WS2_32.dll",
+          "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+          "size": 475136
+        }
+      ],
+      "operation": {
+        "api_calls": [
+          {
+            "api": "OpenProcess",
+            "status": "ok"
+          },
+          {
+            "address": 1903551381504,
+            "api": "VirtualAllocEx",
+            "size": 64,
+            "status": "ok"
+          },
+          {
+            "api": "WriteProcessMemory",
+            "bytes_written": 64,
+            "status": "ok"
+          },
+          {
+            "api": "GetProcAddress",
+            "export": "LoadLibraryW",
+            "export_offset": 260032,
+            "export_owner_module": "KERNEL32.DLL",
+            "export_owner_path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+            "local_export_owner_base": 140720379199488,
+            "local_module_base": 140720379199488,
+            "module": "kernel32.dll",
+            "remote_export_address": 140720379459520,
+            "remote_module_base": 140720379199488,
+            "status": "ok"
+          },
+          {
+            "api": "CreateRemoteThread",
+            "start_address": 140720379459520,
+            "status": "ok",
+            "thread_id": 19292
+          },
+          {
+            "api": "WaitForSingleObject",
+            "status": "ok",
+            "timeout_ms": 10000,
+            "wait_status": 0
+          },
+          {
+            "api": "GetExitCodeThread",
+            "exit_code": 4222418944,
+            "status": "ok"
+          }
+        ],
+        "bytes_written": 64,
+        "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+        "method": "load_library",
+        "ok": true,
+        "payload_encoding": "utf-16-le",
+        "payload_size": 64,
+        "pid": 40456,
+        "remote_allocation": 1903551381504,
+        "safe_to_release": true,
+        "status": "ok",
+        "temporary_memory_released": false,
+        "temporary_memory_retained": true,
+        "thread_exit_code": 4222418944,
+        "thread_id": 19292
+      },
+      "rollback": {
+        "after_modules": [
+          {
+            "base_address": 140697503727616,
+            "name": "python.exe",
+            "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "size": 106496
+          },
+          {
+            "base_address": 140719090892800,
+            "name": "python313.dll",
+            "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+            "size": 6639616
+          },
+          {
+            "base_address": 140719586082816,
+            "name": "VCRUNTIME140.dll",
+            "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+            "size": 122880
+          },
+          {
+            "base_address": 140720380116992,
+            "name": "ADVAPI32.dll",
+            "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+            "size": 737280
+          },
+          {
+            "base_address": 140720363667456,
+            "name": "bcrypt.dll",
+            "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+            "size": 155648
+          },
+          {
+            "base_address": 140720369631232,
+            "name": "bcryptprimitives.dll",
+            "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+            "size": 626688
+          },
+          {
+            "base_address": 140720379199488,
+            "name": "KERNEL32.DLL",
+            "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+            "size": 823296
+          },
+          {
+            "base_address": 140720371793920,
+            "name": "KERNELBASE.dll",
+            "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+            "size": 4128768
+          },
+          {
+            "base_address": 140720378281984,
+            "name": "msvcrt.dll",
+            "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+            "size": 692224
+          },
+          {
+            "base_address": 140720413868032,
+            "name": "ntdll.dll",
+            "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+            "size": 2519040
+          },
+          {
+            "base_address": 140720386342912,
+            "name": "RPCRT4.dll",
+            "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+            "size": 1146880
+          },
+          {
+            "base_address": 140720395845632,
+            "name": "sechost.dll",
+            "path": "C:\\WINDOWS\\System32\\sechost.dll",
+            "size": 679936
+          },
+          {
+            "base_address": 140720367665152,
+            "name": "ucrtbase.dll",
+            "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+            "size": 1355776
+          },
+          {
+            "base_address": 140720135405568,
+            "name": "VERSION.dll",
+            "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+            "size": 45056
+          },
+          {
+            "base_address": 140720396566528,
+            "name": "WS2_32.dll",
+            "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+            "size": 475136
+          }
+        ],
+        "before_modules": [
+          {
+            "base_address": 140697503727616,
+            "name": "python.exe",
+            "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "size": 106496
+          },
+          {
+            "base_address": 140719090892800,
+            "name": "python313.dll",
+            "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+            "size": 6639616
+          },
+          {
+            "base_address": 140719586082816,
+            "name": "VCRUNTIME140.dll",
+            "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+            "size": 122880
+          },
+          {
+            "base_address": 140720380116992,
+            "name": "ADVAPI32.dll",
+            "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+            "size": 737280
+          },
+          {
+            "base_address": 140720363667456,
+            "name": "bcrypt.dll",
+            "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+            "size": 155648
+          },
+          {
+            "base_address": 140720369631232,
+            "name": "bcryptprimitives.dll",
+            "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+            "size": 626688
+          },
+          {
+            "base_address": 140720379199488,
+            "name": "KERNEL32.DLL",
+            "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+            "size": 823296
+          },
+          {
+            "base_address": 140720371793920,
+            "name": "KERNELBASE.dll",
+            "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+            "size": 4128768
+          },
+          {
+            "base_address": 140720378281984,
+            "name": "msvcrt.dll",
+            "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+            "size": 692224
+          },
+          {
+            "base_address": 140720413868032,
+            "name": "ntdll.dll",
+            "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+            "size": 2519040
+          },
+          {
+            "base_address": 140720386342912,
+            "name": "RPCRT4.dll",
+            "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+            "size": 1146880
+          },
+          {
+            "base_address": 140720395845632,
+            "name": "sechost.dll",
+            "path": "C:\\WINDOWS\\System32\\sechost.dll",
+            "size": 679936
+          },
+          {
+            "base_address": 140720367665152,
+            "name": "ucrtbase.dll",
+            "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+            "size": 1355776
+          },
+          {
+            "base_address": 140720135405568,
+            "name": "VERSION.dll",
+            "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+            "size": 45056
+          },
+          {
+            "base_address": 140720235937792,
+            "name": "winhttp.dll",
+            "path": "C:\\Windows\\System32\\winhttp.dll",
+            "size": 1171456
+          },
+          {
+            "base_address": 140720396566528,
+            "name": "WS2_32.dll",
+            "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+            "size": 475136
+          }
+        ],
+        "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+        "free_library_attempted": true,
+        "free_library_ok": true,
+        "memory_release_attempted": true,
+        "memory_released": true,
+        "method": "load_library",
+        "module_absent_after": true,
+        "module_handle": 140720235937792,
+        "operation": {
+          "api_calls": [
+            {
+              "api": "OpenProcess",
+              "status": "ok"
+            },
+            {
+              "api": "GetProcAddress",
+              "export": "FreeLibrary",
+              "export_offset": 247328,
+              "export_owner_module": "KERNEL32.DLL",
+              "export_owner_path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+              "local_export_owner_base": 140720379199488,
+              "local_module_base": 140720379199488,
+              "module": "kernel32.dll",
+              "remote_export_address": 140720379446816,
+              "remote_module_base": 140720379199488,
+              "status": "ok"
+            },
+            {
+              "api": "CreateRemoteThread",
+              "start_address": 140720379446816,
+              "status": "ok",
+              "thread_id": 13388
+            },
+            {
+              "api": "WaitForSingleObject",
+              "status": "ok",
+              "timeout_ms": 10000,
+              "wait_status": 0
+            },
+            {
+              "api": "GetExitCodeThread",
+              "exit_code": 1,
+              "status": "ok"
+            },
+            {
+              "address": 1903551381504,
+              "api": "VirtualFreeEx",
+              "status": "ok"
+            }
+          ],
+          "free_library_attempted": true,
+          "free_library_ok": true,
+          "memory_release_attempted": true,
+          "memory_released": true,
+          "module_handle": 140720235937792,
+          "ok": true,
+          "pid": 40456,
+          "remote_allocation": 1903551381504,
+          "status": "ok"
+        },
+        "pid": 40456,
+        "remote_allocation": 1903551381504,
+        "schema_version": 1,
+        "status": "ok"
+      },
+      "schema_version": 1,
+      "side_effects": true
+    },
+    "artifacts": [
+      {
+        "description": "Controlled injector audit for load_library",
+        "kind": "injector-audit",
+        "metadata": {
+          "materialized": false,
+          "method": "load_library",
+          "precondition_hash": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+          "schema_version": 1,
+          "session_id": "0a330a344b754248aca9567c9ca17f02",
+          "status": "ok",
+          "target_identity": {
+            "display_name": "python.exe",
+            "kind": "controlled_child_process",
+            "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+            "pid": 40456,
+            "sha256": "d932e5e2f324d57f392e8fd063dcf6d0185be8a664c57c6d24e7762ed02c28ca"
+          }
+        },
+        "path": "injector/0a330a344b754248aca9567c9ca17f02/injection.json"
+      }
+    ],
+    "available": true,
+    "backend": {
+      "available": true,
+      "name": "windows_ctypes",
+      "platform": "win32"
+    },
+    "before": {
+      "backend": {
+        "available": true,
+        "name": "windows_ctypes",
+        "platform": "win32"
+      },
+      "capture_phase": "before",
+      "dll": {
+        "absolute": true,
+        "exists": true,
+        "is_file": true,
+        "magic": "4d5a",
+        "mz": true,
+        "path": "C:\\Windows\\System32\\winhttp.dll",
+        "readable": true,
+        "sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+        "size": 1187344
+      },
+      "module_evidence": {
+        "expected_path": "C:\\Windows\\System32\\winhttp.dll",
+        "module_count": 15,
+        "present": false
+      },
+      "modules": [
+        {
+          "base_address": 140697503727616,
+          "name": "python.exe",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "size": 106496
+        },
+        {
+          "base_address": 140719090892800,
+          "name": "python313.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+          "size": 6639616
+        },
+        {
+          "base_address": 140719586082816,
+          "name": "VCRUNTIME140.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+          "size": 122880
+        },
+        {
+          "base_address": 140720380116992,
+          "name": "ADVAPI32.dll",
+          "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+          "size": 737280
+        },
+        {
+          "base_address": 140720363667456,
+          "name": "bcrypt.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+          "size": 155648
+        },
+        {
+          "base_address": 140720369631232,
+          "name": "bcryptprimitives.dll",
+          "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+          "size": 626688
+        },
+        {
+          "base_address": 140720379199488,
+          "name": "KERNEL32.DLL",
+          "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+          "size": 823296
+        },
+        {
+          "base_address": 140720371793920,
+          "name": "KERNELBASE.dll",
+          "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+          "size": 4128768
+        },
+        {
+          "base_address": 140720378281984,
+          "name": "msvcrt.dll",
+          "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+          "size": 692224
+        },
+        {
+          "base_address": 140720413868032,
+          "name": "ntdll.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+          "size": 2519040
+        },
+        {
+          "base_address": 140720386342912,
+          "name": "RPCRT4.dll",
+          "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+          "size": 1146880
+        },
+        {
+          "base_address": 140720395845632,
+          "name": "sechost.dll",
+          "path": "C:\\WINDOWS\\System32\\sechost.dll",
+          "size": 679936
+        },
+        {
+          "base_address": 140720367665152,
+          "name": "ucrtbase.dll",
+          "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+          "size": 1355776
+        },
+        {
+          "base_address": 140720135405568,
+          "name": "VERSION.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+          "size": 45056
+        },
+        {
+          "base_address": 140720396566528,
+          "name": "WS2_32.dll",
+          "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+          "size": 475136
+        }
+      ],
+      "platform": "win32",
+      "process": {
+        "accessible": true,
+        "architecture": "x64",
+        "creation_time_100ns": 134285094524636345,
+        "exists": true,
+        "identity_status": "ok",
+        "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "injector_architecture": "x64",
+        "injector_machine": 34404,
+        "machine": 34404,
+        "machine_hex": "0x8664",
+        "native_machine": 34404,
+        "pid": 40456,
+        "process_machine": 0,
+        "required_access": 1082,
+        "status": "ok"
+      },
+      "schema_version": 1,
+      "validation": {
+        "ok": true,
+        "warnings": [
+          "LoadLibraryW injection writes target memory and creates a remote thread"
+        ]
+      }
+    },
+    "before_snapshot": {
+      "backend": {
+        "available": true,
+        "name": "windows_ctypes",
+        "platform": "win32"
+      },
+      "capture_phase": "before",
+      "dll": {
+        "absolute": true,
+        "exists": true,
+        "is_file": true,
+        "magic": "4d5a",
+        "mz": true,
+        "path": "C:\\Windows\\System32\\winhttp.dll",
+        "readable": true,
+        "sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+        "size": 1187344
+      },
+      "module_evidence": {
+        "expected_path": "C:\\Windows\\System32\\winhttp.dll",
+        "module_count": 15,
+        "present": false
+      },
+      "modules": [
+        {
+          "base_address": 140697503727616,
+          "name": "python.exe",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "size": 106496
+        },
+        {
+          "base_address": 140719090892800,
+          "name": "python313.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+          "size": 6639616
+        },
+        {
+          "base_address": 140719586082816,
+          "name": "VCRUNTIME140.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+          "size": 122880
+        },
+        {
+          "base_address": 140720380116992,
+          "name": "ADVAPI32.dll",
+          "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+          "size": 737280
+        },
+        {
+          "base_address": 140720363667456,
+          "name": "bcrypt.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+          "size": 155648
+        },
+        {
+          "base_address": 140720369631232,
+          "name": "bcryptprimitives.dll",
+          "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+          "size": 626688
+        },
+        {
+          "base_address": 140720379199488,
+          "name": "KERNEL32.DLL",
+          "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+          "size": 823296
+        },
+        {
+          "base_address": 140720371793920,
+          "name": "KERNELBASE.dll",
+          "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+          "size": 4128768
+        },
+        {
+          "base_address": 140720378281984,
+          "name": "msvcrt.dll",
+          "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+          "size": 692224
+        },
+        {
+          "base_address": 140720413868032,
+          "name": "ntdll.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+          "size": 2519040
+        },
+        {
+          "base_address": 140720386342912,
+          "name": "RPCRT4.dll",
+          "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+          "size": 1146880
+        },
+        {
+          "base_address": 140720395845632,
+          "name": "sechost.dll",
+          "path": "C:\\WINDOWS\\System32\\sechost.dll",
+          "size": 679936
+        },
+        {
+          "base_address": 140720367665152,
+          "name": "ucrtbase.dll",
+          "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+          "size": 1355776
+        },
+        {
+          "base_address": 140720135405568,
+          "name": "VERSION.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+          "size": 45056
+        },
+        {
+          "base_address": 140720396566528,
+          "name": "WS2_32.dll",
+          "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+          "size": 475136
+        }
+      ],
+      "platform": "win32",
+      "process": {
+        "accessible": true,
+        "architecture": "x64",
+        "creation_time_100ns": 134285094524636345,
+        "exists": true,
+        "identity_status": "ok",
+        "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+        "injector_architecture": "x64",
+        "injector_machine": 34404,
+        "machine": 34404,
+        "machine_hex": "0x8664",
+        "native_machine": 34404,
+        "pid": 40456,
+        "process_machine": 0,
+        "required_access": 1082,
+        "status": "ok"
+      },
+      "schema_version": 1,
+      "validation": {
+        "ok": true,
+        "warnings": [
+          "LoadLibraryW injection writes target memory and creates a remote thread"
+        ]
+      }
+    },
+    "capability": "injector",
+    "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+    "dll_sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+    "evidence_manifest_entries": [
+      {
+        "dll_sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+        "kind": "injector-audit",
+        "method": "load_library",
+        "path": "injector/0a330a344b754248aca9567c9ca17f02/injection.json",
+        "pid": 40456,
+        "precondition_hash": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+        "provider": "windows_controlled_injector",
+        "role": "injection-audit",
+        "schema_version": 1,
+        "session_id": "0a330a344b754248aca9567c9ca17f02",
+        "status": "ok",
+        "target_identity": {
+          "display_name": "python.exe",
+          "kind": "controlled_child_process",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "pid": 40456,
+          "sha256": "d932e5e2f324d57f392e8fd063dcf6d0185be8a664c57c6d24e7762ed02c28ca"
+        },
+        "tool": "injector"
+      }
+    ],
+    "method": "load_library",
+    "module_evidence": {
+      "added_modules": [
+        {
+          "base_address": 140720235937792,
+          "name": "winhttp.dll",
+          "path": "C:\\Windows\\System32\\winhttp.dll",
+          "size": 1171456
+        }
+      ],
+      "after_count": 16,
+      "before_count": 15,
+      "expected_path": "C:\\Windows\\System32\\winhttp.dll",
+      "loaded_module": {
+        "base_address": 140720235937792,
+        "name": "winhttp.dll",
+        "path": "C:\\Windows\\System32\\winhttp.dll",
+        "size": 1171456
+      },
+      "observed_transition": true,
+      "present_after": true,
+      "present_before": false
+    },
+    "operation": {
+      "api_calls": [
+        {
+          "api": "OpenProcess",
+          "status": "ok"
+        },
+        {
+          "address": 1903551381504,
+          "api": "VirtualAllocEx",
+          "size": 64,
+          "status": "ok"
+        },
+        {
+          "api": "WriteProcessMemory",
+          "bytes_written": 64,
+          "status": "ok"
+        },
+        {
+          "api": "GetProcAddress",
+          "export": "LoadLibraryW",
+          "export_offset": 260032,
+          "export_owner_module": "KERNEL32.DLL",
+          "export_owner_path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+          "local_export_owner_base": 140720379199488,
+          "local_module_base": 140720379199488,
+          "module": "kernel32.dll",
+          "remote_export_address": 140720379459520,
+          "remote_module_base": 140720379199488,
+          "status": "ok"
+        },
+        {
+          "api": "CreateRemoteThread",
+          "start_address": 140720379459520,
+          "status": "ok",
+          "thread_id": 19292
+        },
+        {
+          "api": "WaitForSingleObject",
+          "status": "ok",
+          "timeout_ms": 10000,
+          "wait_status": 0
+        },
+        {
+          "api": "GetExitCodeThread",
+          "exit_code": 4222418944,
+          "status": "ok"
+        }
+      ],
+      "bytes_written": 64,
+      "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+      "method": "load_library",
+      "ok": true,
+      "payload_encoding": "utf-16-le",
+      "payload_size": 64,
+      "pid": 40456,
+      "remote_allocation": 1903551381504,
+      "safe_to_release": true,
+      "status": "ok",
+      "temporary_memory_released": false,
+      "temporary_memory_retained": true,
+      "thread_exit_code": 4222418944,
+      "thread_id": 19292
+    },
+    "pid": 40456,
+    "platform": "win32",
+    "precondition_hash": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+    "provenance": {
+      "audit_schema_version": 1,
+      "backend": {
+        "available": true,
+        "name": "windows_ctypes",
+        "platform": "win32"
+      },
+      "backend_operation": {
+        "api_calls": [
+          {
+            "api": "OpenProcess",
+            "status": "ok"
+          },
+          {
+            "address": 1903551381504,
+            "api": "VirtualAllocEx",
+            "size": 64,
+            "status": "ok"
+          },
+          {
+            "api": "WriteProcessMemory",
+            "bytes_written": 64,
+            "status": "ok"
+          },
+          {
+            "api": "GetProcAddress",
+            "export": "LoadLibraryW",
+            "export_offset": 260032,
+            "export_owner_module": "KERNEL32.DLL",
+            "export_owner_path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+            "local_export_owner_base": 140720379199488,
+            "local_module_base": 140720379199488,
+            "module": "kernel32.dll",
+            "remote_export_address": 140720379459520,
+            "remote_module_base": 140720379199488,
+            "status": "ok"
+          },
+          {
+            "api": "CreateRemoteThread",
+            "start_address": 140720379459520,
+            "status": "ok",
+            "thread_id": 19292
+          },
+          {
+            "api": "WaitForSingleObject",
+            "status": "ok",
+            "timeout_ms": 10000,
+            "wait_status": 0
+          },
+          {
+            "api": "GetExitCodeThread",
+            "exit_code": 4222418944,
+            "status": "ok"
+          }
+        ],
+        "bytes_written": 64,
+        "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+        "method": "load_library",
+        "ok": true,
+        "payload_encoding": "utf-16-le",
+        "payload_size": 64,
+        "pid": 40456,
+        "remote_allocation": 1903551381504,
+        "safe_to_release": true,
+        "status": "ok",
+        "temporary_memory_released": false,
+        "temporary_memory_retained": true,
+        "thread_exit_code": 4222418944,
+        "thread_id": 19292
+      },
+      "declared_dll_path": "C:\\Windows\\System32\\winhttp.dll",
+      "declared_sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+      "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+      "dll_sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+      "evidence_class": "live_host_proof",
+      "execution_status": "ok",
+      "method": "load_library",
+      "pid": 40456,
+      "planned_sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+      "platform": "win32",
+      "precondition_hash": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+      "provider": "windows_controlled_injector",
+      "requested_action": "load_library",
+      "risk_assessment": {
+        "acceptance": {
+          "execution_allowed": true,
+          "reason": "allowed only after every required validation passes"
+        },
+        "assumptions": [
+          "target permits required process access",
+          "remote kernel32 export offsets match the local system image"
+        ],
+        "execution": {
+          "available": true,
+          "implemented": true,
+          "side_effects_allowed": true,
+          "status": "guarded"
+        },
+        "method": "load_library",
+        "overall_severity": "high",
+        "required_inputs": [
+          "absolute DLL path",
+          "DLL SHA-256",
+          "positive target PID"
+        ],
+        "risk_level": "high",
+        "risks": [
+          {
+            "category": "memory_safety",
+            "description": "The strategy writes memory and starts a thread in another process.",
+            "id": "remote_process_mutation",
+            "impact": "high",
+            "likelihood": "high",
+            "required_controls": [
+              "least required process access",
+              "bounded wait",
+              "fail-closed validation"
+            ],
+            "residual_risk": "high",
+            "severity": "high",
+            "validation_status": "required"
+          },
+          {
+            "category": "evidence",
+            "description": "A thread exit code alone is insufficient evidence of the loaded DLL identity.",
+            "id": "module_identity",
+            "impact": "high",
+            "likelihood": "medium",
+            "required_controls": [
+              "absolute path",
+              "SHA-256 pin",
+              "before/after exact-path module evidence"
+            ],
+            "residual_risk": "high",
+            "severity": "high",
+            "validation_status": "required"
+          },
+          {
+            "category": "reversibility",
+            "description": "FreeLibrary may not unload a module with additional references.",
+            "id": "rollback_refcount",
+            "impact": "high",
+            "likelihood": "medium",
+            "required_controls": [
+              "reject already-loaded DLL",
+              "verify module absence after rollback"
+            ],
+            "residual_risk": "high",
+            "severity": "high",
+            "validation_status": "required"
+          }
+        ],
+        "rollback": {
+          "implemented": true,
+          "required": true,
+          "required_evidence": [
+            "FreeLibrary result",
+            "module absence",
+            "temporary memory release"
+          ],
+          "residual_risk": "medium"
+        },
+        "schema_version": "1.0",
+        "score": 8,
+        "validation_requirements": [
+          {
+            "id": "absolute_path",
+            "required": true
+          },
+          {
+            "id": "mz_signature",
+            "required": true
+          },
+          {
+            "id": "sha256_precondition",
+            "required": true
+          },
+          {
+            "id": "process_access",
+            "required": true
+          },
+          {
+            "id": "before_after_module_evidence",
+            "required": true
+          }
+        ]
+      },
+      "source": "p1-acceptance",
+      "synthetic": false,
+      "timeout_ms": 10000,
+      "validation_ok": true
+    },
+    "provider": "windows_controlled_injector",
+    "risk_assessment": {
+      "acceptance": {
+        "execution_allowed": true,
+        "reason": "allowed only after every required validation passes"
+      },
+      "assumptions": [
+        "target permits required process access",
+        "remote kernel32 export offsets match the local system image"
+      ],
+      "execution": {
+        "available": true,
+        "implemented": true,
+        "side_effects_allowed": true,
+        "status": "guarded"
+      },
+      "method": "load_library",
+      "overall_severity": "high",
+      "required_inputs": [
+        "absolute DLL path",
+        "DLL SHA-256",
+        "positive target PID"
+      ],
+      "risk_level": "high",
+      "risks": [
+        {
+          "category": "memory_safety",
+          "description": "The strategy writes memory and starts a thread in another process.",
+          "id": "remote_process_mutation",
+          "impact": "high",
+          "likelihood": "high",
+          "required_controls": [
+            "least required process access",
+            "bounded wait",
+            "fail-closed validation"
+          ],
+          "residual_risk": "high",
+          "severity": "high",
+          "validation_status": "required"
+        },
+        {
+          "category": "evidence",
+          "description": "A thread exit code alone is insufficient evidence of the loaded DLL identity.",
+          "id": "module_identity",
+          "impact": "high",
+          "likelihood": "medium",
+          "required_controls": [
+            "absolute path",
+            "SHA-256 pin",
+            "before/after exact-path module evidence"
+          ],
+          "residual_risk": "high",
+          "severity": "high",
+          "validation_status": "required"
+        },
+        {
+          "category": "reversibility",
+          "description": "FreeLibrary may not unload a module with additional references.",
+          "id": "rollback_refcount",
+          "impact": "high",
+          "likelihood": "medium",
+          "required_controls": [
+            "reject already-loaded DLL",
+            "verify module absence after rollback"
+          ],
+          "residual_risk": "high",
+          "severity": "high",
+          "validation_status": "required"
+        }
+      ],
+      "rollback": {
+        "implemented": true,
+        "required": true,
+        "required_evidence": [
+          "FreeLibrary result",
+          "module absence",
+          "temporary memory release"
+        ],
+        "residual_risk": "medium"
+      },
+      "schema_version": "1.0",
+      "score": 8,
+      "validation_requirements": [
+        {
+          "id": "absolute_path",
+          "required": true
+        },
+        {
+          "id": "mz_signature",
+          "required": true
+        },
+        {
+          "id": "sha256_precondition",
+          "required": true
+        },
+        {
+          "id": "process_access",
+          "required": true
+        },
+        {
+          "id": "before_after_module_evidence",
+          "required": true
+        }
+      ]
+    },
+    "rollback": {
+      "after_modules": [
+        {
+          "base_address": 140697503727616,
+          "name": "python.exe",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "size": 106496
+        },
+        {
+          "base_address": 140719090892800,
+          "name": "python313.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+          "size": 6639616
+        },
+        {
+          "base_address": 140719586082816,
+          "name": "VCRUNTIME140.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+          "size": 122880
+        },
+        {
+          "base_address": 140720380116992,
+          "name": "ADVAPI32.dll",
+          "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+          "size": 737280
+        },
+        {
+          "base_address": 140720363667456,
+          "name": "bcrypt.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+          "size": 155648
+        },
+        {
+          "base_address": 140720369631232,
+          "name": "bcryptprimitives.dll",
+          "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+          "size": 626688
+        },
+        {
+          "base_address": 140720379199488,
+          "name": "KERNEL32.DLL",
+          "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+          "size": 823296
+        },
+        {
+          "base_address": 140720371793920,
+          "name": "KERNELBASE.dll",
+          "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+          "size": 4128768
+        },
+        {
+          "base_address": 140720378281984,
+          "name": "msvcrt.dll",
+          "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+          "size": 692224
+        },
+        {
+          "base_address": 140720413868032,
+          "name": "ntdll.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+          "size": 2519040
+        },
+        {
+          "base_address": 140720386342912,
+          "name": "RPCRT4.dll",
+          "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+          "size": 1146880
+        },
+        {
+          "base_address": 140720395845632,
+          "name": "sechost.dll",
+          "path": "C:\\WINDOWS\\System32\\sechost.dll",
+          "size": 679936
+        },
+        {
+          "base_address": 140720367665152,
+          "name": "ucrtbase.dll",
+          "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+          "size": 1355776
+        },
+        {
+          "base_address": 140720135405568,
+          "name": "VERSION.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+          "size": 45056
+        },
+        {
+          "base_address": 140720396566528,
+          "name": "WS2_32.dll",
+          "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+          "size": 475136
+        }
+      ],
+      "before_modules": [
+        {
+          "base_address": 140697503727616,
+          "name": "python.exe",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "size": 106496
+        },
+        {
+          "base_address": 140719090892800,
+          "name": "python313.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll",
+          "size": 6639616
+        },
+        {
+          "base_address": 140719586082816,
+          "name": "VCRUNTIME140.dll",
+          "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\VCRUNTIME140.dll",
+          "size": 122880
+        },
+        {
+          "base_address": 140720380116992,
+          "name": "ADVAPI32.dll",
+          "path": "C:\\WINDOWS\\System32\\ADVAPI32.dll",
+          "size": 737280
+        },
+        {
+          "base_address": 140720363667456,
+          "name": "bcrypt.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\bcrypt.dll",
+          "size": 155648
+        },
+        {
+          "base_address": 140720369631232,
+          "name": "bcryptprimitives.dll",
+          "path": "C:\\WINDOWS\\System32\\bcryptprimitives.dll",
+          "size": 626688
+        },
+        {
+          "base_address": 140720379199488,
+          "name": "KERNEL32.DLL",
+          "path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+          "size": 823296
+        },
+        {
+          "base_address": 140720371793920,
+          "name": "KERNELBASE.dll",
+          "path": "C:\\WINDOWS\\System32\\KERNELBASE.dll",
+          "size": 4128768
+        },
+        {
+          "base_address": 140720378281984,
+          "name": "msvcrt.dll",
+          "path": "C:\\WINDOWS\\System32\\msvcrt.dll",
+          "size": 692224
+        },
+        {
+          "base_address": 140720413868032,
+          "name": "ntdll.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\ntdll.dll",
+          "size": 2519040
+        },
+        {
+          "base_address": 140720386342912,
+          "name": "RPCRT4.dll",
+          "path": "C:\\WINDOWS\\System32\\RPCRT4.dll",
+          "size": 1146880
+        },
+        {
+          "base_address": 140720395845632,
+          "name": "sechost.dll",
+          "path": "C:\\WINDOWS\\System32\\sechost.dll",
+          "size": 679936
+        },
+        {
+          "base_address": 140720367665152,
+          "name": "ucrtbase.dll",
+          "path": "C:\\WINDOWS\\System32\\ucrtbase.dll",
+          "size": 1355776
+        },
+        {
+          "base_address": 140720135405568,
+          "name": "VERSION.dll",
+          "path": "C:\\WINDOWS\\SYSTEM32\\VERSION.dll",
+          "size": 45056
+        },
+        {
+          "base_address": 140720235937792,
+          "name": "winhttp.dll",
+          "path": "C:\\Windows\\System32\\winhttp.dll",
+          "size": 1171456
+        },
+        {
+          "base_address": 140720396566528,
+          "name": "WS2_32.dll",
+          "path": "C:\\WINDOWS\\System32\\WS2_32.dll",
+          "size": 475136
+        }
+      ],
+      "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+      "free_library_attempted": true,
+      "free_library_ok": true,
+      "memory_release_attempted": true,
+      "memory_released": true,
+      "method": "load_library",
+      "module_absent_after": true,
+      "module_handle": 140720235937792,
+      "operation": {
+        "api_calls": [
+          {
+            "api": "OpenProcess",
+            "status": "ok"
+          },
+          {
+            "api": "GetProcAddress",
+            "export": "FreeLibrary",
+            "export_offset": 247328,
+            "export_owner_module": "KERNEL32.DLL",
+            "export_owner_path": "C:\\WINDOWS\\System32\\KERNEL32.DLL",
+            "local_export_owner_base": 140720379199488,
+            "local_module_base": 140720379199488,
+            "module": "kernel32.dll",
+            "remote_export_address": 140720379446816,
+            "remote_module_base": 140720379199488,
+            "status": "ok"
+          },
+          {
+            "api": "CreateRemoteThread",
+            "start_address": 140720379446816,
+            "status": "ok",
+            "thread_id": 13388
+          },
+          {
+            "api": "WaitForSingleObject",
+            "status": "ok",
+            "timeout_ms": 10000,
+            "wait_status": 0
+          },
+          {
+            "api": "GetExitCodeThread",
+            "exit_code": 1,
+            "status": "ok"
+          },
+          {
+            "address": 1903551381504,
+            "api": "VirtualFreeEx",
+            "status": "ok"
+          }
+        ],
+        "free_library_attempted": true,
+        "free_library_ok": true,
+        "memory_release_attempted": true,
+        "memory_released": true,
+        "module_handle": 140720235937792,
+        "ok": true,
+        "pid": 40456,
+        "remote_allocation": 1903551381504,
+        "status": "ok"
+      },
+      "pid": 40456,
+      "remote_allocation": 1903551381504,
+      "schema_version": 1,
+      "status": "ok"
+    },
+    "rollback_plan": {
+      "completed": true,
+      "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+      "dll_sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+      "evidence_required": "module absent after FreeLibrary",
+      "free_library_ok": true,
+      "free_library_required": true,
+      "mode": "remote_free_library",
+      "module_absent_after": true,
+      "module_handle": 140720235937792,
+      "pid": 40456,
+      "remote_allocation": 1903551381504,
+      "restored": true,
+      "rollback_attempted": true,
+      "rollback_status": "ok",
+      "schema_version": 1,
+      "supported": true,
+      "temporary_memory_release_required": true,
+      "temporary_memory_released": true
+    },
+    "schema_version": 1,
+    "session": {
+      "id": "0a330a344b754248aca9567c9ca17f02",
+      "state": "ok"
+    },
+    "session_id": "0a330a344b754248aca9567c9ca17f02",
+    "status": "ok",
+    "target_identity": {
+      "display_name": "python.exe",
+      "kind": "controlled_child_process",
+      "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+      "pid": 40456,
+      "sha256": "d932e5e2f324d57f392e8fd063dcf6d0185be8a664c57c6d24e7762ed02c28ca"
+    },
+    "validation": {
+      "checks": [
+        {
+          "method": "load_library",
+          "name": "injection_method",
+          "status": "ok",
+          "supported_methods": [
+            "load_library",
+            "manual_map"
+          ]
+        },
+        {
+          "identity_conflict": false,
+          "matches_planned_identity": true,
+          "name": "target_pid",
+          "pid": 40456,
+          "planned_pid": 40456,
+          "positive_integer": true,
+          "status": "ok",
+          "target_identity_pid": 40456
+        },
+        {
+          "declared_path": "C:\\Windows\\System32\\winhttp.dll",
+          "name": "dll_absolute_path",
+          "resolved_path": "C:\\Windows\\System32\\winhttp.dll",
+          "status": "ok"
+        },
+        {
+          "actual": "C:\\Windows\\System32\\winhttp.dll",
+          "expected": "C:\\Windows\\System32\\winhttp.dll",
+          "name": "dll_planned_path_identity",
+          "status": "ok"
+        },
+        {
+          "exists": true,
+          "is_file": true,
+          "name": "dll_file",
+          "path": "C:\\Windows\\System32\\winhttp.dll",
+          "status": "ok"
+        },
+        {
+          "actual": "4d5a",
+          "expected": "4d5a",
+          "name": "dll_mz_signature",
+          "readable": true,
+          "status": "ok"
+        },
+        {
+          "actual": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+          "expected": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+          "name": "dll_precondition_sha256",
+          "status": "ok"
+        },
+        {
+          "actual": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+          "expected": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+          "name": "dll_declared_sha256",
+          "status": "ok"
+        },
+        {
+          "available": true,
+          "backend_name": "windows_ctypes",
+          "name": "windows_backend",
+          "platform": "win32",
+          "status": "ok"
+        },
+        {
+          "accessible": true,
+          "architecture": "x64",
+          "creation_time_100ns": 134285094524636345,
+          "exists": true,
+          "identity_status": "ok",
+          "image_path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+          "injector_architecture": "x64",
+          "injector_machine": 34404,
+          "machine": 34404,
+          "machine_hex": "0x8664",
+          "name": "target_process_access",
+          "native_machine": 34404,
+          "pid": 40456,
+          "process_machine": 0,
+          "required_access": 1082,
+          "status": "ok"
+        },
+        {
+          "module_count": 15,
+          "name": "module_snapshot_before",
+          "status": "ok"
+        },
+        {
+          "name": "dll_not_already_loaded",
+          "status": "ok"
+        },
+        {
+          "method": "load_library",
+          "name": "risk_assessment_schema",
+          "schema_version": "1.0",
+          "status": "ok"
+        }
+      ],
+      "ok": true,
+      "warnings": [
+        "LoadLibraryW injection writes target memory and creates a remote thread"
+      ]
+    }
+  },
+  "rollback_plan": {
+    "completed": true,
+    "dll_path": "C:\\Windows\\System32\\winhttp.dll",
+    "dll_sha256": "e2588b9c0df49dc9d080a5c08fd385a82d1c8c663cb69b6a12850ac4fca9739b",
+    "evidence_required": "module absent after FreeLibrary",
+    "free_library_ok": true,
+    "free_library_required": true,
+    "mode": "remote_free_library",
+    "module_absent_after": true,
+    "module_handle": 140720235937792,
+    "pid": 40456,
+    "remote_allocation": 1903551381504,
+    "restored": true,
+    "rollback_attempted": true,
+    "rollback_status": "ok",
+    "schema_version": 1,
+    "supported": true,
+    "temporary_memory_release_required": true,
+    "temporary_memory_released": true
+  },
+  "schema_version": 1,
+  "session_id": "0a330a344b754248aca9567c9ca17f02",
+  "status": "ok",
+  "target_identity": {
+    "display_name": "python.exe",
+    "kind": "controlled_child_process",
+    "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "pid": 40456,
+    "sha256": "d932e5e2f324d57f392e8fd063dcf6d0185be8a664c57c6d24e7762ed02c28ca"
+  }
+}

@@ -1,0 +1,278 @@
+{
+  "schema_version": 1,
+  "fixture_id": "p2-pe-seven-strategies",
+  "phase": "P2",
+  "capability": "patch_planner",
+  "evidence_level": "repository-production-backend",
+  "session_id": "e329b97085044effa2ef199d53837d27",
+  "target_identity": {},
+  "target_identity_source": "missing",
+  "started_at": "2026-07-14T13:35:58.177171+00:00",
+  "finished_at": "2026-07-14T13:36:19.404803+00:00",
+  "workspace": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance",
+  "run_directory": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27",
+  "record_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\records\\p2-pe-seven-strategies--e329b97085044effa2ef199d53837d27.json",
+  "command": [
+    "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "-m",
+    "unittest",
+    "tests.test_patch_planner",
+    "tests.test_patch_capability_provider"
+  ],
+  "command_display": "python -m unittest tests.test_patch_planner tests.test_patch_capability_provider",
+  "contract_sha256": "1a3f3fe8265f92191de464bee10286998cf530ff97d163a72a0ee89e569b0058",
+  "environment_gates": {
+    "status": "repository_ready",
+    "configured": [],
+    "missing": [],
+    "workflow_states": {}
+  },
+  "provider_versions": {
+    "python": "3.13.7",
+    "platform": "Windows-11-10.0.26100-SP0"
+  },
+  "expected_artifacts": [
+    "patch/plan.json",
+    "patch/verify.json",
+    "patch/rollback_plan.json",
+    "patch/acceptance-summary.json",
+    "patch/strategies/*/artifacts/plan.json",
+    "patch/strategies/*/artifacts/verify.json",
+    "patch/strategies/*/artifacts/risk_report.json",
+    "patch/strategies/*/artifacts/rollback_plan.json",
+    "patch/provider/patch_manifest.json",
+    "patch/provider/rollback.json",
+    "patch/provider/audit.json",
+    "patch/provider/provider-proof.json"
+  ],
+  "observed_artifacts": [
+    {
+      "path": "environment-validation.json",
+      "size": 31034,
+      "sha256": "76921154b966cd58e367fcfa9c878e24bae821318198dd461d28d00dadf10b81"
+    },
+    {
+      "path": "patch/acceptance-summary.json",
+      "size": 6546,
+      "sha256": "0eea691c688494fbcff6690d7494f7146177b7ca9b576d7b061cb4b2a804e819"
+    },
+    {
+      "path": "patch/plan.json",
+      "size": 1069,
+      "sha256": "1a322e6415a61e5174f0b43cc3fba94a87b1cd3da4e2d421cdd507b3686e2c83"
+    },
+    {
+      "path": "patch/provider/audit.json",
+      "size": 16171,
+      "sha256": "68fc26b13888c254d3a81ed4391081d4dec1da216affab29bb5077c4c9efbd90"
+    },
+    {
+      "path": "patch/provider/patch_manifest.json",
+      "size": 1198,
+      "sha256": "dc5efc7dec81aa5e9853bb4797e73ec30e678d766b243a019671a5e1567e8822"
+    },
+    {
+      "path": "patch/provider/provider-proof.json",
+      "size": 686,
+      "sha256": "e07100349c60b5fc2b3f7c52c47cc95979e0cb64fec1a678d1c6a8f79da71d58"
+    },
+    {
+      "path": "patch/provider/rollback.json",
+      "size": 588,
+      "sha256": "1a8f24cae3047a3668b007c91993ef6d5fb2a784d8d7650209fc87ddcbc220ea"
+    },
+    {
+      "path": "patch/rollback_plan.json",
+      "size": 728,
+      "sha256": "0ce6d0aa1f787dc1897b3fcf117503e835948bad5beb2a46418b04fa95447261"
+    },
+    {
+      "path": "patch/strategies/code_cave_patch/artifacts/plan.json",
+      "size": 1342,
+      "sha256": "5ce87538fa01d743a943f9d6e331dda312e48a41310d164d2320cc1695d1b14a"
+    },
+    {
+      "path": "patch/strategies/code_cave_patch/artifacts/risk_report.json",
+      "size": 537,
+      "sha256": "934b8a8ca188a53776d1d13c9d90836343b5b5dfc7bc94e6b5e56511664f68f6"
+    },
+    {
+      "path": "patch/strategies/code_cave_patch/artifacts/rollback_plan.json",
+      "size": 734,
+      "sha256": "7f2e399563b01c358f8893efa9bf95662150d5c604fc108fb13c3a9400802011"
+    },
+    {
+      "path": "patch/strategies/code_cave_patch/artifacts/verify.json",
+      "size": 5917,
+      "sha256": "8525f95d31cd838180c230cef9648fff969368de45f029273e0ab6b3b93a3f75"
+    },
+    {
+      "path": "patch/strategies/entrypoint_redirect/artifacts/plan.json",
+      "size": 1539,
+      "sha256": "90e639ddc7e57d77f9b371fdf0de5d6ec73c5cd901ba4bdaefecf77bbce34ea7"
+    },
+    {
+      "path": "patch/strategies/entrypoint_redirect/artifacts/risk_report.json",
+      "size": 832,
+      "sha256": "9544101df038508b631a79f16901f050a8d76694ed225cd7716fdd0c06135acb"
+    },
+    {
+      "path": "patch/strategies/entrypoint_redirect/artifacts/rollback_plan.json",
+      "size": 951,
+      "sha256": "ed8dbdae3cf9f9f3d22ea6d535b9f5e8db58a0e8dc8e3ed268d1dd742c573443"
+    },
+    {
+      "path": "patch/strategies/entrypoint_redirect/artifacts/verify.json",
+      "size": 6617,
+      "sha256": "655376f00028b00166384c21100fcbdf764362ab76b5981ed2a7a9b4fb272966"
+    },
+    {
+      "path": "patch/strategies/iat_thunk_patch/artifacts/plan.json",
+      "size": 1308,
+      "sha256": "29955a73b32cdd12db7e4398edd8aa966405e646222a45af1922cdd471d944f3"
+    },
+    {
+      "path": "patch/strategies/iat_thunk_patch/artifacts/risk_report.json",
+      "size": 930,
+      "sha256": "1c7958944c42a73afb4f8de82ebd8603a13f8f33df1c0e0b713f8ae64b9b5655"
+    },
+    {
+      "path": "patch/strategies/iat_thunk_patch/artifacts/rollback_plan.json",
+      "size": 743,
+      "sha256": "375ef957dd53aca9c8e87e14cdb1cf6e0048fd42a192127a8b3beec7f73bd503"
+    },
+    {
+      "path": "patch/strategies/iat_thunk_patch/artifacts/verify.json",
+      "size": 3048,
+      "sha256": "c493e92d4a7f819a0005319518cd52b7076e4effb1cdf757c71aff1818d11dfb"
+    },
+    {
+      "path": "patch/strategies/inline_patch/artifacts/plan.json",
+      "size": 1069,
+      "sha256": "1a322e6415a61e5174f0b43cc3fba94a87b1cd3da4e2d421cdd507b3686e2c83"
+    },
+    {
+      "path": "patch/strategies/inline_patch/artifacts/risk_report.json",
+      "size": 507,
+      "sha256": "bf9e872077745ce1789a41df9e40d743255ceb618c84d9107f698ccb0c68d66a"
+    },
+    {
+      "path": "patch/strategies/inline_patch/artifacts/rollback_plan.json",
+      "size": 728,
+      "sha256": "0ce6d0aa1f787dc1897b3fcf117503e835948bad5beb2a46418b04fa95447261"
+    },
+    {
+      "path": "patch/strategies/inline_patch/artifacts/verify.json",
+      "size": 5780,
+      "sha256": "a3e3dd05a5ce704f0ccdf7b8db23d4e34dba3ac25352d7a3ceb3992941cc795c"
+    },
+    {
+      "path": "patch/strategies/overlay_preserve_patch/artifacts/plan.json",
+      "size": 1350,
+      "sha256": "c33d02505961ec5e066f286473670d104c8650c97ac79d51397b768f02290edb"
+    },
+    {
+      "path": "patch/strategies/overlay_preserve_patch/artifacts/risk_report.json",
+      "size": 541,
+      "sha256": "e0c8badbfeb983925f8bc4a6d48f8596acfad9efe8eb80f21d49b6ce21e36997"
+    },
+    {
+      "path": "patch/strategies/overlay_preserve_patch/artifacts/rollback_plan.json",
+      "size": 752,
+      "sha256": "22ab0f6cbcef7b72fd55a52c457fac3fee6b56702f0b3190e54650cfab10cceb"
+    },
+    {
+      "path": "patch/strategies/overlay_preserve_patch/artifacts/verify.json",
+      "size": 2877,
+      "sha256": "eca1d77f3cc67a4489e434d1538c93fb3c010a7df191ff94abd1c130fc83ee4c"
+    },
+    {
+      "path": "patch/strategies/resource_replace/artifacts/plan.json",
+      "size": 1598,
+      "sha256": "23c3ea1f61f62cace8bba1ebd0002d94dbb1fca0aecbad69e74fb7efc9bf128e"
+    },
+    {
+      "path": "patch/strategies/resource_replace/artifacts/risk_report.json",
+      "size": 1326,
+      "sha256": "45f4e606c3224a533f064741770f516a2c42800245e9c677eec6480e1ec45d52"
+    },
+    {
+      "path": "patch/strategies/resource_replace/artifacts/rollback_plan.json",
+      "size": 966,
+      "sha256": "7d5c77d299f523e2bccd6f5ef1f032cb10a9eb9bbd0b48383bfd3a18549f160b"
+    },
+    {
+      "path": "patch/strategies/resource_replace/artifacts/verify.json",
+      "size": 3283,
+      "sha256": "90d7bd834326c8df9ea21e0e36a3d77ece3aa8c3728079b3a43d8d6bef28546e"
+    },
+    {
+      "path": "patch/strategies/section_extend_patch/artifacts/plan.json",
+      "size": 3991,
+      "sha256": "3bedf9647cc54bcdcb5606fd93ec30ac987e1cfed5eccef9c1e9d72c3d1da0b0"
+    },
+    {
+      "path": "patch/strategies/section_extend_patch/artifacts/risk_report.json",
+      "size": 1163,
+      "sha256": "1b670fe0c6f0f0d1d8f021c77914a2d3cdbbd25b727d605c1e2cf42f3af43214"
+    },
+    {
+      "path": "patch/strategies/section_extend_patch/artifacts/rollback_plan.json",
+      "size": 3195,
+      "sha256": "86192013b71c983cfd8d84e5110cfa8d2fbd2784ff22928374ee908400bccf9d"
+    },
+    {
+      "path": "patch/strategies/section_extend_patch/artifacts/verify.json",
+      "size": 8742,
+      "sha256": "4563d8368ff76c8a589ae109fcbf2fa7214a5f475a8d86d5668ab84c78bee58b"
+    },
+    {
+      "path": "patch/verify.json",
+      "size": 5780,
+      "sha256": "a3e3dd05a5ce704f0ccdf7b8db23d4e34dba3ac25352d7a3ceb3992941cc795c"
+    },
+    {
+      "path": "stderr.log",
+      "size": 143,
+      "sha256": "d7c72d6040cc8f62040d49a35786ed8c23a567e42549e3f87a74ba50b0e9f7cf"
+    },
+    {
+      "path": "stdout.log",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "missing_artifacts": [],
+  "rejected_provenance": [],
+  "execution_proof": {},
+  "execution_proof_errors": [],
+  "execution_proof_artifact": null,
+  "rollback_result": {
+    "status": "not_required",
+    "verified": true,
+    "artifacts": []
+  },
+  "cleanup_result": {
+    "status": "not_required",
+    "verified": true,
+    "artifacts": []
+  },
+  "exit_code": 0,
+  "execution_error": null,
+  "outcome": "passed",
+  "verification_constraints": {
+    "registered_fixture": true,
+    "structured_argv": true,
+    "host_and_dependencies_ready": true,
+    "execution_passed": true,
+    "live_evidence_level": false,
+    "execution_proof_valid": true,
+    "target_identity_present": false,
+    "target_identity_matches_artifact": true,
+    "expected_artifacts_complete": true,
+    "provenance_non_synthetic": true,
+    "rollback_verified": true,
+    "cleanup_verified": true
+  },
+  "live_verified": false
+}

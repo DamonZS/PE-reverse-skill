@@ -1,0 +1,115 @@
+{
+  "checks": [
+    {
+      "details": {
+        "bits": 32,
+        "machine": "0x014C"
+      },
+      "name": "pe_parse",
+      "status": "passed"
+    },
+    {
+      "expected": "048a30269f2eaad1d2b1af8f6932fbfbb6d554b27f622fd2a90f03041641a51a",
+      "name": "target_hash",
+      "observed": "048a30269f2eaad1d2b1af8f6932fbfbb6d554b27f622fd2a90f03041641a51a",
+      "status": "passed"
+    },
+    {
+      "error": null,
+      "name": "patch_engine_validation",
+      "status": "passed"
+    },
+    {
+      "name": "section_ranges",
+      "operation_count": 1,
+      "status": "passed"
+    },
+    {
+      "errors": [],
+      "file_alignment": 512,
+      "name": "source_pe_layout",
+      "section_alignment": 4096,
+      "status": "passed"
+    },
+    {
+      "errors": [],
+      "name": "strategy_contract",
+      "status": "passed",
+      "strategy": "overlay_preserve_patch",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "name": "resulting_pe_layout",
+      "size_of_image": 12288,
+      "status": "passed"
+    },
+    {
+      "name": "instruction_boundaries",
+      "operations": [],
+      "status": "passed"
+    },
+    {
+      "entrypoint_redirect": null,
+      "name": "basic_cfg",
+      "operations": [],
+      "status": "passed"
+    },
+    {
+      "intersection_count": 0,
+      "name": "pe_directories",
+      "status": "passed"
+    },
+    {
+      "certificate_offset": null,
+      "certificate_present": false,
+      "certificate_size": 0,
+      "finding_ids": [],
+      "name": "authenticode_signature",
+      "status": "passed"
+    },
+    {
+      "name": "overlay_preservation",
+      "overlay_offset": 1536,
+      "overlay_size": 21,
+      "status": "passed"
+    },
+    {
+      "intersection_count": 0,
+      "name": "base_relocations",
+      "status": "passed"
+    },
+    {
+      "name": "rollback_recoverability",
+      "status": "passed"
+    }
+  ],
+  "errors": [],
+  "operations": [
+    {
+      "file_offset": 1024,
+      "file_offset_hex": "0x400",
+      "id": "overlay-preserve",
+      "kind": "replace_offset",
+      "original_hex": "50",
+      "replacement_hex": "51",
+      "role": "overlay_preserving_patch",
+      "rva": 8192,
+      "rva_hex": "0x2000",
+      "section": ".rdata",
+      "section_analysis_end": 1536,
+      "section_executable": false,
+      "section_index": 1,
+      "size": 1
+    }
+  ],
+  "overall_risk": "low",
+  "planned_sha256": "3895f9af644c9ef847c8ac3d6a16869c8900d00e9673d22f73f8fc5976fc1eec",
+  "schema_version": 1,
+  "status": "ok",
+  "strategy": "overlay_preserve_patch",
+  "target_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p2-acceptance-final\\acceptance\\runs\\p2-pe-seven-strategies\\87dd5072d40c44d6af5e9abc3a22db15\\patch\\strategies\\overlay_preserve_patch\\fixture.exe",
+  "target_sha256": "048a30269f2eaad1d2b1af8f6932fbfbb6d554b27f622fd2a90f03041641a51a",
+  "valid": true,
+  "warnings": []
+}

@@ -1,0 +1,64 @@
+{
+  "architecture": {
+    "bits": 64,
+    "machine": 34404,
+    "name": "x64",
+    "unique": true
+  },
+  "checks": [
+    {
+      "name": "pe_headers",
+      "status": "passed"
+    },
+    {
+      "name": "export_directory",
+      "status": "passed"
+    },
+    {
+      "name": "duplicate_names",
+      "status": "passed"
+    },
+    {
+      "name": "duplicate_ordinals",
+      "status": "passed"
+    },
+    {
+      "name": "architecture_match",
+      "status": "passed"
+    },
+    {
+      "name": "copy_directory_confinement",
+      "status": "passed"
+    },
+    {
+      "name": "forwarding_coverage",
+      "status": "passed"
+    }
+  ],
+  "coverage": {
+    "coverage_percent": 100.0,
+    "forwarded_exports": 3,
+    "named_exports": 2,
+    "noname_exports": 1,
+    "source_forwarders": 1,
+    "total_exports": 3
+  },
+  "preservation": {
+    "calling_boundaries": true,
+    "forwarder_mechanism": "PE loader direct forwarders",
+    "names": true,
+    "noname": true,
+    "ordinals": true
+  },
+  "project": {
+    "backing_name": "fixture_original.dll",
+    "output_name": "fixture.dll",
+    "path": "proxy"
+  },
+  "schema_version": 1,
+  "source": {
+    "path": "input/fixture.dll",
+    "sha256": "c7e8f8f3f62acf8b86ddb7575c3ce99312dec19b9509d28b2fbebd9100f8b8ca"
+  },
+  "status": "passed"
+}

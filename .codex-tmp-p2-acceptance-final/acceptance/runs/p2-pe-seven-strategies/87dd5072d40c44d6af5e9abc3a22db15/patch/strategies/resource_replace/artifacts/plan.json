@@ -1,0 +1,54 @@
+{
+  "operations": [
+    {
+      "expected": "5245534f55524345",
+      "id": "resource-replace-data",
+      "kind": "replace_offset",
+      "offset": 1248,
+      "replacement": "4e45570000000000",
+      "role": "resource_data"
+    },
+    {
+      "expected": "08000000",
+      "id": "resource-replace-size",
+      "kind": "replace_offset",
+      "offset": 1228,
+      "replacement": "03000000",
+      "role": "resource_size"
+    }
+  ],
+  "planner": {
+    "explicit_intent": true,
+    "layout_preserving": true,
+    "name": "pe_aware_patch_planner",
+    "operation_model": "checked_equal_length_byte_replacements",
+    "schema_version": 1
+  },
+  "schema_version": 1,
+  "strategy": "resource_replace",
+  "strategy_details": {
+    "allocation_preserved": true,
+    "allocation_size": 8,
+    "language": 1033,
+    "mode": "in_place_resource_allocation",
+    "replacement_size": 3,
+    "resource_name": "1",
+    "resource_offset": 1248,
+    "resource_rva": 8416,
+    "resource_type": "10",
+    "size_field_offset": 1228
+  },
+  "target": {
+    "bits": 32,
+    "entrypoint_rva": 4096,
+    "format": "pe",
+    "has_overlay": false,
+    "image_base": 4194304,
+    "machine": "0x014C",
+    "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p2-acceptance-final\\acceptance\\runs\\p2-pe-seven-strategies\\87dd5072d40c44d6af5e9abc3a22db15\\patch\\strategies\\resource_replace\\fixture.exe",
+    "section_count": 2,
+    "sha256": "626e023d2b3b8baabb21aac86da6ebad4899a36d29ac55c4d98fc83e54b56645",
+    "size": 1536
+  },
+  "target_sha256": "626e023d2b3b8baabb21aac86da6ebad4899a36d29ac55c4d98fc83e54b56645"
+}

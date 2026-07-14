@@ -27,6 +27,7 @@ class ReportBuilder:
         self.knowledge = knowledge
         self.config = config
         self.out_dir = str(out_dir) if out_dir is not None else None
+        self._last_report: Optional[Dict[str, Any]] = None
 
     def build(self) -> Dict[str, Any]:
         sample = _sample_overview(self.session)
@@ -39,6 +40,7 @@ class ReportBuilder:
         memory_analysis = _memory_analysis(tool_trace)
         engine_analysis = _engine_analysis(tool_trace)
         android_analysis = _android_analysis(tool_trace)
+        ios_analysis = _ios_analysis(tool_trace)
         protocol_analysis = _protocol_analysis(tool_trace)
         gui_analysis = _gui_analysis(tool_trace)
         behavior_graph = _behavior_graph(tool_trace)
@@ -70,6 +72,7 @@ class ReportBuilder:
             "memory_analysis": memory_analysis,
             "engine_analysis": engine_analysis,
             "android_analysis": android_analysis,
+            "ios_analysis": ios_analysis,
             "protocol_analysis": protocol_analysis,
             "gui_analysis": gui_analysis,
             "behavior_graph": behavior_graph,
@@ -82,13 +85,18 @@ class ReportBuilder:
             "recommendations": recommendations,
             "artifacts": artifacts,
         }
-        return ensure_platform_sections(report_data)
+        report = ensure_platform_sections(report_data)
+        self._last_report = report
+        return report
 
     def to_json(self, *, indent: int = 2) -> str:
         return json.dumps(self.build(), indent=indent, ensure_ascii=False, sort_keys=True)
 
     def to_markdown(self) -> str:
-        report = self.build()
+        # CLI finalization mutates the object returned by build() with Platform
+        # Core artifact metadata. Reuse that object so report.md and report.json
+        # describe the same finalized run.
+        report = self._last_report if self._last_report is not None else self.build()
         lines = ["# Reverse Analysis Report", ""]
         lines.extend(["## Sample Overview", ""])
         for key, value in report["sample"].items():
@@ -111,6 +119,7 @@ class ReportBuilder:
 
         capability_audit = report.get("capability_audit") or {}
         lines.extend(["", "## Capability Audit", ""])
+        lines.append(f"- **Status:** {_capability_audit_display_status(capability_audit)}")
         if isinstance(capability_audit, Mapping) and capability_audit:
             summary = capability_audit.get("summary") if isinstance(capability_audit.get("summary"), Mapping) else {}
             records = capability_audit.get("records") if isinstance(capability_audit.get("records"), list) else []
@@ -146,6 +155,45 @@ class ReportBuilder:
                     )
         else:
             lines.append("No capability audit records recorded.")
+
+        platform_core_value = report.get("platform_core")
+        platform_core = platform_core_value if isinstance(platform_core_value, Mapping) else {}
+        semantic_ir_value = platform_core.get("semantic_ir")
+        platform_semantic_ir = semantic_ir_value if isinstance(semantic_ir_value, Mapping) else {}
+        evidence_graph_value = platform_core.get("evidence_graph")
+        platform_evidence_graph = evidence_graph_value if isinstance(evidence_graph_value, Mapping) else {}
+        registry_value = platform_core.get("capability_registry")
+        capability_registry = registry_value if isinstance(registry_value, Mapping) else {}
+        platform_audit_value = platform_core.get("capability_audit")
+        platform_audit = (
+            platform_audit_value
+            if isinstance(platform_audit_value, Mapping)
+            else capability_audit
+        )
+        lines.extend(["", "## Platform Core", ""])
+        lines.append(f"- **Status:** {_platform_core_display_status(platform_core)}")
+        lines.append(
+            "- **Semantic IR:** "
+            f"status={_section_display_status(platform_semantic_ir)} "
+            f"modules={_safe_count(platform_semantic_ir.get('module_count'))} "
+            f"entities={_safe_count(platform_semantic_ir.get('entity_count'))}"
+        )
+        lines.append(
+            "- **Evidence Graph:** "
+            f"status={_section_display_status(platform_evidence_graph)} "
+            f"nodes={_safe_count(platform_evidence_graph.get('node_count'))} "
+            f"edges={_safe_count(platform_evidence_graph.get('edge_count'))}"
+        )
+        lines.append(
+            "- **Capability Registry:** "
+            f"status={_section_display_status(capability_registry)} "
+            f"capabilities={_safe_count(capability_registry.get('capability_count'))}"
+        )
+        lines.append(
+            "- **Capability Audit:** "
+            f"status={_capability_audit_display_status(platform_audit)} "
+            f"records={_safe_count(platform_audit.get('record_count'))}"
+        )
 
         lines.extend(["", "## Tool Trace", ""])
         if report["tool_trace"]:
@@ -300,9 +348,9 @@ class ReportBuilder:
                 lines.append(f"- **Artifacts:** {len(memory_analysis['artifacts'])}")
 
         engine_analysis = report.get("engine_analysis") or {}
+        lines.extend(["", "## Engine Analysis", ""])
+        lines.append(f"- **Status:** {_section_display_status(engine_analysis)}")
         if engine_analysis:
-            lines.extend(["", "## Engine Analysis", ""])
-            lines.append(f"- **Status:** {engine_analysis.get('status') or 'unknown'}")
             if engine_analysis.get("platform"):
                 lines.append(f"- **Platform:** {engine_analysis['platform']}")
             if engine_analysis.get("engine"):
@@ -335,9 +383,9 @@ class ReportBuilder:
                 lines.append(f"- **Strategy:** {strategy.get('name') or strategy.get('key') or 'unknown'}")
 
         android_analysis = report.get("android_analysis") or {}
+        lines.extend(["", "## Android Analysis", ""])
+        lines.append(f"- **Status:** {_section_display_status(android_analysis)}")
         if android_analysis:
-            lines.extend(["", "## Android Analysis", ""])
-            lines.append(f"- **Status:** {android_analysis.get('status') or 'unknown'}")
             if android_analysis.get("package_type"):
                 lines.append(f"- **Package Type:** {android_analysis['package_type']}")
             framework = android_analysis.get("framework") or {}
@@ -369,10 +417,43 @@ class ReportBuilder:
             if isinstance(strategy, Mapping):
                 lines.append(f"- **Strategy:** {strategy.get('name') or strategy.get('key') or 'unknown'}")
 
+        ios_analysis = report.get("ios_analysis") or {}
+        lines.extend(["", "## iOS Analysis", ""])
+        lines.append(f"- **Status:** {_section_display_status(ios_analysis)}")
+        if ios_analysis:
+            if ios_analysis.get("package_type"):
+                lines.append(f"- **Package Type:** {ios_analysis['package_type']}")
+            framework = ios_analysis.get("framework") or {}
+            if isinstance(framework, Mapping):
+                lines.append(f"- **Framework:** {framework.get('name') or 'unknown'}")
+                if framework.get("confidence") is not None:
+                    lines.append(f"- **Framework Confidence:** {framework.get('confidence')}")
+            manifest = ios_analysis.get("manifest") or {}
+            if isinstance(manifest, Mapping):
+                if manifest.get("bundle_identifier"):
+                    lines.append(f"- **Bundle Identifier:** {manifest['bundle_identifier']}")
+                if manifest.get("executable"):
+                    lines.append(f"- **Executable:** {manifest['executable']}")
+            resources = ios_analysis.get("resources") or {}
+            if isinstance(resources, Mapping):
+                lines.append(
+                    "- **Resources:** "
+                    f"storyboards={_safe_count(resources.get('storyboard_count'))} "
+                    f"xibs={_safe_count(resources.get('xib_count'))} "
+                    f"asset_catalogs={_safe_count(resources.get('asset_catalog_count'))}"
+                )
+            native = ios_analysis.get("native_binaries") or {}
+            if isinstance(native, Mapping):
+                lines.append(f"- **Native Binaries:** {_safe_count(native.get('count'))}")
+                lines.append(f"- **Encrypted:** {_bool_word(native.get('encrypted'))}")
+            strategy = ios_analysis.get("strategy") or {}
+            if isinstance(strategy, Mapping):
+                lines.append(f"- **Strategy:** {strategy.get('name') or strategy.get('key') or 'unknown'}")
+
         protocol_analysis = report.get("protocol_analysis") or {}
+        lines.extend(["", "## Protocol Analysis", ""])
+        lines.append(f"- **Status:** {_section_display_status(protocol_analysis)}")
         if protocol_analysis:
-            lines.extend(["", "## Protocol Analysis", ""])
-            lines.append(f"- **Status:** {protocol_analysis.get('status') or 'unknown'}")
             inference = protocol_analysis.get("inference") or {}
             if isinstance(inference, Mapping):
                 if inference.get("primary_protocol"):
@@ -395,9 +476,9 @@ class ReportBuilder:
                         lines.append(f"  - {item.get('kind')}: {item.get('endpoint')}")
 
         source_reconstruction = report.get("source_reconstruction") or {}
+        lines.extend(["", "## Source Reconstruction", ""])
+        lines.append(f"- **Status:** {_section_display_status(source_reconstruction)}")
         if source_reconstruction:
-            lines.extend(["", "## Source Reconstruction", ""])
-            lines.append(f"- **Status:** {source_reconstruction.get('status') or 'unknown'}")
             if source_reconstruction.get("project_dir"):
                 lines.append(f"- **Project Dir:** {source_reconstruction['project_dir']}")
             if source_reconstruction.get("language"):
@@ -414,6 +495,40 @@ class ReportBuilder:
                 lines.append(f"- **Verification Status:** {source_reconstruction['verification_status']}")
             if source_reconstruction.get("verification_score") is not None:
                 lines.append(f"- **Verification Score:** {source_reconstruction['verification_score']}")
+            if source_reconstruction.get("runtime_validation_status"):
+                lines.append(
+                    f"- **Runtime Validation Status:** {source_reconstruction['runtime_validation_status']}"
+                )
+            runtime_confidence = source_reconstruction.get("runtime_validation_confidence")
+            if isinstance(runtime_confidence, Mapping):
+                runtime_confidence = runtime_confidence.get("score")
+            if runtime_confidence is not None:
+                lines.append(f"- **Runtime Validation Confidence:** {runtime_confidence}")
+            if source_reconstruction.get("runtime_validation_artifact"):
+                lines.append(
+                    f"- **Runtime Validation Artifact:** {source_reconstruction['runtime_validation_artifact']}"
+                )
+            if source_reconstruction.get("behavior_validation_status"):
+                lines.append(
+                    f"- **Behavior Validation Status:** {source_reconstruction['behavior_validation_status']}"
+                )
+            behavior_summary = source_reconstruction.get("behavior_validation_summary")
+            if isinstance(behavior_summary, Mapping):
+                for label, key in (
+                    ("Behavior Comparisons", "comparison_count"),
+                    ("Behavior Matches", "matched_comparison_count"),
+                    ("Behavior Mismatches", "mismatched_comparison_count"),
+                ):
+                    if behavior_summary.get(key) is not None:
+                        lines.append(f"- **{label}:** {behavior_summary[key]}")
+            if source_reconstruction.get("behavior_validation_artifact"):
+                lines.append(
+                    f"- **Behavior Validation Artifact:** {source_reconstruction['behavior_validation_artifact']}"
+                )
+            if source_reconstruction.get("behavior_equivalent") is not None:
+                lines.append(
+                    f"- **Behavior Equivalent:** {_bool_word(source_reconstruction.get('behavior_equivalent'))}"
+                )
 
         behavior_graph = report.get("behavior_graph") or {}
         if isinstance(behavior_graph, Mapping) and behavior_graph:
@@ -452,9 +567,9 @@ class ReportBuilder:
                     )
 
         gui_analysis = report.get("gui_analysis") or {}
+        lines.extend(["", "## GUI Analysis", ""])
+        lines.append(f"- **Status:** {_section_display_status(gui_analysis)}")
         if gui_analysis:
-            lines.extend(["", "## GUI Analysis", ""])
-            lines.append(f"- **Status:** {gui_analysis.get('status') or 'unknown'}")
             if gui_analysis.get("platform"):
                 lines.append(f"- **Platform:** {gui_analysis['platform']}")
             if gui_analysis.get("framework"):
@@ -1477,6 +1592,35 @@ def _android_analysis(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]
     return {}
 
 
+def _ios_analysis(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    for trace in reversed(tool_trace):
+        tool_name = str(trace.get("tool_name") or trace.get("tool") or "")
+        if tool_name not in {"ios_analyze", "ipa_analyze"}:
+            continue
+        payload = _tool_payload(trace)
+        if not isinstance(payload, Mapping):
+            return {"status": _tool_status(trace)}
+        result = dict(payload)
+        result.setdefault("status", _tool_status(trace))
+        for field in (
+            "archive",
+            "framework",
+            "manifest",
+            "resources",
+            "native_binaries",
+            "strategy",
+            "decompilation",
+            "capability_boundary",
+            "semantic_ir_fragment",
+        ):
+            if field in result and not isinstance(result.get(field), Mapping):
+                result[field] = {}
+        if not isinstance(result.get("warnings"), list):
+            result["warnings"] = []
+        return result
+    return {}
+
+
 def _protocol_analysis(tool_trace: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     for trace in reversed(tool_trace):
         tool_name = str(trace.get("tool_name") or trace.get("tool") or "")
@@ -1571,6 +1715,15 @@ def _source_reconstruction(
         "semantic_ir": semantic_fragment or {},
         "verification_status": reconstruction_verification.get("status"),
         "verification_score": reconstruction_verification.get("score"),
+        "runtime_validation_status": reconstruction.get("runtime_validation_status"),
+        "runtime_validation_confidence": reconstruction.get("runtime_validation_confidence"),
+        "runtime_validation_artifact": reconstruction.get("runtime_validation_artifact"),
+        "runtime_validation_provenance": reconstruction.get("runtime_validation_provenance") or {},
+        "behavior_validation_status": reconstruction.get("behavior_validation_status"),
+        "behavior_validation_summary": reconstruction.get("behavior_validation_summary") or {},
+        "behavior_validation_artifact": reconstruction.get("behavior_validation_artifact"),
+        "behavior_validation_provenance": reconstruction.get("behavior_validation_provenance") or {},
+        "behavior_equivalent": reconstruction.get("behavior_equivalent") is True,
         "artifacts": reconstruction.get("artifacts") or [],
         "stub_only": reconstruction.get("stub_only"),
     }
@@ -1687,6 +1840,21 @@ def _reconstruction(session: Any, tool_trace: Sequence[Mapping[str, Any]]) -> Di
             "prioritized_modules": payload.get("prioritized_modules") or [],
             "high_value_functions": payload.get("high_value_functions") or [],
             "dynamic_evidence_count": payload.get("dynamic_evidence_count"),
+            "runtime_validation": payload.get("runtime_validation") or {},
+            "runtime_validation_status": payload.get("runtime_validation_status"),
+            "runtime_validation_confidence": payload.get("runtime_validation_confidence"),
+            "runtime_validation_artifact": payload.get("runtime_validation_artifact"),
+            "runtime_validation_provenance": payload.get("runtime_validation_provenance") or {},
+            "behavior_validation": payload.get("behavior_validation") or {},
+            "behavior_validation_status": payload.get("behavior_validation_status"),
+            "behavior_validation_summary": (
+                (payload.get("behavior_validation") or {}).get("summary")
+                if isinstance(payload.get("behavior_validation"), Mapping)
+                else {}
+            ) or {},
+            "behavior_validation_artifact": payload.get("behavior_validation_artifact"),
+            "behavior_validation_provenance": payload.get("behavior_validation_provenance") or {},
+            "behavior_equivalent": _source_behavior_equivalent(payload.get("behavior_validation")),
             "reconstruction_plan": payload.get("reconstruction_plan") or {},
             "task_count": payload.get("task_count"),
             "next_task": payload.get("next_task"),
@@ -1700,6 +1868,26 @@ def _reconstruction(session: Any, tool_trace: Sequence[Mapping[str, Any]]) -> Di
             result["next_task"] = session_progress.get("next_task")
         return result
     return session_progress
+
+
+def _source_behavior_equivalent(value: Any) -> bool:
+    """Trust only a passed differential validator backed by real subprocesses."""
+
+    if not isinstance(value, Mapping):
+        return False
+    if value.get("status") != "passed" or value.get("behavior_equivalent") is not True:
+        return False
+    provenance = value.get("provenance")
+    if not isinstance(provenance, Mapping):
+        return False
+    validator = provenance.get("validator")
+    if not isinstance(validator, Mapping):
+        return False
+    return (
+        validator.get("real_subprocess") is True
+        and validator.get("runner_injected") is False
+        and validator.get("shell") is False
+    )
 
 
 def _reconstruction_session_progress(session: Any) -> Dict[str, Any]:
@@ -2638,6 +2826,85 @@ def _extract_items(source: Any, key: str) -> list[Any]:
 
 def _status_value(status: Any) -> Any:
     return getattr(status, "value", status)
+
+
+def _normalized_display_status(status: Any) -> str:
+    value = str(_status_value(status) or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if value in {"failed", "failure", "error", "invalid"}:
+        return "failed"
+    if value in {"unavailable", "unsupported", "not_available", "not_run", "skipped"}:
+        return "unavailable"
+    if value in {"partial", "degraded", "mock", "mocked", "dry_run", "simulated", "planned", "unknown"}:
+        return "partial"
+    if value in {"ok", "success", "succeeded", "complete", "completed", "available", "ready"}:
+        return "ok"
+    return value or "unavailable"
+
+
+def _section_display_status(section: Any) -> str:
+    if not isinstance(section, Mapping) or not section:
+        return "unavailable"
+    explicit = section.get("status")
+    if explicit is not None and str(_status_value(explicit) or "").strip():
+        return _normalized_display_status(explicit)
+    return "ok"
+
+
+def _capability_audit_display_status(audit: Any) -> str:
+    if not isinstance(audit, Mapping) or not audit:
+        return "unavailable"
+
+    summary = audit.get("summary") if isinstance(audit.get("summary"), Mapping) else {}
+    counts = summary.get("status_counts") if isinstance(summary.get("status_counts"), Mapping) else {}
+    observed: list[str] = []
+    for status, count in counts.items():
+        try:
+            present = int(count) > 0
+        except (TypeError, ValueError):
+            present = bool(count)
+        if present:
+            observed.append(_normalized_display_status(status))
+
+    records = audit.get("records") if isinstance(audit.get("records"), list) else []
+    if not observed:
+        observed.extend(
+            _normalized_display_status(item.get("status"))
+            for item in records
+            if isinstance(item, Mapping) and item.get("status") is not None
+        )
+
+    if "failed" in observed:
+        return "failed"
+    if any(status in {"partial", "unavailable"} for status in observed):
+        return "partial"
+    if observed or records or _safe_count(audit.get("record_count")) > 0:
+        return "ok"
+
+    explicit = audit.get("status")
+    if explicit is not None and str(_status_value(explicit) or "").strip():
+        return _normalized_display_status(explicit)
+    return "unavailable"
+
+
+def _platform_core_display_status(platform_core: Any) -> str:
+    if not isinstance(platform_core, Mapping) or not platform_core:
+        return "unavailable"
+
+    child_statuses: list[str] = []
+    for name in ("semantic_ir", "evidence_graph", "capability_registry"):
+        child_statuses.append(_section_display_status(platform_core.get(name)))
+    child_statuses.append(_capability_audit_display_status(platform_core.get("capability_audit")))
+
+    if "failed" in child_statuses:
+        return "failed"
+    if child_statuses and all(status == "unavailable" for status in child_statuses):
+        explicit = platform_core.get("status")
+        if explicit is not None and str(_status_value(explicit) or "").strip():
+            return _normalized_display_status(explicit)
+        return "unavailable"
+    if any(status in {"partial", "unavailable"} for status in child_statuses):
+        return "partial"
+    return "ok"
 
 
 def _severity(value: Any) -> str:

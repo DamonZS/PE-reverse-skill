@@ -13,7 +13,7 @@ from ctypes import wintypes
 from hashlib import sha256
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Iterable, Mapping
 
 from .executor import ToolResult
@@ -197,7 +197,7 @@ def memory_diff(
 def memory_address_map(
     path: str | Path,
     snapshot: str | Path | Mapping[str, Any],
-    addresses: Iterable[int | str],
+    addresses: Iterable[int | str | Mapping[str, Any]],
     out_dir: str | Path,
     artifact_name: str | None = None,
 ) -> ToolResult:
@@ -432,18 +432,125 @@ def _normalise_module(module: Mapping[str, Any]) -> dict[str, Any]:
     return {"name": str(module.get("name") or "unknown"), "path": module.get("path"), "base_address": _hex(base), "base_address_int": base, "size": size}
 
 
-def _map_address(value: int | str, modules: list[dict[str, Any]], sections: list[dict[str, Any]], pe_path: str | Path) -> dict[str, Any]:
-    address = _parse_address(value)
+def resolve_module_rva(
+    modules: Iterable[Mapping[str, Any]],
+    module: str,
+    rva: int | str,
+) -> dict[str, Any]:
+    """Resolve an exact module name or path plus RVA to a process address.
+
+    Name and path matching is case-insensitive. A basename that matches more
+    than one loaded image is rejected instead of selecting an arbitrary module.
+    """
+
+    selector = str(module or "").strip()
+    if not selector:
+        raise ValueError("module selector must be non-empty")
+    parsed_rva = _parse_address(rva)
+    if parsed_rva is None or parsed_rva < 0:
+        raise ValueError("module RVA must be a non-negative integer")
+
+    normalized: list[dict[str, Any]] = []
+    for item in modules:
+        if not isinstance(item, Mapping):
+            continue
+        if "base_address_int" in item:
+            normalized.append(dict(item))
+        else:
+            normalized.append(_normalise_module(item))
+
+    selector_name = selector.casefold()
+    selector_path = _canonical_module_path(selector)
+    matches = []
+    for item in normalized:
+        name_matches = str(item.get("name") or "").casefold() == selector_name
+        path = item.get("path")
+        path_matches = bool(path) and _canonical_module_path(str(path)) == selector_path
+        if name_matches or path_matches:
+            matches.append(item)
+    if not matches:
+        raise ValueError(f"loaded module was not found: {selector}")
+    if len(matches) > 1:
+        raise ValueError(
+            f"module selector is ambiguous: {selector} ({len(matches)} matches)"
+        )
+
+    selected = matches[0]
+    size = selected.get("size")
+    if not isinstance(size, int) or size < 0:
+        raise ValueError("matched module has an invalid size")
+    if parsed_rva >= size:
+        raise ValueError(
+            f"module RVA {_hex(parsed_rva)} is outside image size {_hex(size)}"
+        )
+    base = _parse_address(selected.get("base_address_int", selected.get("base_address")))
+    if base is None or base < 0:
+        raise ValueError("matched module has an invalid base address")
+    address = base + parsed_rva
+    return {
+        "status": "ok",
+        "module": _public_module(
+            {
+                **selected,
+                "base_address": _hex(base),
+                "base_address_int": base,
+            }
+        ),
+        "module_selector": selector,
+        "base_address": _hex(base),
+        "base_address_int": base,
+        "rva": _hex(parsed_rva),
+        "rva_int": parsed_rva,
+        "address": _hex(address),
+        "address_int": address,
+    }
+
+
+def _map_address(
+    value: int | str | Mapping[str, Any],
+    modules: list[dict[str, Any]],
+    sections: list[dict[str, Any]],
+    pe_path: str | Path,
+) -> dict[str, Any]:
+    requested: dict[str, Any] | None = None
+    if isinstance(value, Mapping):
+        requested = {
+            "module": value.get("module", value.get("module_name", value.get("module_path"))),
+            "rva": value.get("rva"),
+        }
+        try:
+            resolution = resolve_module_rva(
+                modules,
+                str(requested["module"] or ""),
+                requested["rva"],
+            )
+            address = int(resolution["address_int"])
+        except (TypeError, ValueError) as exc:
+            return {
+                "address": None,
+                "requested": requested,
+                "module": None,
+                "rva": None,
+                "section": None,
+                "file_offset": None,
+                "error": str(exc),
+            }
+    else:
+        address = _parse_address(value)
     original = str(value) if address is None else _hex(address)
     if address is None:
         return {"address": original, "module": None, "rva": None, "section": None, "file_offset": None, "error": "invalid address"}
     module = _module_for_address(address, modules)
     if not module:
-        return {"address": _hex(address), "module": None, "rva": None, "section": None, "file_offset": None, "error": None}
+        return {"address": _hex(address), "requested": requested, "module": None, "rva": None, "section": None, "file_offset": None, "error": None}
     rva = address - module["base_address_int"]
     same_image = _same_image_path(module.get("path"), pe_path)
     section = next((item for item in sections if item["virtual_address"] <= rva < item["virtual_address"] + max(item["virtual_size"], item["raw_size"])), None) if same_image else None
-    return {"address": _hex(address), "module": _public_module(module), "rva": _hex(rva), "section": section["name"] if section else None, "file_offset": section["raw_offset"] + (rva - section["virtual_address"]) if section and rva < section["virtual_address"] + section["raw_size"] else None, "error": None}
+    return {"address": _hex(address), "requested": requested, "module": _public_module(module), "rva": _hex(rva), "section": section["name"] if section else None, "file_offset": section["raw_offset"] + (rva - section["virtual_address"]) if section and rva < section["virtual_address"] + section["raw_size"] else None, "error": None}
+
+
+def _canonical_module_path(value: str) -> str:
+    return str(PureWindowsPath(str(value).strip())).replace("\\", "/").casefold()
 
 
 def _same_image_path(module_path: Any, pe_path: str | Path) -> bool:

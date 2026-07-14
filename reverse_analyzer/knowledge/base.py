@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from reverse_analyzer.core.models import utc_now
+from reverse_analyzer.knowledge.capability_outcomes import CapabilityOutcomeKnowledgeMixin
 from reverse_analyzer.knowledge.strategy_stats import (
     default_strategy_store,
+    normalize_strategy_status as _normalize_strategy_status_impl,
     record_strategy_result as _record_strategy_result_impl,
     recommend_strategy as _recommend_strategy_impl,
 )
@@ -17,7 +20,7 @@ from reverse_analyzer.knowledge.strategy_stats import (
 def _int(value: Any, default: int = 0) -> int:
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return default
 
 
@@ -28,7 +31,7 @@ def _float(value: Any, default: float = 0.0) -> float:
         return default
 
 
-class KnowledgeBase:
+class KnowledgeBase(CapabilityOutcomeKnowledgeMixin):
     """Read/write helper for evolution JSON databases.
 
     Files managed under ``root``:
@@ -36,6 +39,7 @@ class KnowledgeBase:
     - ``detection_db.json``: detection features and packer metadata.
     - ``dynamic_profiles.json``: Frida profile outcome statistics.
     - ``gui_strategies.json``: GUI reconstruction strategy outcome statistics.
+    - ``patch_strategies.json``: patch lifecycle strategy outcome statistics.
     - ``sessions.json``: historical session summaries.
     """
 
@@ -411,8 +415,225 @@ class KnowledgeBase:
     def save_gui_strategies(self, data: Dict[str, Any]) -> None:
         self._write_json(self.gui_strategies_path, data)
 
+    def load_patch_strategies(self) -> Dict[str, Any]:
+        data = self._read_json(
+            self.patch_strategies_path,
+            default={"version": 1, "strategies": {}},
+        )
+        if not isinstance(data, dict):
+            return {"version": 1, "strategies": {}}
+        data.setdefault("version", 1)
+        if not isinstance(data.get("strategies"), dict):
+            data["strategies"] = {}
+        return data
 
-    def _load_strategy_namespace(self, namespace):
+    def save_patch_strategies(self, data: Dict[str, Any]) -> None:
+        self._write_json(self.patch_strategies_path, data)
+
+    def record_patch_strategy_result(
+        self,
+        strategy: str,
+        *,
+        target_format: str = "pe",
+        status: str = "unknown",
+        verification_status: Optional[str] = None,
+        apply_status: Optional[str] = None,
+        rollback_status: Optional[str] = None,
+        operation_count: int = 0,
+        risk_counts: Optional[Dict[str, Any]] = None,
+        sample_id: Optional[str] = None,
+        backend: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Accumulate verified patch lifecycle outcomes for one strategy."""
+
+        format_name = str(target_format or "unknown").strip().lower() or "unknown"
+        strategy_name = str(strategy or "inline_patch").strip().lower() or "inline_patch"
+        key = strategy_name if strategy_name.startswith(f"{format_name}:") else f"{format_name}:{strategy_name}"
+        stored_strategy = strategy_name.split(":", 1)[-1] if strategy_name.startswith(f"{format_name}:") else strategy_name
+
+        data = self.load_patch_strategies()
+        strategies = data.setdefault("strategies", {})
+        record = dict(strategies.get(key, {}))
+        record.setdefault("target_format", format_name)
+        record.setdefault("strategy", stored_strategy)
+        record.setdefault("runs", 0)
+        record.setdefault("successes", 0)
+        record.setdefault("failures", 0)
+        record.setdefault("unavailable", 0)
+        record.setdefault("verifications_attempted", 0)
+        record.setdefault("verifications_passed", 0)
+        record.setdefault("applies_attempted", 0)
+        record.setdefault("applies_succeeded", 0)
+        record.setdefault("rollbacks_attempted", 0)
+        record.setdefault("rollbacks_succeeded", 0)
+        record.setdefault("total_operation_count", 0)
+        record.setdefault("risk_counts", {})
+        record.setdefault("backends", {})
+        record.setdefault("samples", [])
+
+        status_value = str(status or "unknown").strip().lower() or "unknown"
+        record["runs"] = _int(record.get("runs")) + 1
+        if status_value in {"ok", "success", "succeeded", "passed", "planned"}:
+            record["successes"] = _int(record.get("successes")) + 1
+        elif status_value in {"unavailable", "unsupported", "skipped"}:
+            record["unavailable"] = _int(record.get("unavailable")) + 1
+        elif status_value in {"failed", "failure", "error"}:
+            record["failures"] = _int(record.get("failures")) + 1
+
+        self._record_patch_stage(record, "verification", verification_status)
+        self._record_patch_stage(record, "apply", apply_status)
+        self._record_patch_stage(record, "rollback", rollback_status)
+        record["total_operation_count"] = _int(record.get("total_operation_count")) + max(
+            0,
+            _int(operation_count),
+        )
+
+        aggregate_risks = dict(record.get("risk_counts") or {})
+        for risk, count in (risk_counts or {}).items():
+            risk_name = str(risk or "unknown").strip().lower() or "unknown"
+            aggregate_risks[risk_name] = _int(aggregate_risks.get(risk_name)) + max(0, _int(count))
+        record["risk_counts"] = aggregate_risks
+
+        if backend:
+            backend_name = str(backend).strip().lower()
+            if backend_name:
+                backends = dict(record.get("backends") or {})
+                backends[backend_name] = _int(backends.get(backend_name)) + 1
+                record["backends"] = backends
+
+        samples = [item for item in (record.get("samples") or []) if item != sample_id]
+        if sample_id:
+            samples.append(sample_id)
+        record["samples"] = samples[-25:]
+
+        runs = max(1, _int(record.get("runs")))
+        verification_attempts = _int(record.get("verifications_attempted"))
+        apply_attempts = _int(record.get("applies_attempted"))
+        rollback_attempts = _int(record.get("rollbacks_attempted"))
+        record["success_rate"] = round(_int(record.get("successes")) / runs, 3)
+        record["verify_rate"] = round(
+            _int(record.get("verifications_passed")) / verification_attempts,
+            3,
+        ) if verification_attempts else 0.0
+        record["apply_rate"] = round(
+            _int(record.get("applies_succeeded")) / apply_attempts,
+            3,
+        ) if apply_attempts else 0.0
+        record["rollback_rate"] = round(
+            _int(record.get("rollbacks_succeeded")) / rollback_attempts,
+            3,
+        ) if rollback_attempts else 0.0
+        record["avg_operation_count"] = round(_int(record.get("total_operation_count")) / runs, 3)
+        record["last_status"] = status_value
+        record["last_updated"] = utc_now()
+        strategies[key] = record
+        data["last_updated"] = record["last_updated"]
+        self.save_patch_strategies(data)
+        return record
+
+    def recommend_patch_strategy(
+        self,
+        *,
+        target_format: Optional[str] = None,
+        default: str = "inline_patch",
+    ) -> Dict[str, Any]:
+        """Return the strongest learned patch strategy for a target format."""
+
+        requested_format = str(target_format or "").strip().lower()
+        candidates: list[Dict[str, Any]] = []
+        for strategy_key, record in (self.load_patch_strategies().get("strategies") or {}).items():
+            if not isinstance(record, dict):
+                continue
+            record_format = str(
+                record.get("target_format") or str(strategy_key).split(":", 1)[0] or "unknown"
+            ).lower()
+            if requested_format and record_format != requested_format:
+                continue
+            runs = max(1, _int(record.get("runs")))
+            risk_penalty = self._patch_risk_penalty(record.get("risk_counts"), runs=runs)
+            score = (
+                _float(record.get("success_rate")) * 10.0
+                + _float(record.get("verify_rate")) * 2.0
+                + _float(record.get("apply_rate")) * 3.0
+                + _float(record.get("rollback_rate")) * 1.5
+                + min(2.0, runs * 0.1)
+                - risk_penalty
+                - min(1.0, _float(record.get("avg_operation_count")) * 0.01)
+            )
+            candidate = dict(record)
+            candidate["target_format"] = record_format
+            candidate["strategy"] = str(record.get("strategy") or str(strategy_key).split(":", 1)[-1])
+            candidate["score"] = round(score, 3)
+            candidates.append(candidate)
+
+        if not candidates:
+            return {
+                "target_format": requested_format or None,
+                "strategy": default,
+                "score": 0.0,
+                "reason": "no patch strategy history",
+            }
+        candidates.sort(
+            key=lambda item: (
+                -_float(item.get("score")),
+                -_int(item.get("runs")),
+                str(item.get("target_format") or ""),
+                str(item.get("strategy") or ""),
+            )
+        )
+        best = candidates[0]
+        return {
+            "target_format": best.get("target_format"),
+            "strategy": best.get("strategy"),
+            "score": best.get("score"),
+            "runs": best.get("runs"),
+            "success_rate": best.get("success_rate"),
+            "verify_rate": best.get("verify_rate"),
+            "apply_rate": best.get("apply_rate"),
+            "rollback_rate": best.get("rollback_rate"),
+            "avg_operation_count": best.get("avg_operation_count"),
+            "risk_counts": dict(best.get("risk_counts") or {}),
+        }
+
+    @staticmethod
+    def _record_patch_stage(record: Dict[str, Any], stage: str, status: Optional[str]) -> None:
+        status_value = str(status or "").strip().lower()
+        if not status_value or status_value in {"unknown", "pending", "not_run", "not_attempted"}:
+            return
+        attempted_key = {
+            "verification": "verifications_attempted",
+            "apply": "applies_attempted",
+            "rollback": "rollbacks_attempted",
+        }[stage]
+        succeeded_key = {
+            "verification": "verifications_passed",
+            "apply": "applies_succeeded",
+            "rollback": "rollbacks_succeeded",
+        }[stage]
+        record[attempted_key] = _int(record.get(attempted_key)) + 1
+        if status_value in {"ok", "success", "succeeded", "passed", "restored"}:
+            record[succeeded_key] = _int(record.get(succeeded_key)) + 1
+
+    @staticmethod
+    def _patch_risk_penalty(risk_counts: Any, *, runs: int) -> float:
+        if not isinstance(risk_counts, dict):
+            return 0.0
+        weights = {
+            "critical": 4.0,
+            "high": 2.0,
+            "medium": 0.5,
+            "warning": 0.25,
+            "low": 0.1,
+            "info": 0.0,
+        }
+        weighted = sum(
+            weights.get(str(risk).lower(), 0.25) * max(0, _int(count))
+            for risk, count in risk_counts.items()
+        )
+        return min(6.0, weighted / max(1, runs))
+
+
+    def _load_strategy_namespace(self, namespace: str) -> Dict[str, Any]:
         path = self._strategy_namespace_paths[namespace]
         if not path.exists():
             return default_strategy_store()
@@ -423,46 +644,186 @@ class KnowledgeBase:
             return default_strategy_store()
         if not isinstance(data, dict):
             return default_strategy_store()
-        data.setdefault("strategies", {})
+        if not isinstance(data.get("strategies"), dict):
+            data["strategies"] = {}
         return data
 
-    def _save_strategy_namespace(self, namespace, data):
+    def _save_strategy_namespace(self, namespace: str, data: Dict[str, Any]) -> None:
         path = self._strategy_namespace_paths[namespace]
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8") as handle:
-            json.dump(data, handle, indent=2, ensure_ascii=False)
+            json.dump(data, handle, indent=2, ensure_ascii=False, sort_keys=True)
             handle.write("\n")
 
     def record_strategy_result(
         self,
-        namespace,
-        key,
-        status,
-        metrics=None,
-        sample_id=None,
-        backend=None,
-    ):
-        if namespace not in self._strategy_namespace_paths:
+        namespace: str,
+        key: str,
+        status: str,
+        metrics: Optional[Dict[str, Any]] = None,
+        sample_id: Optional[str] = None,
+        backend: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        namespace_name = str(namespace or "").strip().lower()
+        if namespace_name not in self._strategy_namespace_paths:
             raise KeyError(f"Unknown strategy namespace: {namespace}")
+        strategy_key = str(key or "").strip()
+        if not strategy_key:
+            raise ValueError("Strategy key must not be empty")
 
-        data = self._load_strategy_namespace(namespace)
+        data = self._load_strategy_namespace(namespace_name)
+        self._normalize_strategy_bucket(data, strategy_key)
         result = _record_strategy_result_impl(
             data,
-            key=key,
-            status=status,
-            metrics=metrics or {},
-            sample_id=sample_id,
-            backend=backend,
+            key=strategy_key,
+            status=self._normalize_strategy_status(status),
+            metrics=self._normalize_strategy_metrics(metrics),
+            sample_id=str(sample_id) if sample_id not in (None, "") else None,
+            backend=str(backend).strip().lower() if backend not in (None, "") else None,
         )
-        self._save_strategy_namespace(namespace, data)
-        return result
+        timestamp = utc_now()
+        result["last_updated"] = timestamp
+        data["last_updated"] = timestamp
+        self._save_strategy_namespace(namespace_name, data)
+        return dict(result)
 
-    def recommend_strategy(self, namespace):
-        if namespace not in self._strategy_namespace_paths:
+    def recommend_strategy(self, namespace: str) -> Optional[Dict[str, Any]]:
+        """Return the best generic strategy with deterministic tie-breaking."""
+
+        namespace_name = str(namespace or "").strip().lower()
+        if namespace_name not in self._strategy_namespace_paths:
             raise KeyError(f"Unknown strategy namespace: {namespace}")
 
-        data = self._load_strategy_namespace(namespace)
-        return _recommend_strategy_impl(data)
+        data = self._load_strategy_namespace(namespace_name)
+        strategies = data.get("strategies") if isinstance(data, dict) else {}
+        if not isinstance(strategies, dict):
+            return None
+        candidates: list[Dict[str, Any]] = []
+        for key in sorted(list(strategies), key=str):
+            self._normalize_strategy_bucket(data, key)
+            bucket = strategies.get(key)
+            if not isinstance(bucket, dict):
+                continue
+            candidate = _recommend_strategy_impl({"strategies": {str(key): bucket}})
+            if not isinstance(candidate, dict):
+                continue
+            score = _float(candidate.get("score"), float("-inf"))
+            if not math.isfinite(score):
+                continue
+            candidate["key"] = str(key)
+            candidates.append(candidate)
+        if not candidates:
+            return None
+        candidates.sort(
+            key=lambda item: (
+                -_float(item.get("score")),
+                -_int(item.get("runs")),
+                str(item.get("key") or ""),
+            )
+        )
+        return candidates[0]
+
+    def record_engine_strategy_result(
+        self,
+        key: str,
+        *,
+        status: str = "unknown",
+        metrics: Optional[Dict[str, Any]] = None,
+        sample_id: Optional[str] = None,
+        backend: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return self.record_strategy_result(
+            "engine", key, status, metrics=metrics, sample_id=sample_id, backend=backend
+        )
+
+    def recommend_engine_strategy(self) -> Optional[Dict[str, Any]]:
+        return self.recommend_strategy("engine")
+
+    def record_protocol_format_result(
+        self,
+        key: str,
+        *,
+        status: str = "unknown",
+        metrics: Optional[Dict[str, Any]] = None,
+        sample_id: Optional[str] = None,
+        backend: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return self.record_strategy_result(
+            "protocol", key, status, metrics=metrics, sample_id=sample_id, backend=backend
+        )
+
+    def recommend_protocol_format(self) -> Optional[Dict[str, Any]]:
+        return self.recommend_strategy("protocol")
+
+    def record_source_restoration_result(
+        self,
+        key: str,
+        *,
+        status: str = "unknown",
+        metrics: Optional[Dict[str, Any]] = None,
+        sample_id: Optional[str] = None,
+        backend: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return self.record_strategy_result(
+            "source", key, status, metrics=metrics, sample_id=sample_id, backend=backend
+        )
+
+    def recommend_source_restoration(self) -> Optional[Dict[str, Any]]:
+        return self.recommend_strategy("source")
+
+    @staticmethod
+    def _normalize_strategy_status(status: Any) -> str:
+        return _normalize_strategy_status_impl(status)
+
+    @staticmethod
+    def _normalize_strategy_metrics(metrics: Any) -> Dict[str, float]:
+        if not isinstance(metrics, dict):
+            return {}
+        normalized: Dict[str, float] = {}
+        for raw_name, raw_value in metrics.items():
+            name = str(raw_name or "").strip()
+            if not name or isinstance(raw_value, bool):
+                continue
+            try:
+                value = float(raw_value)
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(value):
+                normalized[name] = value
+        return normalized
+
+    @staticmethod
+    def _normalize_strategy_bucket(data: Dict[str, Any], key: str) -> None:
+        strategies = data.setdefault("strategies", {})
+        existing = strategies.get(key)
+        if existing is None:
+            return
+        if not isinstance(existing, dict):
+            strategies.pop(key, None)
+            return
+        for counter in ("runs", "successes", "failures", "unavailable"):
+            existing[counter] = max(0, _int(existing.get(counter)))
+        success_rate = _float(existing.get("success_rate"), float("nan"))
+        if not math.isfinite(success_rate):
+            success_rate = (
+                existing["successes"] / existing["runs"]
+                if existing["runs"]
+                else 0.0
+            )
+        existing["success_rate"] = min(1.0, max(0.0, success_rate))
+        if not isinstance(existing.get("samples"), list):
+            existing["samples"] = []
+        if not isinstance(existing.get("backends"), dict):
+            existing["backends"] = {}
+        else:
+            existing["backends"] = {
+                str(name): max(0, _int(count))
+                for name, count in existing["backends"].items()
+            }
+        for field, value in list(existing.items()):
+            if field.startswith(("total_", "avg_")):
+                number = _float(value)
+                existing[field] = number if math.isfinite(number) else 0.0
 
     def _ensure_files(self) -> None:
         if not self.knowledge_path.exists():

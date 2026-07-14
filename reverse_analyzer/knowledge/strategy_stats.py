@@ -28,6 +28,42 @@ def _metric_sign(metric_name: str) -> int:
     return 1
 
 
+def normalize_strategy_status(status: Any) -> str:
+    """Collapse provider statuses into the counters used for recommendations."""
+
+    normalized = "_".join(
+        str(status or "unknown").strip().lower().replace("-", "_").split()
+    )
+    if normalized in {
+        "ok",
+        "success",
+        "succeeded",
+        "passed",
+        "completed",
+        "complete",
+    }:
+        return "ok"
+    if normalized in {
+        "unavailable",
+        "unsupported",
+        "skipped",
+        "not_run",
+        "not_attempted",
+        "not_executed",
+        "mock",
+        "mocked",
+        "dry_run",
+        "dryrun",
+        "simulated",
+        "simulation",
+        "planned",
+        "preview",
+        "stubbed",
+    }:
+        return "unavailable"
+    return "failed"
+
+
 def record_strategy_result(
     store: Dict[str, Any],
     key: str,
@@ -51,11 +87,11 @@ def record_strategy_result(
     )
 
     bucket["runs"] += 1
-    normalized_status = (status or "").lower()
+    normalized_status = normalize_strategy_status(status)
 
-    if normalized_status in ("ok", "success", "passed"):
+    if normalized_status == "ok":
         bucket["successes"] += 1
-    elif normalized_status in ("unavailable", "unsupported", "skipped"):
+    elif normalized_status == "unavailable":
         bucket["unavailable"] += 1
     else:
         bucket["failures"] += 1

@@ -1,0 +1,3 @@
+C:/Users/Damon/AppData/Local/Temp/tmpgamli3qy/copy/proxy/build/CMakeFiles/dll_proxy.dir
+C:/Users/Damon/AppData/Local/Temp/tmpgamli3qy/copy/proxy/build/CMakeFiles/edit_cache.dir
+C:/Users/Damon/AppData/Local/Temp/tmpgamli3qy/copy/proxy/build/CMakeFiles/rebuild_cache.dir

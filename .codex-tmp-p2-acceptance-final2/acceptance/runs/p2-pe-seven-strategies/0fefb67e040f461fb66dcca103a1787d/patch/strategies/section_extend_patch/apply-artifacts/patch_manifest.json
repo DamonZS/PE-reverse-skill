@@ -1,0 +1,49 @@
+{
+  "dry_run": false,
+  "operations": [
+    {
+      "expected_hex": "90909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090000000000000000000000000",
+      "file_offset": "0x20A",
+      "file_offset_value": 522,
+      "id": "section-extend-payload",
+      "kind": "replace_bytes",
+      "replacement_hex": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "rva": null,
+      "rva_value": null,
+      "size": 514
+    },
+    {
+      "expected_hex": "0a000000",
+      "file_offset": "0x180",
+      "file_offset_value": 384,
+      "id": "section-extend-virtual-size",
+      "kind": "replace_bytes",
+      "replacement_hex": "0c020000",
+      "rva": "0x180",
+      "rva_value": 384,
+      "size": 4
+    },
+    {
+      "expected_hex": "00020000",
+      "file_offset": "0x188",
+      "file_offset_value": 392,
+      "id": "section-extend-raw-size",
+      "kind": "replace_bytes",
+      "replacement_hex": "00040000",
+      "rva": "0x188",
+      "rva_value": 392,
+      "size": 4
+    }
+  ],
+  "patched_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p2-acceptance-final2\\acceptance\\runs\\p2-pe-seven-strategies\\0fefb67e040f461fb66dcca103a1787d\\patch\\strategies\\section_extend_patch\\patched.exe",
+  "patched_sha256": "496f1c101f1c20a0423bafc912b9e6dfa78c258f8fddaf8a50284d5dfd5d3328",
+  "patched_size": 2048,
+  "plan_schema_version": 1,
+  "rollback_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p2-acceptance-final2\\acceptance\\runs\\p2-pe-seven-strategies\\0fefb67e040f461fb66dcca103a1787d\\patch\\strategies\\section_extend_patch\\apply-artifacts\\rollback.json",
+  "schema_version": 1,
+  "source_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p2-acceptance-final2\\acceptance\\runs\\p2-pe-seven-strategies\\0fefb67e040f461fb66dcca103a1787d\\patch\\strategies\\section_extend_patch\\fixture.exe",
+  "source_sha256": "eeefc065a6075e65dc293ca8d5f833d171b14f7a7a19b06364835431811f670d",
+  "source_size": 2048,
+  "status": "ok",
+  "strategy": "section_extend_patch"
+}

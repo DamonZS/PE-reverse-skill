@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "fixture_id": "p1-native-hook-live",
+  "phase": "P1",
+  "capability": "native_hook",
+  "evidence_level": "live-target",
+  "session_id": "b7025dd63462416e853e73254aee8992",
+  "target_identity": {
+    "kind": "controlled_child_process",
+    "pid": 32800,
+    "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe"
+  },
+  "target_identity_source": "artifact",
+  "started_at": "2026-07-14T13:11:30.746438+00:00",
+  "finished_at": "2026-07-14T13:11:31.606808+00:00",
+  "workspace": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance",
+  "run_directory": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p1-native-hook-live\\b7025dd63462416e853e73254aee8992",
+  "record_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\records\\p1-native-hook-live--b7025dd63462416e853e73254aee8992.json",
+  "command": [
+    "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "-m",
+    "unittest",
+    "tests.test_native_hook_provider"
+  ],
+  "command_display": "$env:RUN_NATIVE_HOOK_SMOKE='1'; python -m unittest tests.test_native_hook_provider",
+  "contract_sha256": "390759190fc739119bfede62ebef664e8c0d0ab97588b94a03d822bebe9f6a47",
+  "environment_gates": {
+    "status": "ready_to_run",
+    "configured": [
+      "RUN_NATIVE_HOOK_SMOKE"
+    ],
+    "missing": [],
+    "workflow_states": {}
+  },
+  "provider_versions": {
+    "python": "3.13.7",
+    "platform": "Windows-11-10.0.26100-SP0"
+  },
+  "expected_artifacts": [
+    "native_hook/*/audit.json",
+    "native_hook/*/events.json",
+    "native_hook/*/manifest.json",
+    "native-hook/target-identity.json",
+    "native-hook/rollback.json"
+  ],
+  "observed_artifacts": [
+    {
+      "path": "environment-validation.json",
+      "size": 29316,
+      "sha256": "0d79281df3d0bd88f9a97b5b433eba97453e41c792e57ff08d9a3902b647a667"
+    },
+    {
+      "path": "native-hook/execution-proof.json",
+      "size": 244,
+      "sha256": "b50dfc09b3d2f14add5fa42f04d121e32099d8deec9eca0ca3580016ca7ce8fb"
+    },
+    {
+      "path": "native-hook/rollback.json",
+      "size": 1420,
+      "sha256": "ffc0662858ccdcf5e27801552ac491b419b0fd9dd882508b95cd606ee6bd2120"
+    },
+    {
+      "path": "native-hook/target-identity.json",
+      "size": 149,
+      "sha256": "a0203de883dc23f289b44e30f0d1cde7534fdab0e302398d6546522ef73fedeb"
+    },
+    {
+      "path": "native_hook/windows-native-hook-smoke/audit.json",
+      "size": 23799,
+      "sha256": "b7b23ed7340108f47d2e3bf6281dd7f0e8228370f0cf92735f46a602101bf62f"
+    },
+    {
+      "path": "native_hook/windows-native-hook-smoke/events.json",
+      "size": 941,
+      "sha256": "0e192fd2327998f6a23e218f420c7b5a313b3e9a64b936ba4c6cd38b5be1a84b"
+    },
+    {
+      "path": "native_hook/windows-native-hook-smoke/manifest.json",
+      "size": 970,
+      "sha256": "b310a49d5805e358e847e4bc99c180f0235202ef8e17ab4a1187729fb1bb96b6"
+    },
+    {
+      "path": "native_hook/windows-native-inline-smoke/audit.json",
+      "size": 41066,
+      "sha256": "98892b5851c39953e93cfc6a75cc91ccb8d1367bf83f5ace30872dc331201836"
+    },
+    {
+      "path": "native_hook/windows-native-inline-smoke/events.json",
+      "size": 949,
+      "sha256": "7c57054f10ad94d420c8bab5e6441f10f9cb54414814c50165adf05f1479272a"
+    },
+    {
+      "path": "native_hook/windows-native-inline-smoke/manifest.json",
+      "size": 983,
+      "sha256": "cea8b778636a1ad95b26314179142eaa11f024652abd7eebe06324f931749143"
+    },
+    {
+      "path": "stderr.log",
+      "size": 135,
+      "sha256": "0e729516a961203eefabd7bace66bd5cb2246089ab68e6a026e7aa1ff4871164"
+    },
+    {
+      "path": "stdout.log",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "missing_artifacts": [],
+  "rejected_provenance": [],
+  "execution_proof": {
+    "status": "ok",
+    "provider": "windows_native_hook",
+    "evidence_class": "live_host_proof",
+    "executed_tests": 2,
+    "skipped_tests": 0,
+    "live_operations": 2,
+    "actions": [
+      "inline_trampoline",
+      "vtable_pointer"
+    ]
+  },
+  "execution_proof_errors": [],
+  "execution_proof_artifact": "native-hook/execution-proof.json",
+  "rollback_result": {
+    "status": "ok",
+    "verified": true,
+    "artifacts": [
+      "D:/Project/pe-reverse-analyzer-main/.codex-tmp-p0-p4-acceptance/acceptance/runs/p1-native-hook-live/b7025dd63462416e853e73254aee8992/native-hook/rollback.json"
+    ]
+  },
+  "cleanup_result": {
+    "status": "ok",
+    "verified": true,
+    "artifacts": [
+      "D:/Project/pe-reverse-analyzer-main/.codex-tmp-p0-p4-acceptance/acceptance/runs/p1-native-hook-live/b7025dd63462416e853e73254aee8992/native-hook/rollback.json"
+    ]
+  },
+  "exit_code": 0,
+  "execution_error": null,
+  "outcome": "passed",
+  "verification_constraints": {
+    "registered_fixture": true,
+    "structured_argv": true,
+    "host_and_dependencies_ready": true,
+    "execution_passed": true,
+    "live_evidence_level": true,
+    "execution_proof_valid": true,
+    "target_identity_present": true,
+    "target_identity_matches_artifact": true,
+    "expected_artifacts_complete": true,
+    "provenance_non_synthetic": true,
+    "rollback_verified": true,
+    "cleanup_verified": true
+  },
+  "live_verified": true
+}

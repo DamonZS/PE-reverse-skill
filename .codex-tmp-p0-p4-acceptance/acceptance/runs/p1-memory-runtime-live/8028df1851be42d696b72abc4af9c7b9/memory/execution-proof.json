@@ -1,0 +1,8 @@
+{
+  "status": "ok",
+  "provider": "windows_ctypes",
+  "evidence_class": "live_host_proof",
+  "executed_tests": 2,
+  "skipped_tests": 0,
+  "live_operations": 3
+}

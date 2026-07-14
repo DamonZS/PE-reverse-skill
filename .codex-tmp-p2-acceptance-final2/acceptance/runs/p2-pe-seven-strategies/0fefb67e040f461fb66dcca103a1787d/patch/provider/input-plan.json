@@ -1,0 +1,1 @@
+{"target_sha256": "5dac8da521e716d5223d7012363291c34934221a3701e7deca8da3a419ed059e", "operations": [{"id": "replace-nops", "kind": "replace_offset", "offset": 2, "expected": "9090", "replacement": "cccc"}]}

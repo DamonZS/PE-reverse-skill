@@ -1,0 +1,109 @@
+{
+  "architecture": {
+    "bits": 64,
+    "machine": 34404,
+    "machine_hex": "0x8664",
+    "name": "x64",
+    "optional_magic": 523
+  },
+  "build": {
+    "build_directory": "build",
+    "build_system": "cmake",
+    "commands": [
+      {
+        "argv": [
+          "cmake",
+          "-S",
+          ".",
+          "-B",
+          "build"
+        ],
+        "name": "configure"
+      },
+      {
+        "argv": [
+          "cmake",
+          "--build",
+          "build",
+          "--config",
+          "Release"
+        ],
+        "name": "build"
+      }
+    ],
+    "minimum_cmake_version": "3.20",
+    "output_candidates": [
+      "build/fixture.dll",
+      "build/Release/fixture.dll"
+    ],
+    "output_scope": "project_directory_only"
+  },
+  "exports": [
+    {
+      "definition_name": "LoaderData",
+      "name": "LoaderData",
+      "noname": false,
+      "ordinal": 1,
+      "proxy_forwarder": "fixture_original.LoaderData",
+      "source_forwarder": null
+    },
+    {
+      "definition_name": "Forwarded",
+      "name": "Forwarded",
+      "noname": false,
+      "ordinal": 2,
+      "proxy_forwarder": "fixture_original.Forwarded",
+      "source_forwarder": "KERNEL32.Sleep"
+    },
+    {
+      "definition_name": "__proxy_ordinal_3",
+      "name": null,
+      "noname": true,
+      "ordinal": 3,
+      "proxy_forwarder": "fixture_original.#3",
+      "source_forwarder": null
+    }
+  ],
+  "files": [
+    {
+      "path": "CMakeLists.txt",
+      "sha256": "a2b41cff1da0b361b991f40b8b314cfb257021ecb5f151b3057a5f971caa16aa",
+      "size": 1299
+    },
+    {
+      "path": "backing/fixture_original.dll",
+      "sha256": "ba9a9f17baeca2f4043eb4b7cb4b97e7c78280c2e56cb12ea5f62d39dfe33dae",
+      "size": 44664
+    },
+    {
+      "path": "proxy.c",
+      "sha256": "1779bf5884a1180bfa01f6f52233b79fc01625c8d85c65edff5dc89d3e3bc1bb",
+      "size": 664
+    },
+    {
+      "path": "proxy.def",
+      "sha256": "94b2f46057b1351618d54b26966c5dc6c5d5f1561b39057c9f973f4852781ace",
+      "size": 174
+    }
+  ],
+  "generator": {
+    "name": "reverse_analyzer.dll_proxy",
+    "version": 1
+  },
+  "project": {
+    "path": "proxy"
+  },
+  "proxy": {
+    "backing_binary": "proxy/backing/fixture_original.dll",
+    "backing_name": "fixture_original.dll",
+    "output_name": "fixture.dll"
+  },
+  "schema_version": 1,
+  "scope": "copy_directory_only",
+  "source": {
+    "dll_name": "fixture.dll",
+    "path": "input/fixture.dll",
+    "sha256": "ba9a9f17baeca2f4043eb4b7cb4b97e7c78280c2e56cb12ea5f62d39dfe33dae",
+    "size": 44664
+  }
+}

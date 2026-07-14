@@ -41,6 +41,80 @@ class PatchPlanError(ValueError):
     """Raised when a patch plan cannot be validated against a target."""
 
 
+def android_elf_patch_plan(
+    path: str | Path,
+    *,
+    out_dir: str | Path,
+    virtual_address: int | str | None = None,
+    file_offset: int | str | None = None,
+    replacement: str | bytes | None = None,
+    instruction_mode: str = "auto",
+    operation_id: str | None = None,
+    intent: Mapping[str, Any] | None = None,
+) -> ToolResult:
+    """Expose the Android ELF planner through the common tool registry."""
+
+    from ..patch.android_elf import plan_android_elf_patch
+
+    return plan_android_elf_patch(
+        path,
+        out_dir=out_dir,
+        virtual_address=virtual_address,
+        file_offset=file_offset,
+        replacement=replacement,
+        instruction_mode=instruction_mode,
+        operation_id=operation_id,
+        intent=intent,
+    )
+
+
+def android_elf_patch_verify(
+    path: str | Path,
+    *,
+    plan: Mapping[str, Any] | str | Path,
+    out_dir: str | Path | None = None,
+) -> ToolResult:
+    """Expose Android ELF verification through the common tool registry."""
+
+    from ..patch.android_elf import verify_android_elf_patch
+
+    return verify_android_elf_patch(path, plan=plan, out_dir=out_dir)
+
+
+def dll_proxy_generate(
+    path: str | Path,
+    *,
+    copy_dir: str | Path,
+    project_dir: str | Path | None = None,
+    expected_architecture: str | None = None,
+    proxy_name: str | None = None,
+) -> ToolResult:
+    """Generate a forwarding-DLL project and normalize its audit result."""
+
+    try:
+        from ..patch.dll_proxy import generate_dll_proxy_project
+
+        project = generate_dll_proxy_project(
+            path,
+            copy_dir=copy_dir,
+            project_dir=project_dir,
+            expected_architecture=expected_architecture,
+            proxy_name=proxy_name,
+        )
+        return ToolResult(
+            tool="dll_proxy_generate",
+            status="ok",
+            data=project.to_dict(),
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        return ToolResult(
+            tool="dll_proxy_generate",
+            status="failed",
+            error=f"{type(exc).__name__}: {exc}",
+            data={"status": "failed", "artifacts": []},
+        )
+
+
 _PATCH_OPERATION_KINDS = {
     "replace_bytes",
     "replace_offset",
@@ -52,14 +126,39 @@ _PATCH_OPERATION_KINDS = {
     "embed_overlay",
     "append_overlay",
 }
+_PE_PATCH_STRATEGIES = {
+    "code_cave",
+    "code_cave_patch",
+    "section_extend",
+    "section_extend_patch",
+    "resource_replace",
+    "iat_thunk",
+    "iat_thunk_patch",
+    "entrypoint_redirect",
+    "overlay_preserve",
+    "overlay_preserve_patch",
+}
+_PE_OPERATION_ROLES = {
+    "code_cave_payload",
+    "section_extension_payload",
+    "section_virtual_size",
+    "section_raw_size",
+    "size_of_image",
+    "resource_data",
+    "resource_size",
+    "iat_thunk",
+    "entrypoint_target_payload",
+    "address_of_entrypoint",
+    "overlay_preserving_patch",
+}
 
 
-def validate_patch_plan(
+def _validate_patch_plan_engine(
     path: str | Path,
     *,
     plan: Mapping[str, Any] | str | Path,
 ) -> ToolResult:
-    """Validate a patch plan against ``path`` without creating artifacts.
+    """Run the generic byte-patch validator without PE policy dispatch.
 
     Validation checks the plan schema, target hash, operation parameters and
     pre-images.  Payload files are opened/read for overlay operations, but the
@@ -85,6 +184,7 @@ def validate_patch_plan(
                 "status": "ok",
                 "valid": True,
                 "schema_version": schema_version,
+                "strategy": str(plan_payload.get("strategy") or "inline_patch"),
                 "target_path": str(source),
                 "target_sha256": _sha256(original),
                 "planned_sha256": _sha256(bytes(simulated)),
@@ -101,6 +201,110 @@ def validate_patch_plan(
             error=f"{type(exc).__name__}: {exc}",
             data={"status": "failed", "valid": False, "target": str(path), "artifacts": []},
         )
+
+
+def validate_patch_plan(
+    path: str | Path,
+    *,
+    plan: Mapping[str, Any] | str | Path,
+) -> ToolResult:
+    """Validate a patch plan, including PE policy when the plan requires it."""
+
+    engine_result = _validate_patch_plan_engine(path, plan=plan)
+    if engine_result.status != "ok":
+        return engine_result
+    try:
+        plan_payload, _ = _load_json_mapping(plan, label="patch plan")
+    except (OSError, PatchPlanError, TypeError, ValueError) as exc:
+        return ToolResult(
+            tool="validate_patch_plan",
+            status="failed",
+            error=f"{type(exc).__name__}: {exc}",
+            data={"status": "failed", "valid": False, "target": str(path), "artifacts": []},
+        )
+    if not _requires_pe_patch_validation(plan_payload):
+        return engine_result
+    return _merge_pe_validation_result(
+        tool="validate_patch_plan",
+        target=path,
+        plan=plan_payload,
+        engine_result=engine_result,
+    )
+
+
+def _requires_pe_patch_validation(plan: Mapping[str, Any]) -> bool:
+    planner = plan.get("planner")
+    if isinstance(planner, Mapping) and str(planner.get("name") or "").casefold() == "pe_aware_patch_planner":
+        return True
+    if isinstance(plan.get("strategy_details"), Mapping):
+        return True
+    strategy = str(plan.get("strategy") or "").strip().casefold().replace("-", "_")
+    if strategy in _PE_PATCH_STRATEGIES:
+        return True
+    operations = plan.get("operations")
+    if not isinstance(operations, list):
+        return False
+    for operation in operations:
+        if not isinstance(operation, Mapping):
+            continue
+        kind = str(operation.get("kind") or operation.get("type") or "").casefold()
+        role = str(operation.get("role") or "").casefold()
+        if kind == "replace_rva" or role in _PE_OPERATION_ROLES:
+            return True
+    return False
+
+
+def _merge_pe_validation_result(
+    *,
+    tool: str,
+    target: str | Path,
+    plan: Mapping[str, Any],
+    engine_result: ToolResult,
+) -> ToolResult:
+    try:
+        from reverse_analyzer.patch.planner import validate_pe_patch_plan
+
+        pe_result = validate_pe_patch_plan(target, plan=plan)
+    except Exception as exc:  # noqa: BLE001
+        return ToolResult(
+            tool=tool,
+            status="failed",
+            error=f"{type(exc).__name__}: {exc}",
+            data={"status": "failed", "valid": False, "target": str(target), "artifacts": []},
+        )
+    engine_data = dict(engine_result.data) if isinstance(engine_result.data, Mapping) else {}
+    pe_data = dict(pe_result.data) if isinstance(pe_result.data, Mapping) else {}
+    status = str(pe_result.status or "failed")
+    return ToolResult(
+        tool=tool,
+        status=status,
+        error=pe_result.error,
+        data={
+            **engine_data,
+            "status": status,
+            "valid": status == "ok" and bool(pe_data.get("valid", True)),
+            "pe_verification": pe_data,
+            "artifacts": [],
+        },
+    )
+
+
+def _validate_pe_before_apply(
+    *,
+    tool: str,
+    target: str | Path,
+    plan: Mapping[str, Any],
+) -> ToolResult | None:
+    if not _requires_pe_patch_validation(plan):
+        return None
+    generic = ToolResult(tool=tool, status="ok", data={"status": "ok", "valid": True, "artifacts": []})
+    result = _merge_pe_validation_result(
+        tool=tool,
+        target=target,
+        plan=plan,
+        engine_result=generic,
+    )
+    return None if result.status == "ok" else result
 
 
 def binary_patch_apply(
@@ -122,6 +326,7 @@ def binary_patch_apply(
 
     try:
         source = _require_file(path)
+        plan_input = _mapping_input_path(plan)
         plan_payload, plan_dir = _load_json_mapping(plan, label="patch plan")
         original = source.read_bytes()
         source_hash = _sha256(original)
@@ -135,15 +340,33 @@ def binary_patch_apply(
             applied_operations.append(applied)
             rollback_operations.append(rollback)
 
+        pe_validation = _validate_pe_before_apply(
+            tool="binary_patch_apply",
+            target=source,
+            plan=plan_payload,
+        )
+        if pe_validation is not None:
+            return pe_validation
+
         patched_bytes = bytes(patched)
         patched_hash = _sha256(patched_bytes)
         destination_dir = Path(out_dir).resolve()
         destination = destination_dir / "patched" / (output_name or _patched_name(source))
         manifest_path = destination_dir / "patch_manifest.json"
         rollback_path = destination_dir / "rollback.json"
+        named_paths = {
+            "source": source,
+            "patched_output": destination,
+            "patch_manifest": manifest_path,
+            "rollback_manifest": rollback_path,
+        }
+        if plan_input is not None:
+            named_paths["plan_input"] = plan_input
+        _ensure_distinct_paths(named_paths)
         manifest = {
             "status": "planned" if dry_run else "ok",
             "schema_version": 1,
+            "strategy": str(plan_payload.get("strategy") or "inline_patch"),
             "source_path": str(source),
             "patched_path": str(destination),
             "source_sha256": source_hash,
@@ -165,13 +388,14 @@ def binary_patch_apply(
         if dry_run:
             return ToolResult(tool="binary_patch_apply", status="planned", data={**manifest, "artifacts": []})
 
-        if destination.exists() and not overwrite:
-            raise PatchPlanError(f"patched output already exists: {destination}; pass overwrite=True to replace it")
-        destination_dir.mkdir(parents=True, exist_ok=True)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        _atomic_write_bytes(destination, patched_bytes)
-        _write_json(manifest_path, manifest)
-        _write_json(rollback_path, rollback_manifest)
+        _publish_file_bundle(
+            [
+                (destination, patched_bytes),
+                (manifest_path, _json_bytes(manifest)),
+                (rollback_path, _json_bytes(rollback_manifest)),
+            ],
+            overwrite=overwrite,
+        )
         return ToolResult(
             tool="binary_patch_apply",
             status="ok",
@@ -201,6 +425,7 @@ def binary_patch_rollback(
 
     try:
         source = _require_file(path)
+        rollback_input = _mapping_input_path(rollback)
         rollback_payload, _ = _load_json_mapping(rollback, label="rollback manifest")
         original = source.read_bytes()
         restored_bytes, restored_operations, expected_source_hash = _restore_rollback_bytes(
@@ -212,6 +437,14 @@ def binary_patch_rollback(
         destination_dir = Path(out_dir).resolve()
         destination = destination_dir / "rolled_back" / (output_name or _rollback_name(source))
         manifest_path = destination_dir / "rollback_manifest.json"
+        named_paths = {
+            "patched_input": source,
+            "restored_output": destination,
+            "rollback_manifest": manifest_path,
+        }
+        if rollback_input is not None:
+            named_paths["rollback_input"] = rollback_input
+        _ensure_distinct_paths(named_paths)
         manifest = {
             "status": "planned" if dry_run else "ok",
             "schema_version": 1,
@@ -227,12 +460,13 @@ def binary_patch_rollback(
         if dry_run:
             return ToolResult(tool="binary_patch_rollback", status="planned", data={**manifest, "artifacts": []})
 
-        if destination.exists() and not overwrite:
-            raise PatchPlanError(f"rollback output already exists: {destination}; pass overwrite=True to replace it")
-        destination_dir.mkdir(parents=True, exist_ok=True)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        _atomic_write_bytes(destination, restored_bytes)
-        _write_json(manifest_path, manifest)
+        _publish_file_bundle(
+            [
+                (destination, restored_bytes),
+                (manifest_path, _json_bytes(manifest)),
+            ],
+            overwrite=overwrite,
+        )
         return ToolResult(
             tool="binary_patch_rollback",
             status="ok",
@@ -255,6 +489,7 @@ def binary_patch_apply_plan(
     out_path: str | Path,
     apply: bool = False,
     artifact_dir: str | Path | None = None,
+    plan_source_path: str | Path | None = None,
 ) -> ToolResult:
     """Apply a verified patch plan to one explicit output path.
 
@@ -266,9 +501,8 @@ def binary_patch_apply_plan(
 
     try:
         destination = Path(out_path).resolve()
-        source = Path(path).resolve()
-        if source == destination:
-            raise PatchPlanError("out_path must differ from the source; in-place patching is not supported")
+        source = _require_file(path)
+        plan_input = Path(plan_source_path).resolve() if plan_source_path is not None else _mapping_input_path(plan)
         plan_payload, plan_dir = _load_json_mapping(plan, label="patch plan")
         original = source.read_bytes()
         source_hash = _sha256(original)
@@ -282,14 +516,32 @@ def binary_patch_apply_plan(
             applied_operations.append(applied_item)
             rollback_operations.append(rollback_item)
 
+        pe_validation = _validate_pe_before_apply(
+            tool="binary_patch_apply",
+            target=source,
+            plan=plan_payload,
+        )
+        if pe_validation is not None:
+            return pe_validation
+
         patched_bytes = bytes(patched)
         patched_hash = _sha256(patched_bytes)
         artifact_root = Path(artifact_dir).resolve() if artifact_dir is not None else destination.parent / f"{destination.name}.patch-artifacts"
         manifest_path = artifact_root / "patch_manifest.json"
         rollback_path = artifact_root / "rollback.json"
+        named_paths = {
+            "source": source,
+            "patched_output": destination,
+            "patch_manifest": manifest_path,
+            "rollback_manifest": rollback_path,
+        }
+        if plan_input is not None:
+            named_paths["plan_input"] = plan_input
+        _ensure_distinct_paths(named_paths)
         manifest = {
             "status": "planned" if not apply else "ok",
             "schema_version": 1,
+            "strategy": str(plan_payload.get("strategy") or "inline_patch"),
             "source_path": str(source),
             "patched_path": str(destination),
             "source_sha256": source_hash,
@@ -311,13 +563,14 @@ def binary_patch_apply_plan(
         if not apply:
             return ToolResult(tool="binary_patch_apply", status="planned", data={**manifest, "artifacts": []})
 
-        if destination.exists():
-            raise PatchPlanError(f"patched output already exists: {destination}")
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        artifact_root.mkdir(parents=True, exist_ok=True)
-        _atomic_write_bytes(destination, patched_bytes)
-        _write_json(manifest_path, manifest)
-        _write_json(rollback_path, rollback_manifest)
+        _publish_file_bundle(
+            [
+                (destination, patched_bytes),
+                (manifest_path, _json_bytes(manifest)),
+                (rollback_path, _json_bytes(rollback_manifest)),
+            ],
+            overwrite=False,
+        )
         return ToolResult(
             tool="binary_patch_apply",
             status="ok",
@@ -351,8 +604,7 @@ def binary_patch_rollback_plan(
     try:
         source = _require_file(path)
         destination = Path(out_path).resolve()
-        if source == destination:
-            raise PatchPlanError("out_path must differ from the patched input; in-place rollback is not supported")
+        rollback_input = _mapping_input_path(rollback)
         rollback_payload, _ = _load_json_mapping(rollback, label="rollback manifest")
         original = source.read_bytes()
         restored_bytes, restored_operations, expected_source_hash = _restore_rollback_bytes(
@@ -362,6 +614,14 @@ def binary_patch_rollback_plan(
         restored_hash = _sha256(restored_bytes)
         artifact_root = Path(artifact_dir).resolve() if artifact_dir is not None else destination.parent / f"{destination.name}.rollback-artifacts"
         manifest_path = artifact_root / "rollback_manifest.json"
+        named_paths = {
+            "patched_input": source,
+            "restored_output": destination,
+            "rollback_manifest": manifest_path,
+        }
+        if rollback_input is not None:
+            named_paths["rollback_input"] = rollback_input
+        _ensure_distinct_paths(named_paths)
         manifest = {
             "status": "ok" if apply else "planned",
             "schema_version": 1,
@@ -376,12 +636,13 @@ def binary_patch_rollback_plan(
         }
         if not apply:
             return ToolResult(tool="binary_patch_rollback", status="planned", data={**manifest, "artifacts": []})
-        if destination.exists():
-            raise PatchPlanError(f"rollback output already exists: {destination}")
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        artifact_root.mkdir(parents=True, exist_ok=True)
-        _atomic_write_bytes(destination, restored_bytes)
-        _write_json(manifest_path, manifest)
+        _publish_file_bundle(
+            [
+                (destination, restored_bytes),
+                (manifest_path, _json_bytes(manifest)),
+            ],
+            overwrite=False,
+        )
         return ToolResult(
             tool="binary_patch_rollback",
             status="ok",
@@ -440,12 +701,15 @@ def _replace_at_offset(
         raise PatchPlanError(
             f"{operation_id}: expected bytes do not match at file offset 0x{offset:X}; observed={observed.hex()}"
         )
+    resolved_rva = rva if rva is not None else _pe_offset_to_rva(bytes(data), offset, size=len(expected))
     data[offset : offset + len(expected)] = replacement
     applied = {
         "id": operation_id,
         "kind": kind,
         "file_offset": f"0x{offset:X}",
-        "rva": f"0x{rva:X}" if rva is not None else None,
+        "file_offset_value": offset,
+        "rva": f"0x{resolved_rva:X}" if resolved_rva is not None else None,
+        "rva_value": resolved_rva,
         "size": len(expected),
         "expected_hex": expected.hex(),
         "replacement_hex": replacement.hex(),
@@ -454,6 +718,7 @@ def _replace_at_offset(
         "kind": "restore_bytes",
         "id": operation_id,
         "file_offset": offset,
+        "rva": resolved_rva,
         "original_hex": expected.hex(),
         "patched_hex": replacement.hex(),
     }
@@ -474,11 +739,23 @@ def _replace_aob(data: bytearray, operation: Mapping[str, Any], *, operation_id:
         raise PatchPlanError(f"{operation_id}: occurrence {occurrence} is outside {len(matches)} AOB matches")
     offset = matches[occurrence]
     original = bytes(data[offset : offset + len(pattern)])
+    pinned_preimage = _aob_expected_preimage(operation, operation_id=operation_id)
+    if pinned_preimage is not None:
+        if len(pinned_preimage) != len(pattern):
+            raise PatchPlanError(f"{operation_id}: expected AOB pre-image length must equal pattern length")
+        if original != pinned_preimage:
+            raise PatchPlanError(
+                f"{operation_id}: resolved AOB pre-image does not match expected bytes at file offset 0x{offset:X}"
+            )
+    rva = _pe_offset_to_rva(bytes(data), offset, size=len(pattern))
     data[offset : offset + len(pattern)] = replacement
     applied = {
         "id": operation_id,
         "kind": "replace_aob",
         "file_offset": f"0x{offset:X}",
+        "file_offset_value": offset,
+        "rva": f"0x{rva:X}" if rva is not None else None,
+        "rva_value": rva,
         "pattern": _format_aob(pattern),
         "match_count": len(matches),
         "occurrence": occurrence,
@@ -490,10 +767,32 @@ def _replace_aob(data: bytearray, operation: Mapping[str, Any], *, operation_id:
         "kind": "restore_bytes",
         "id": operation_id,
         "file_offset": offset,
+        "rva": rva,
         "original_hex": original.hex(),
         "patched_hex": replacement.hex(),
     }
     return applied, rollback
+
+
+def _aob_expected_preimage(
+    operation: Mapping[str, Any],
+    *,
+    operation_id: str,
+) -> bytes | None:
+    values = [
+        (field, operation.get(field))
+        for field in ("expected", "resolved_preimage")
+        if operation.get(field) is not None
+    ]
+    if not values:
+        return None
+    parsed = [
+        (field, _hex_bytes(value, field=f"{operation_id}.{field}"))
+        for field, value in values
+    ]
+    if any(value != parsed[0][1] for _, value in parsed[1:]):
+        raise PatchPlanError(f"{operation_id}: expected and resolved_preimage must describe the same bytes")
+    return parsed[0][1]
 
 
 def _embed_overlay(
@@ -553,8 +852,22 @@ def _apply_rollback_operation(data: bytearray, operation: Mapping[str, Any]) -> 
         observed = bytes(data[offset : offset + len(patched)])
         if observed != patched:
             raise PatchPlanError(f"{operation_id}: rollback pre-image mismatch at file offset 0x{offset:X}")
+        declared_rva = operation.get("rva")
+        rva = (
+            _nonnegative_int(declared_rva, field=f"{operation_id}.rva")
+            if declared_rva is not None
+            else _pe_offset_to_rva(bytes(data), offset, size=len(patched))
+        )
         data[offset : offset + len(patched)] = original
-        return {"id": operation_id, "kind": "restore_bytes", "file_offset": f"0x{offset:X}", "size": len(original)}
+        return {
+            "id": operation_id,
+            "kind": "restore_bytes",
+            "file_offset": f"0x{offset:X}",
+            "file_offset_value": offset,
+            "rva": f"0x{rva:X}" if rva is not None else None,
+            "rva_value": rva,
+            "size": len(original),
+        }
     if kind == "truncate":
         before = _nonnegative_int(operation.get("size_before"), field=f"{operation_id}.size_before")
         after = _nonnegative_int(operation.get("size_after"), field=f"{operation_id}.size_after")
@@ -665,6 +978,42 @@ def _pe_rva_to_offset(data: bytes, rva: int, *, size: int) -> int:
     raise PatchPlanError(f"RVA 0x{rva:X} is not mapped by any PE section")
 
 
+def _pe_offset_to_rva(data: bytes, offset: int, *, size: int) -> int | None:
+    """Best-effort inverse mapping used only to enrich operation manifests."""
+
+    if offset < 0 or size <= 0 or offset + size > len(data):
+        return None
+    try:
+        if len(data) < 0x40 or data[:2] != b"MZ":
+            return None
+        pe_offset = struct.unpack_from("<I", data, 0x3C)[0]
+        if pe_offset + 24 > len(data) or data[pe_offset : pe_offset + 4] != b"PE\x00\x00":
+            return None
+        section_count = struct.unpack_from("<H", data, pe_offset + 6)[0]
+        optional_size = struct.unpack_from("<H", data, pe_offset + 20)[0]
+        section_table = pe_offset + 24 + optional_size
+        if section_table + section_count * 40 > len(data):
+            return None
+        raw_offsets = [
+            struct.unpack_from("<I", data, section_table + index * 40 + 20)[0]
+            for index in range(section_count)
+            if struct.unpack_from("<I", data, section_table + index * 40 + 16)[0] > 0
+        ]
+        first_raw = min(raw_offsets, default=len(data))
+        if offset < first_raw and offset + size <= first_raw:
+            return offset
+        for index in range(section_count):
+            entry = section_table + index * 40
+            virtual_address = struct.unpack_from("<I", data, entry + 12)[0]
+            raw_size = struct.unpack_from("<I", data, entry + 16)[0]
+            raw_offset = struct.unpack_from("<I", data, entry + 20)[0]
+            if raw_offset <= offset and offset + size <= raw_offset + raw_size:
+                return virtual_address + (offset - raw_offset)
+    except (IndexError, struct.error, ValueError):
+        return None
+    return None
+
+
 def _load_json_mapping(value: Mapping[str, Any] | str | Path, *, label: str) -> tuple[dict[str, Any], Path | None]:
     if isinstance(value, Mapping):
         return {str(key): item for key, item in value.items()}, None
@@ -693,11 +1042,14 @@ def _validate_patch_plan_schema(
     if isinstance(unknown_required, bool) or not isinstance(unknown_required, int) or unknown_required != 1:
         raise PatchPlanError("patch plan schema_version must be the supported integer 1")
     target_hash = plan.get("target_sha256")
-    if target_hash is not None:
-        if not isinstance(target_hash, str) or len(target_hash) != 64 or any(char not in string.hexdigits for char in target_hash):
-            raise PatchPlanError("target_sha256 must be a 64-character hexadecimal SHA-256 digest")
-        if target_hash.casefold() != source_hash.casefold():
-            raise PatchPlanError("target_sha256 does not match the supplied target")
+    if not isinstance(target_hash, str) or len(target_hash) != 64 or any(
+        char not in string.hexdigits for char in target_hash
+    ):
+        raise PatchPlanError(
+            "target_sha256 is required and must be a 64-character hexadecimal SHA-256 digest"
+        )
+    if target_hash.casefold() != source_hash.casefold():
+        raise PatchPlanError("target_sha256 does not match the supplied target")
     operations_value = plan.get("operations")
     if not isinstance(operations_value, list) or not operations_value:
         raise PatchPlanError("patch plan must contain a non-empty operations array")
@@ -740,6 +1092,9 @@ def _validate_operation_schema(operation: Mapping[str, Any], *, index: int) -> N
         replacement = _hex_bytes(operation.get("replacement"), field=f"{operation_id}.replacement")
         if len(pattern) != len(replacement):
             raise PatchPlanError(f"{operation_id}: replacement length must equal AOB pattern length")
+        pinned_preimage = _aob_expected_preimage(operation, operation_id=operation_id)
+        if pinned_preimage is not None and len(pinned_preimage) != len(pattern):
+            raise PatchPlanError(f"{operation_id}: expected AOB pre-image length must equal pattern length")
         _positive_int(operation.get("expected_match_count"), default=1, field=f"{operation_id}.expected_match_count")
         _nonnegative_int(operation.get("occurrence"), default=0, field=f"{operation_id}.occurrence")
         return
@@ -864,6 +1219,177 @@ def _rollback_name(source: Path) -> str:
     return f"{source.stem}.restored{source.suffix}" if source.suffix else f"{source.name}.restored"
 
 
+def _mapping_input_path(value: Mapping[str, Any] | str | Path) -> Path | None:
+    if isinstance(value, Mapping):
+        return None
+    return Path(value).expanduser().resolve()
+
+
+def _ensure_distinct_paths(named_paths: Mapping[str, Path]) -> None:
+    normalized = [
+        (str(name), Path(path).expanduser().resolve())
+        for name, path in named_paths.items()
+    ]
+    for index, (left_name, left_path) in enumerate(normalized):
+        for right_name, right_path in normalized[index + 1 :]:
+            same_resolved_path = os.path.normcase(str(left_path)) == os.path.normcase(str(right_path))
+            same_existing_file = False
+            if not same_resolved_path and left_path.exists() and right_path.exists():
+                try:
+                    same_existing_file = os.path.samefile(left_path, right_path)
+                except OSError:
+                    same_existing_file = False
+            if same_resolved_path or same_existing_file:
+                raise PatchPlanError(
+                    f"path collision between {left_name} and {right_name}: {left_path}"
+                )
+
+
+def _json_bytes(value: Mapping[str, Any]) -> bytes:
+    return (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def _publish_file_bundle(
+    values: list[tuple[Path, bytes]],
+    *,
+    overwrite: bool,
+) -> None:
+    """Publish a related set of files with rollback on partial failure."""
+
+    if not values:
+        return
+
+    normalized: list[tuple[Path, bytes]] = []
+    for output, payload in values:
+        destination = Path(output).expanduser().resolve()
+        if not isinstance(payload, bytes):
+            raise TypeError(f"artifact payload for {destination} must be bytes")
+        normalized.append((destination, payload))
+
+    _ensure_distinct_paths(
+        {f"bundle_output[{index}]": output for index, (output, _) in enumerate(normalized)}
+    )
+    for output, _ in normalized:
+        if output.exists() and not output.is_file():
+            raise PatchPlanError(f"artifact path is not a regular file: {output}")
+        if output.exists() and not overwrite:
+            raise PatchPlanError(f"artifact already exists: {output}")
+
+    staged: list[tuple[Path, Path, bytes]] = []
+    backups: dict[Path, Path] = {}
+    committed: list[Path] = []
+    try:
+        for output, payload in normalized:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                dir=output.parent,
+                prefix=f".{output.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+                temporary.write(payload)
+                temporary.flush()
+                os.fsync(temporary.fileno())
+            staged.append((temporary_path, output, payload))
+
+        if overwrite:
+            for _, output, _ in staged:
+                if not output.exists():
+                    continue
+                backup = _unused_temporary_path(output, suffix=".bak")
+                os.replace(output, backup)
+                backups[output] = backup
+                _fsync_directory(output.parent)
+        else:
+            for _, output, _ in staged:
+                if output.exists():
+                    raise PatchPlanError(f"artifact already exists: {output}")
+
+        for temporary_path, output, payload in staged:
+            if overwrite:
+                os.replace(temporary_path, output)
+            else:
+                _publish_staged_without_overwrite(temporary_path, output, payload)
+            committed.append(output)
+            _fsync_directory(output.parent)
+    except Exception as exc:
+        restore_errors: list[str] = []
+        for output in reversed(committed):
+            try:
+                output.unlink(missing_ok=True)
+            except OSError as restore_exc:
+                restore_errors.append(f"remove {output}: {restore_exc}")
+        for output, backup in backups.items():
+            try:
+                os.replace(backup, output)
+                _fsync_directory(output.parent)
+            except OSError as restore_exc:
+                restore_errors.append(f"restore {output}: {restore_exc}")
+        if restore_errors:
+            raise PatchPlanError(
+                f"artifact bundle publish failed ({exc}); rollback incomplete: {'; '.join(restore_errors)}"
+            ) from exc
+        raise
+    finally:
+        for temporary_path, _, _ in staged:
+            temporary_path.unlink(missing_ok=True)
+        for backup in backups.values():
+            backup.unlink(missing_ok=True)
+
+
+def _unused_temporary_path(output: Path, *, suffix: str) -> Path:
+    descriptor, raw_path = tempfile.mkstemp(
+        dir=output.parent,
+        prefix=f".{output.name}.",
+        suffix=suffix,
+    )
+    os.close(descriptor)
+    temporary_path = Path(raw_path)
+    temporary_path.unlink()
+    return temporary_path
+
+
+def _publish_staged_without_overwrite(staged: Path, output: Path, payload: bytes) -> None:
+    try:
+        os.link(staged, output)
+    except FileExistsError as exc:
+        raise PatchPlanError(f"artifact already exists: {output}") from exc
+    except OSError:
+        descriptor: int | None = None
+        try:
+            descriptor = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
+            with os.fdopen(descriptor, "wb") as handle:
+                descriptor = None
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except FileExistsError as exc:
+            raise PatchPlanError(f"artifact already exists: {output}") from exc
+        except Exception:
+            output.unlink(missing_ok=True)
+            raise
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+    else:
+        staged.unlink()
+
+
+def _fsync_directory(path: Path) -> None:
+    try:
+        descriptor = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(descriptor)
+    except OSError:
+        pass
+    finally:
+        os.close(descriptor)
+
+
 def _atomic_write_bytes(path: Path, data: bytes) -> None:
     temporary_path: Path | None = None
     try:
@@ -886,10 +1412,7 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
 
 
 def _write_json(path: Path, value: Mapping[str, Any]) -> None:
-    _atomic_write_bytes(
-        path,
-        (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8"),
-    )
+    _atomic_write_bytes(path, _json_bytes(value))
 
 
 def _failure(tool: str, exc: Exception, path: str | Path) -> ToolResult:

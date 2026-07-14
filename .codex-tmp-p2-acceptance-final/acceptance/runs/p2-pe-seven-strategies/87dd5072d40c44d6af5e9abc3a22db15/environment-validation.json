@@ -1,0 +1,937 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-07-14T13:26:44.193627+00:00",
+  "host": {
+    "system": "Windows",
+    "release": "11",
+    "machine": "AMD64",
+    "python": "3.13.7"
+  },
+  "execute_probes": true,
+  "checks": {
+    "frida_python": {
+      "kind": "python_module",
+      "module": "frida",
+      "discovered": true,
+      "status": "verified",
+      "probe": {
+        "status": "ok",
+        "version": "17.15.5"
+      }
+    },
+    "comtypes": {
+      "kind": "python_module",
+      "module": "comtypes",
+      "discovered": true,
+      "status": "verified",
+      "probe": {
+        "status": "ok",
+        "version": "1.4.16"
+      }
+    },
+    "opencv": {
+      "kind": "python_module",
+      "module": "cv2",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "frida_cli": {
+      "kind": "executable",
+      "path": null,
+      "env": "FRIDA_CLI",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "apktool": {
+      "kind": "executable",
+      "path": null,
+      "env": "APKTOOL_PATH",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "jadx": {
+      "kind": "executable",
+      "path": null,
+      "env": "JADX_PATH",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "apksigner": {
+      "kind": "executable",
+      "path": null,
+      "env": "APKSIGNER_PATH",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "adb": {
+      "kind": "executable",
+      "path": null,
+      "env": "ADB_PATH",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "xcodebuild": {
+      "kind": "executable",
+      "path": null,
+      "env": "XCODEBUILD_PATH",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "xcrun": {
+      "kind": "executable",
+      "path": null,
+      "env": "XCRUN_PATH",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "presentmon": {
+      "kind": "executable",
+      "path": null,
+      "env": "PRESENTMON_PATH",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "graphics_bridge": {
+      "kind": "bridge",
+      "path": null,
+      "env": "REVERSE_ANALYZER_GRAPHICS_BRIDGE",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "imgui_bridge": {
+      "kind": "bridge",
+      "path": null,
+      "env": "REVERSE_ANALYZER_IMGUI_BRIDGE",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "kernel_bridge": {
+      "kind": "bridge",
+      "path": null,
+      "env": "REVERSE_ANALYZER_KERNEL_BRIDGE",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "memprocfs": {
+      "kind": "executable",
+      "path": null,
+      "env": "MEMPROCFS_PATH",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "leechcore": {
+      "kind": "executable",
+      "path": null,
+      "env": "LEECHCORE_PATH",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "tesseract": {
+      "kind": "executable",
+      "path": null,
+      "env": "TESSERACT_PATH",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "kernel_driver": {
+      "kind": "file",
+      "path": null,
+      "env": "REVERSE_ANALYZER_KERNEL_DRIVER",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    },
+    "vlm_provider": {
+      "kind": "configuration",
+      "value": null,
+      "env": "REVERSE_ANALYZER_VLM_PROVIDER",
+      "discovered": false,
+      "status": "unavailable",
+      "probe": null
+    }
+  },
+  "workflows": {
+    "frida_desktop": {
+      "name": "frida_desktop",
+      "status": "partial",
+      "ready": false,
+      "verified": false,
+      "required": [
+        "frida_python"
+      ],
+      "any_of": [
+        "frida_cli"
+      ],
+      "note": "A live target session is still required for full adapter E2E."
+    },
+    "android_static": {
+      "name": "android_static",
+      "status": "unavailable",
+      "ready": false,
+      "verified": false,
+      "required": [
+        "apktool",
+        "jadx"
+      ],
+      "any_of": [],
+      "note": ""
+    },
+    "android_rebuild_sign": {
+      "name": "android_rebuild_sign",
+      "status": "unavailable",
+      "ready": false,
+      "verified": false,
+      "required": [
+        "apktool",
+        "apksigner"
+      ],
+      "any_of": [],
+      "note": ""
+    },
+    "android_device": {
+      "name": "android_device",
+      "status": "unavailable",
+      "ready": false,
+      "verified": false,
+      "required": [
+        "adb"
+      ],
+      "any_of": [],
+      "note": "The version probe does not prove that an authorized device is attached."
+    },
+    "ios_toolchain": {
+      "name": "ios_toolchain",
+      "status": "unsupported_host",
+      "ready": false,
+      "verified": false,
+      "required": [
+        "xcodebuild",
+        "xcrun"
+      ],
+      "any_of": [],
+      "note": "Signing identity and physical-device validation remain session-specific."
+    },
+    "graphics_present_observation": {
+      "name": "graphics_present_observation",
+      "status": "unavailable",
+      "ready": false,
+      "verified": false,
+      "required": [
+        "presentmon"
+      ],
+      "any_of": [],
+      "note": "PresentMon observes presentation; it is not an in-process Present hook."
+    },
+    "graphics_present_hook": {
+      "name": "graphics_present_hook",
+      "status": "unavailable",
+      "ready": false,
+      "verified": false,
+      "required": [
+        "graphics_bridge"
+      ],
+      "any_of": [],
+      "note": ""
+    },
+    "imgui_in_process": {
+      "name": "imgui_in_process",
+      "status": "unavailable",
+      "ready": false,
+      "verified": false,
+      "required": [
+        "imgui_bridge"
+      ],
+      "any_of": [],
+      "note": ""
+    },
+    "kernel_memory": {
+      "name": "kernel_memory",
+      "status": "unavailable",
+      "ready": false,
+      "verified": false,
+      "required": [
+        "kernel_bridge",
+        "kernel_driver"
+      ],
+      "any_of": [],
+      "note": "A successful bridge probe is not a signed-driver IOCTL test against a live target."
+    },
+    "dma_memory": {
+      "name": "dma_memory",
+      "status": "unavailable",
+      "ready": false,
+      "verified": false,
+      "required": [],
+      "any_of": [
+        "memprocfs",
+        "leechcore"
+      ],
+      "note": "Hardware presence and acquisition permissions remain session-specific."
+    },
+    "windows_uia": {
+      "name": "windows_uia",
+      "status": "verified",
+      "ready": true,
+      "verified": true,
+      "required": [
+        "comtypes"
+      ],
+      "any_of": [],
+      "note": ""
+    },
+    "local_ocr": {
+      "name": "local_ocr",
+      "status": "unavailable",
+      "ready": false,
+      "verified": false,
+      "required": [
+        "tesseract"
+      ],
+      "any_of": [],
+      "note": ""
+    },
+    "vlm_visual_parse": {
+      "name": "vlm_visual_parse",
+      "status": "unavailable",
+      "ready": false,
+      "verified": false,
+      "required": [
+        "vlm_provider"
+      ],
+      "any_of": [],
+      "note": "Provider configuration must still be validated by a screenshot request."
+    }
+  },
+  "acceptance_fixtures": [
+    {
+      "id": "p0-environment-contract",
+      "phase": "P0",
+      "capability": "environment_validation",
+      "evidence_level": "repository",
+      "host": "any",
+      "command": "python -m unittest tests.test_environment_validation",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_environment_validation"
+      ],
+      "expected_artifacts": [
+        "environment-validation.json"
+      ],
+      "status": "repository_ready",
+      "host_supported": true,
+      "workflow_states": {},
+      "configured_gates": [],
+      "missing_gates": [],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    },
+    {
+      "id": "p1-memory-runtime-live",
+      "phase": "P1",
+      "capability": "memory_runtime",
+      "evidence_level": "live-target",
+      "host": "windows",
+      "gate_env": [
+        "RUN_MEMORY_RUNTIME_INTEGRATION"
+      ],
+      "command": "$env:RUN_MEMORY_RUNTIME_INTEGRATION='1'; python -m unittest tests.test_memory_structured",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_memory_structured"
+      ],
+      "run_env": {
+        "RUN_MEMORY_RUNTIME_INTEGRATION": "1"
+      },
+      "mutating": true,
+      "expected_artifacts": [
+        "memory/session.json",
+        "memory/target-identity.json",
+        "memory/rollback_plan.json",
+        "memory/cleanup.json"
+      ],
+      "execution_proof_artifact": "memory/execution-proof.json",
+      "required_executed_tests": 2,
+      "target_identity_artifact": "memory/target-identity.json",
+      "rollback_artifacts": [
+        "memory/rollback_plan.json"
+      ],
+      "cleanup_artifacts": [
+        "memory/cleanup.json"
+      ],
+      "status": "dependency_gated",
+      "host_supported": true,
+      "workflow_states": {},
+      "configured_gates": [],
+      "missing_gates": [
+        "RUN_MEMORY_RUNTIME_INTEGRATION"
+      ],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    },
+    {
+      "id": "p1-loadlibrary-injector",
+      "phase": "P1",
+      "capability": "injector",
+      "evidence_level": "repository-production-backend",
+      "host": "windows",
+      "command": "python -m unittest tests.test_injector_provider",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_injector_provider"
+      ],
+      "expected_artifacts": [
+        "injector/audit.json",
+        "injector/rollback.json"
+      ],
+      "status": "repository_ready",
+      "host_supported": true,
+      "workflow_states": {},
+      "configured_gates": [],
+      "missing_gates": [],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    },
+    {
+      "id": "p1-manual-map-live",
+      "phase": "P1",
+      "capability": "injector_manual_map",
+      "evidence_level": "live-target",
+      "host": "windows",
+      "gate_env": [
+        "RUN_INJECTOR_MANUAL_MAP_WINDOWS_LIVE"
+      ],
+      "command": "$env:RUN_INJECTOR_MANUAL_MAP_WINDOWS_LIVE='1'; python -m unittest tests.test_injector_manual_map_live",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_injector_manual_map_live"
+      ],
+      "run_env": {
+        "RUN_INJECTOR_MANUAL_MAP_WINDOWS_LIVE": "1"
+      },
+      "mutating": true,
+      "expected_artifacts": [
+        "injector/*/injection.json",
+        "injector/target-identity.json",
+        "injector/manual-map-rollback.json"
+      ],
+      "execution_proof_artifact": "injector/execution-proof.json",
+      "required_executed_tests": 1,
+      "target_identity_artifact": "injector/target-identity.json",
+      "rollback_artifacts": [
+        "injector/manual-map-rollback.json"
+      ],
+      "cleanup_artifacts": [
+        "injector/manual-map-rollback.json"
+      ],
+      "status": "dependency_gated",
+      "host_supported": true,
+      "workflow_states": {},
+      "configured_gates": [],
+      "missing_gates": [
+        "RUN_INJECTOR_MANUAL_MAP_WINDOWS_LIVE"
+      ],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    },
+    {
+      "id": "p1-native-hook-live",
+      "phase": "P1",
+      "capability": "native_hook",
+      "evidence_level": "live-target",
+      "host": "windows",
+      "gate_env": [
+        "RUN_NATIVE_HOOK_SMOKE"
+      ],
+      "command": "$env:RUN_NATIVE_HOOK_SMOKE='1'; python -m unittest tests.test_native_hook_provider",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_native_hook_provider"
+      ],
+      "run_env": {
+        "RUN_NATIVE_HOOK_SMOKE": "1"
+      },
+      "mutating": true,
+      "expected_artifacts": [
+        "native_hook/*/audit.json",
+        "native_hook/*/events.json",
+        "native_hook/*/manifest.json",
+        "native-hook/target-identity.json",
+        "native-hook/rollback.json"
+      ],
+      "execution_proof_artifact": "native-hook/execution-proof.json",
+      "required_executed_tests": 2,
+      "target_identity_artifact": "native-hook/target-identity.json",
+      "rollback_artifacts": [
+        "native-hook/rollback.json"
+      ],
+      "cleanup_artifacts": [
+        "native-hook/rollback.json"
+      ],
+      "status": "dependency_gated",
+      "host_supported": true,
+      "workflow_states": {},
+      "configured_gates": [],
+      "missing_gates": [
+        "RUN_NATIVE_HOOK_SMOKE"
+      ],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    },
+    {
+      "id": "p1-hook-target-resolution",
+      "phase": "P1",
+      "capability": "hook_target_resolver",
+      "evidence_level": "repository-production-backend",
+      "host": "windows",
+      "command": "python -m unittest tests.test_hook_target_capability tests.test_hook_target_live",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_hook_target_capability",
+        "tests.test_hook_target_live"
+      ],
+      "expected_artifacts": [
+        "hook-targets/*/resolution.json",
+        "hook-targets/*/audit.json"
+      ],
+      "status": "repository_ready",
+      "host_supported": true,
+      "workflow_states": {},
+      "configured_gates": [],
+      "missing_gates": [],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    },
+    {
+      "id": "p1-native-debugger-child",
+      "phase": "P1",
+      "capability": "native_debugger",
+      "evidence_level": "live-child-process",
+      "host": "windows",
+      "command": "python -m unittest tests.test_native_debugger_provider.NativeDebuggerWindowsE2ETests",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_native_debugger_provider.NativeDebuggerWindowsE2ETests"
+      ],
+      "expected_artifacts": [
+        "native_debugger/*/audit.json",
+        "native_debugger/*/events.json",
+        "native_debugger/*/diagnostics.json",
+        "native_debugger/*/manifest.json",
+        "native-debugger/target-identity.json",
+        "native-debugger/rollback.json"
+      ],
+      "execution_proof_artifact": "native-debugger/execution-proof.json",
+      "required_executed_tests": 2,
+      "target_identity_artifact": "native-debugger/target-identity.json",
+      "cleanup_artifacts": [
+        "native-debugger/rollback.json"
+      ],
+      "status": "ready_to_run",
+      "host_supported": true,
+      "workflow_states": {},
+      "configured_gates": [],
+      "missing_gates": [],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    },
+    {
+      "id": "p2-pe-seven-strategies",
+      "phase": "P2",
+      "capability": "patch_planner",
+      "evidence_level": "repository-production-backend",
+      "host": "any",
+      "command": "python -m unittest tests.test_patch_planner tests.test_patch_capability_provider",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_patch_planner",
+        "tests.test_patch_capability_provider"
+      ],
+      "expected_artifacts": [
+        "patch/plan.json",
+        "patch/verify.json",
+        "patch/rollback_plan.json"
+      ],
+      "status": "repository_ready",
+      "host_supported": true,
+      "workflow_states": {},
+      "configured_gates": [],
+      "missing_gates": [],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    },
+    {
+      "id": "p2-dll-proxy-build",
+      "phase": "P2",
+      "capability": "dll_proxy_generation",
+      "evidence_level": "toolchain",
+      "host": "any",
+      "gate_env": [
+        "RUN_DLL_PROXY_BUILD"
+      ],
+      "command": "$env:RUN_DLL_PROXY_BUILD='1'; python -m unittest tests.test_dll_proxy_generator",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_dll_proxy_generator"
+      ],
+      "run_env": {
+        "RUN_DLL_PROXY_BUILD": "1"
+      },
+      "expected_artifacts": [
+        "proxy/CMakeLists.txt",
+        "proxy/proxy.def",
+        "proxy/validation_report.json"
+      ],
+      "status": "dependency_gated",
+      "host_supported": true,
+      "workflow_states": {},
+      "configured_gates": [],
+      "missing_gates": [
+        "RUN_DLL_PROXY_BUILD"
+      ],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    },
+    {
+      "id": "p3-unity-mono-live",
+      "phase": "P3",
+      "capability": "engine_runtime_mono",
+      "evidence_level": "live-target",
+      "host": "windows",
+      "gate_env": [
+        "RUN_ENGINE_RUNTIME_WINDOWS_SMOKE",
+        "REVERSE_ANALYZER_UNITY_MONO_FIXTURE"
+      ],
+      "command": "$env:RUN_ENGINE_RUNTIME_WINDOWS_SMOKE='1'; python -m unittest tests.test_engine_runtime_mono tests.test_engine_runtime_provider",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_engine_runtime_mono",
+        "tests.test_engine_runtime_provider"
+      ],
+      "run_env": {
+        "RUN_ENGINE_RUNTIME_WINDOWS_SMOKE": "1"
+      },
+      "expected_artifacts": [
+        "engine/runtime-metadata.json",
+        "engine/target-identity.json",
+        "engine/semantic_ir_fragment.json"
+      ],
+      "execution_proof_artifact": "engine/execution-proof.json",
+      "target_identity_artifact": "engine/target-identity.json",
+      "status": "dependency_gated",
+      "host_supported": true,
+      "workflow_states": {},
+      "configured_gates": [],
+      "missing_gates": [
+        "RUN_ENGINE_RUNTIME_WINDOWS_SMOKE",
+        "REVERSE_ANALYZER_UNITY_MONO_FIXTURE"
+      ],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    },
+    {
+      "id": "p3-unity-il2cpp-live",
+      "phase": "P3",
+      "capability": "engine_runtime_il2cpp",
+      "evidence_level": "live-target",
+      "host": "windows",
+      "gate_env": [
+        "RUN_ENGINE_RUNTIME_WINDOWS_SMOKE",
+        "REVERSE_ANALYZER_UNITY_IL2CPP_FIXTURE"
+      ],
+      "command": "$env:RUN_ENGINE_RUNTIME_WINDOWS_SMOKE='1'; python -m unittest tests.test_engine_runtime_il2cpp tests.test_engine_runtime_provider",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_engine_runtime_il2cpp",
+        "tests.test_engine_runtime_provider"
+      ],
+      "run_env": {
+        "RUN_ENGINE_RUNTIME_WINDOWS_SMOKE": "1"
+      },
+      "expected_artifacts": [
+        "engine/registration.json",
+        "engine/target-identity.json",
+        "engine/token-native-map.json"
+      ],
+      "execution_proof_artifact": "engine/execution-proof.json",
+      "target_identity_artifact": "engine/target-identity.json",
+      "status": "dependency_gated",
+      "host_supported": true,
+      "workflow_states": {},
+      "configured_gates": [],
+      "missing_gates": [
+        "RUN_ENGINE_RUNTIME_WINDOWS_SMOKE",
+        "REVERSE_ANALYZER_UNITY_IL2CPP_FIXTURE"
+      ],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    },
+    {
+      "id": "p3-unreal-live",
+      "phase": "P3",
+      "capability": "engine_runtime_unreal",
+      "evidence_level": "live-target",
+      "host": "windows",
+      "gate_env": [
+        "RUN_ENGINE_RUNTIME_WINDOWS_SMOKE",
+        "REVERSE_ANALYZER_UNREAL_FIXTURE"
+      ],
+      "command": "$env:RUN_ENGINE_RUNTIME_WINDOWS_SMOKE='1'; python -m unittest tests.test_engine_runtime_unreal tests.test_engine_runtime_provider",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_engine_runtime_unreal",
+        "tests.test_engine_runtime_provider"
+      ],
+      "run_env": {
+        "RUN_ENGINE_RUNTIME_WINDOWS_SMOKE": "1"
+      },
+      "expected_artifacts": [
+        "engine/target-identity.json",
+        "engine/gnames.json",
+        "engine/gobjects.json",
+        "engine/gworld.json"
+      ],
+      "execution_proof_artifact": "engine/execution-proof.json",
+      "target_identity_artifact": "engine/target-identity.json",
+      "status": "dependency_gated",
+      "host_supported": true,
+      "workflow_states": {},
+      "configured_gates": [],
+      "missing_gates": [
+        "RUN_ENGINE_RUNTIME_WINDOWS_SMOKE",
+        "REVERSE_ANALYZER_UNREAL_FIXTURE"
+      ],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    },
+    {
+      "id": "p4-presentmon-live",
+      "phase": "P4",
+      "capability": "graphics_present_runtime",
+      "evidence_level": "live-target",
+      "host": "windows",
+      "workflows": [
+        "graphics_present_observation"
+      ],
+      "gate_env": [
+        "REVERSE_ANALYZER_GRAPHICS_FIXTURE_PID"
+      ],
+      "command": "python -m unittest tests.test_graphics_runtime_provider",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_graphics_runtime_provider"
+      ],
+      "expected_artifacts": [
+        "graphics/target-identity.json",
+        "graphics/present-events.jsonl",
+        "graphics/audit.json",
+        "graphics/evidence-manifest.json"
+      ],
+      "execution_proof_artifact": "graphics/execution-proof.json",
+      "target_identity_artifact": "graphics/target-identity.json",
+      "status": "dependency_gated",
+      "host_supported": true,
+      "workflow_states": {
+        "graphics_present_observation": "unavailable"
+      },
+      "configured_gates": [],
+      "missing_gates": [
+        "REVERSE_ANALYZER_GRAPHICS_FIXTURE_PID"
+      ],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    },
+    {
+      "id": "p4-native-graphics-bridge",
+      "phase": "P4",
+      "capability": "graphics_present_bridge",
+      "evidence_level": "live-target",
+      "host": "windows",
+      "workflows": [
+        "graphics_present_hook"
+      ],
+      "gate_env": [
+        "REVERSE_ANALYZER_GRAPHICS_FIXTURE_PID"
+      ],
+      "command": "python -m unittest tests.test_graphics_runtime_provider",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_graphics_runtime_provider"
+      ],
+      "mutating": true,
+      "expected_artifacts": [
+        "graphics/target-identity.json",
+        "graphics/bridge-request.json",
+        "graphics/bridge-response.json",
+        "graphics/stop-proof.json"
+      ],
+      "execution_proof_artifact": "graphics/execution-proof.json",
+      "target_identity_artifact": "graphics/target-identity.json",
+      "rollback_artifacts": [
+        "graphics/stop-proof.json"
+      ],
+      "cleanup_artifacts": [
+        "graphics/stop-proof.json"
+      ],
+      "status": "dependency_gated",
+      "host_supported": true,
+      "workflow_states": {
+        "graphics_present_hook": "unavailable"
+      },
+      "configured_gates": [],
+      "missing_gates": [
+        "REVERSE_ANALYZER_GRAPHICS_FIXTURE_PID"
+      ],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    },
+    {
+      "id": "p4-imgui-d3d11-live",
+      "phase": "P4",
+      "capability": "imgui_in_process_rendering",
+      "evidence_level": "live-target",
+      "host": "windows",
+      "workflows": [
+        "imgui_in_process"
+      ],
+      "gate_env": [
+        "DEAR_IMGUI_ROOT",
+        "REVERSE_ANALYZER_GRAPHICS_FIXTURE_PID"
+      ],
+      "command": "python -m unittest tests.test_imgui_renderer_provider",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_imgui_renderer_provider"
+      ],
+      "mutating": true,
+      "expected_artifacts": [
+        "imgui/target-identity.json",
+        "imgui/renderer-plugin.json",
+        "imgui/frame-lifecycle.json",
+        "imgui/hook-restoration.json"
+      ],
+      "execution_proof_artifact": "imgui/execution-proof.json",
+      "target_identity_artifact": "imgui/target-identity.json",
+      "rollback_artifacts": [
+        "imgui/hook-restoration.json"
+      ],
+      "cleanup_artifacts": [
+        "imgui/hook-restoration.json"
+      ],
+      "status": "dependency_gated",
+      "host_supported": true,
+      "workflow_states": {
+        "imgui_in_process": "unavailable"
+      },
+      "configured_gates": [],
+      "missing_gates": [
+        "DEAR_IMGUI_ROOT",
+        "REVERSE_ANALYZER_GRAPHICS_FIXTURE_PID"
+      ],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    },
+    {
+      "id": "p4-external-overlay-live",
+      "phase": "P4",
+      "capability": "render_overlay_runtime",
+      "evidence_level": "interactive-live-target",
+      "host": "windows",
+      "gate_env": [
+        "RUN_RENDER_OVERLAY_SMOKE"
+      ],
+      "command": "$env:RUN_RENDER_OVERLAY_SMOKE='1'; python -m unittest tests.test_render_overlay_provider",
+      "argv": [
+        "{python}",
+        "-m",
+        "unittest",
+        "tests.test_render_overlay_provider"
+      ],
+      "run_env": {
+        "RUN_RENDER_OVERLAY_SMOKE": "1"
+      },
+      "mutating": true,
+      "expected_artifacts": [
+        "render-overlay/target-identity.json",
+        "render-overlay/audit.json",
+        "render-overlay/screenshot.png",
+        "render-overlay/window-teardown.json"
+      ],
+      "execution_proof_artifact": "render-overlay/execution-proof.json",
+      "target_identity_artifact": "render-overlay/target-identity.json",
+      "rollback_artifacts": [
+        "render-overlay/window-teardown.json"
+      ],
+      "cleanup_artifacts": [
+        "render-overlay/window-teardown.json"
+      ],
+      "status": "dependency_gated",
+      "host_supported": true,
+      "workflow_states": {},
+      "configured_gates": [],
+      "missing_gates": [
+        "RUN_RENDER_OVERLAY_SMOKE"
+      ],
+      "live_verified": false,
+      "acceptance_boundary": "This readiness record does not become live_verified until the command runs against the named production fixture and its artifacts are retained."
+    }
+  ],
+  "summary": {
+    "total": 13,
+    "verified": 1,
+    "dependency_gated": 0,
+    "partial": 1,
+    "failed": 0,
+    "unavailable": 10,
+    "unsupported_host": 1,
+    "acceptance_fixture_total": 16,
+    "acceptance_fixture_repository_ready": 4,
+    "acceptance_fixture_ready_to_run": 1,
+    "acceptance_fixture_dependency_gated": 11,
+    "acceptance_fixture_unsupported_host": 0
+  }
+}

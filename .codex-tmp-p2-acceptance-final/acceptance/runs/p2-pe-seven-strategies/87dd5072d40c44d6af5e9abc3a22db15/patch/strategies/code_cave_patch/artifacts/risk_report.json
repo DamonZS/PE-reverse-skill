@@ -1,0 +1,27 @@
+{
+  "counts": {
+    "critical": 0,
+    "high": 1,
+    "info": 0,
+    "low": 0,
+    "medium": 0
+  },
+  "findings": [
+    {
+      "category": "control_flow",
+      "evidence": {
+        "offset": 522,
+        "section": ".text",
+        "size": 2
+      },
+      "id": "code_cave_execution_surface",
+      "message": "executable section padding is replaced with new instructions",
+      "operation_id": "code-cave",
+      "severity": "high"
+    }
+  ],
+  "overall_risk": "high",
+  "risk_score": 30,
+  "schema_version": 1,
+  "status": "ok"
+}

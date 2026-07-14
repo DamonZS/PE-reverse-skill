@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "fixture_id": "p1-native-debugger-child",
+  "phase": "P1",
+  "capability": "native_debugger",
+  "evidence_level": "live-child-process",
+  "session_id": "da789522acab44c396515d4140f9d4eb",
+  "target_identity": {
+    "kind": "controlled_child_process",
+    "pid": 11008,
+    "path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmprnp2he_5\\native_debugger_fixture.exe",
+    "sha256": "e0c8a76b43cfbdb0309d9b8aca5af18f17c95579211eb1154debadbff85ff959"
+  },
+  "target_identity_source": "artifact",
+  "started_at": "2026-07-14T13:10:28.565968+00:00",
+  "finished_at": "2026-07-14T13:10:37.163202+00:00",
+  "workspace": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance",
+  "run_directory": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p1-native-debugger-child\\da789522acab44c396515d4140f9d4eb",
+  "record_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\records\\p1-native-debugger-child--da789522acab44c396515d4140f9d4eb.json",
+  "command": [
+    "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "-m",
+    "unittest",
+    "tests.test_native_debugger_provider.NativeDebuggerWindowsE2ETests"
+  ],
+  "command_display": "python -m unittest tests.test_native_debugger_provider.NativeDebuggerWindowsE2ETests",
+  "contract_sha256": "a199ad35f8999a521d8bdc0af107682f19f81f462b459cd81aa726af45180408",
+  "environment_gates": {
+    "status": "ready_to_run",
+    "configured": [],
+    "missing": [],
+    "workflow_states": {}
+  },
+  "provider_versions": {
+    "python": "3.13.7",
+    "platform": "Windows-11-10.0.26100-SP0"
+  },
+  "expected_artifacts": [
+    "native_debugger/*/audit.json",
+    "native_debugger/*/events.json",
+    "native_debugger/*/diagnostics.json",
+    "native_debugger/*/manifest.json",
+    "native-debugger/target-identity.json",
+    "native-debugger/rollback.json"
+  ],
+  "observed_artifacts": [
+    {
+      "path": "environment-validation.json",
+      "size": 29240,
+      "sha256": "3ed5a79591bdde27e2b110b602f5efaaed93d7d55a7489f193200cdcff8afee2"
+    },
+    {
+      "path": "native-debugger/execution-proof.json",
+      "size": 255,
+      "sha256": "6597f03aee01839b3dc1266c472416c008c629176efbec885cfd7fecbffca5ed"
+    },
+    {
+      "path": "native-debugger/rollback.json",
+      "size": 98,
+      "sha256": "c93c6020ea2c1a54a9961e7bd4fde23c384a1ccc1902fcd5a7f2eee7614c0904"
+    },
+    {
+      "path": "native-debugger/target-identity.json",
+      "size": 237,
+      "sha256": "18736d75a420b0610b03f2380bd3b30a3fb90eca90522fcbf90d569c0bbd08ad"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-attach_trace/audit.json",
+      "size": 36886,
+      "sha256": "9e5d4e91ca61b66fa4018f4b0a14c571145338810907374d1adc1db1c2d7e23b"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-attach_trace/diagnostics.json",
+      "size": 4236,
+      "sha256": "ec610388b088eba5c0a4f3debd1eb746adf333f841030388c3233827626f73a2"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-attach_trace/events.json",
+      "size": 6629,
+      "sha256": "db1bb27e9fdb21a62ea9ee5ed6f493004cee01ba61f525c6d8eba8486d88b5c3"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-attach_trace/manifest.json",
+      "size": 1443,
+      "sha256": "9340b17148cfa0ebccb17eb02a01c3b232d243c778e9a9d1f38645e0bfda2284"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-software_breakpoint_trace/audit.json",
+      "size": 44864,
+      "sha256": "60c61d7238270a24ecb43e420c33d5cf1deee5cb9c0587299d11842dbd8df470"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-software_breakpoint_trace/diagnostics.json",
+      "size": 4284,
+      "sha256": "a49a7e2f5fe6a32c8677eb154aeac3fea569f6535f4358e6bf7e1b8b21e632a6"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-software_breakpoint_trace/events.json",
+      "size": 9624,
+      "sha256": "a2961172a723b4aa0e0f3968f33e014356df91ec0ca8ab2c9ee71423f5cea760"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-software_breakpoint_trace/manifest.json",
+      "size": 1547,
+      "sha256": "906f5a9b904d766970e3f025bc4ca6715645d1485279d58dc9623c7c2948abb6"
+    },
+    {
+      "path": "stderr.log",
+      "size": 105,
+      "sha256": "195aaa3e944c1483a2bfaccd8613f17dcadb176aed846c0e359f8d28f80d9854"
+    },
+    {
+      "path": "stdout.log",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "missing_artifacts": [],
+  "rejected_provenance": [],
+  "execution_proof": {
+    "status": "ok",
+    "provider": "windows_native_debugger",
+    "evidence_class": "live_host_proof",
+    "executed_tests": 2,
+    "skipped_tests": 0,
+    "live_operations": 20,
+    "actions": [
+      "attach_trace",
+      "software_breakpoint_trace"
+    ]
+  },
+  "execution_proof_errors": [],
+  "execution_proof_artifact": "native-debugger/execution-proof.json",
+  "rollback_result": {
+    "status": "not_required",
+    "verified": true,
+    "artifacts": []
+  },
+  "cleanup_result": {
+    "status": "ok",
+    "verified": true,
+    "artifacts": [
+      "D:/Project/pe-reverse-analyzer-main/.codex-tmp-p0-p4-acceptance/acceptance/runs/p1-native-debugger-child/da789522acab44c396515d4140f9d4eb/native-debugger/rollback.json"
+    ]
+  },
+  "exit_code": 0,
+  "execution_error": null,
+  "outcome": "passed",
+  "verification_constraints": {
+    "registered_fixture": true,
+    "structured_argv": true,
+    "host_and_dependencies_ready": true,
+    "execution_passed": true,
+    "live_evidence_level": true,
+    "execution_proof_valid": true,
+    "target_identity_present": true,
+    "target_identity_matches_artifact": true,
+    "expected_artifacts_complete": true,
+    "provenance_non_synthetic": true,
+    "rollback_verified": true,
+    "cleanup_verified": true
+  },
+  "live_verified": true
+}

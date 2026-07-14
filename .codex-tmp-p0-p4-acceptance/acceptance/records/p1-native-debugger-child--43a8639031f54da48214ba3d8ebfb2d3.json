@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "fixture_id": "p1-native-debugger-child",
+  "phase": "P1",
+  "capability": "native_debugger",
+  "evidence_level": "live-child-process",
+  "session_id": "43a8639031f54da48214ba3d8ebfb2d3",
+  "target_identity": {
+    "kind": "controlled_child_process",
+    "pid": 36988,
+    "path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmpt787fhd2\\native_debugger_fixture.exe",
+    "sha256": "bd685a5df8f5e5957c1d2bef0b62112b788ad171d4a5fc158d4f997609390fd7"
+  },
+  "target_identity_source": "artifact",
+  "started_at": "2026-07-14T13:09:13.419482+00:00",
+  "finished_at": "2026-07-14T13:09:21.933792+00:00",
+  "workspace": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance",
+  "run_directory": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p1-native-debugger-child\\43a8639031f54da48214ba3d8ebfb2d3",
+  "record_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\records\\p1-native-debugger-child--43a8639031f54da48214ba3d8ebfb2d3.json",
+  "command": [
+    "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "-m",
+    "unittest",
+    "tests.test_native_debugger_provider.NativeDebuggerWindowsE2ETests"
+  ],
+  "command_display": "python -m unittest tests.test_native_debugger_provider.NativeDebuggerWindowsE2ETests",
+  "contract_sha256": "a199ad35f8999a521d8bdc0af107682f19f81f462b459cd81aa726af45180408",
+  "environment_gates": {
+    "status": "ready_to_run",
+    "configured": [],
+    "missing": [],
+    "workflow_states": {}
+  },
+  "provider_versions": {
+    "python": "3.13.7",
+    "platform": "Windows-11-10.0.26100-SP0"
+  },
+  "expected_artifacts": [
+    "native_debugger/*/audit.json",
+    "native_debugger/*/events.json",
+    "native_debugger/*/diagnostics.json",
+    "native_debugger/*/manifest.json",
+    "native-debugger/target-identity.json",
+    "native-debugger/rollback.json"
+  ],
+  "observed_artifacts": [
+    {
+      "path": "environment-validation.json",
+      "size": 29240,
+      "sha256": "a94dc0892167f33442f50da216affe6ab0d5c5dca5b8892cc9c4331e00ff3ccc"
+    },
+    {
+      "path": "native-debugger/execution-proof.json",
+      "size": 255,
+      "sha256": "6597f03aee01839b3dc1266c472416c008c629176efbec885cfd7fecbffca5ed"
+    },
+    {
+      "path": "native-debugger/rollback.json",
+      "size": 98,
+      "sha256": "c93c6020ea2c1a54a9961e7bd4fde23c384a1ccc1902fcd5a7f2eee7614c0904"
+    },
+    {
+      "path": "native-debugger/target-identity.json",
+      "size": 237,
+      "sha256": "0d0959bd213ae53097ff73585e1d88c2e7712ae9c0dca58e35410c26e89e6138"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-attach_trace/audit.json",
+      "size": 36873,
+      "sha256": "a905d770c47a7b8e3c5707d5513238ce1060b58ee36e6fd19d510ea6e9b87292"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-attach_trace/diagnostics.json",
+      "size": 4233,
+      "sha256": "0c59045b6088eb17f5921850d1b294501c61af7e0222d3138869dd3a07661013"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-attach_trace/events.json",
+      "size": 6623,
+      "sha256": "f599681441f02cd3f256af04098304156c5bbdb99b4ce61fb678987746814b3f"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-attach_trace/manifest.json",
+      "size": 1443,
+      "sha256": "4ced02fef4940fb972ec3d874f0ad7d82db19e431b92afb7e70b5ea69f3eb7b6"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-software_breakpoint_trace/audit.json",
+      "size": 44842,
+      "sha256": "7a2b9e174e51b6c48032b386cbecdba53a380fffc9a746c96ef0d68cf2aaf013"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-software_breakpoint_trace/diagnostics.json",
+      "size": 4281,
+      "sha256": "21b61fd78fa05379a244b699556ae21eb7de85ea18d10dfac65327c45c4720fe"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-software_breakpoint_trace/events.json",
+      "size": 9613,
+      "sha256": "b27f0a086ddb03df9488dd3fa59edfbad4dcb699cfd233375e0d2c911ee6dbbc"
+    },
+    {
+      "path": "native_debugger/native-debugger-e2e-software_breakpoint_trace/manifest.json",
+      "size": 1547,
+      "sha256": "f3c5b668511f802653c448af24a7d7203a8be03942f5d3d08cd6edc974a23618"
+    },
+    {
+      "path": "stderr.log",
+      "size": 105,
+      "sha256": "047586ea710b5e8fa0dce59ca8eb4cd07c4107eddc6949c85096b0519eb3b61b"
+    },
+    {
+      "path": "stdout.log",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "missing_artifacts": [],
+  "rejected_provenance": [
+    "D:/Project/pe-reverse-analyzer-main/.codex-tmp-p0-p4-acceptance/acceptance/runs/p1-native-debugger-child/43a8639031f54da48214ba3d8ebfb2d3/native_debugger/native-debugger-e2e-attach_trace/audit.json",
+    "D:/Project/pe-reverse-analyzer-main/.codex-tmp-p0-p4-acceptance/acceptance/runs/p1-native-debugger-child/43a8639031f54da48214ba3d8ebfb2d3/native_debugger/native-debugger-e2e-software_breakpoint_trace/audit.json"
+  ],
+  "execution_proof": {
+    "status": "ok",
+    "provider": "windows_native_debugger",
+    "evidence_class": "live_host_proof",
+    "executed_tests": 2,
+    "skipped_tests": 0,
+    "live_operations": 20,
+    "actions": [
+      "attach_trace",
+      "software_breakpoint_trace"
+    ]
+  },
+  "execution_proof_errors": [],
+  "execution_proof_artifact": "native-debugger/execution-proof.json",
+  "rollback_result": {
+    "status": "not_required",
+    "verified": true,
+    "artifacts": []
+  },
+  "cleanup_result": {
+    "status": "ok",
+    "verified": true,
+    "artifacts": [
+      "D:/Project/pe-reverse-analyzer-main/.codex-tmp-p0-p4-acceptance/acceptance/runs/p1-native-debugger-child/43a8639031f54da48214ba3d8ebfb2d3/native-debugger/rollback.json"
+    ]
+  },
+  "exit_code": 0,
+  "execution_error": null,
+  "outcome": "passed",
+  "verification_constraints": {
+    "registered_fixture": true,
+    "structured_argv": true,
+    "host_and_dependencies_ready": true,
+    "execution_passed": true,
+    "live_evidence_level": true,
+    "execution_proof_valid": true,
+    "target_identity_present": true,
+    "target_identity_matches_artifact": true,
+    "expected_artifacts_complete": true,
+    "provenance_non_synthetic": false,
+    "rollback_verified": true,
+    "cleanup_verified": true
+  },
+  "live_verified": false
+}

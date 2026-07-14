@@ -78,17 +78,19 @@ class CliTests(unittest.TestCase):
     def test_capability_list_text_and_json(self) -> None:
         result = run_cli("capability", "list")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("memory_runtime: mock", result.stdout)
-        self.assertIn("injector: mock", result.stdout)
-        self.assertIn("android_rebuild: mock", result.stdout)
+        self.assertIn("memory_runtime: windows_memory_runtime, mock", result.stdout)
+        self.assertIn("injector: windows_controlled_injector, mock", result.stdout)
+        self.assertIn("hook_runtime: frida_hook_runtime, mock", result.stdout)
+        self.assertIn("android_rebuild: local_android_rebuild, mock", result.stdout)
 
         json_result = run_cli("capability", "list", "--json")
         self.assertEqual(json_result.returncode, 0, json_result.stderr)
         payload = json.loads(json_result.stdout)
         capabilities = {item["name"]: item["providers"] for item in payload["capabilities"]}
-        self.assertEqual(capabilities["memory_runtime"], ["mock"])
-        self.assertEqual(capabilities["injector"], ["mock"])
-        self.assertEqual(capabilities["android_rebuild"], ["mock"])
+        self.assertEqual(capabilities["memory_runtime"], ["windows_memory_runtime", "mock"])
+        self.assertEqual(capabilities["injector"], ["windows_controlled_injector", "mock"])
+        self.assertEqual(capabilities["hook_runtime"], ["frida_hook_runtime", "mock"])
+        self.assertEqual(capabilities["android_rebuild"], ["local_android_rebuild", "mock"])
 
     def test_capability_run_writes_report_manifest_and_audit_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -108,6 +110,8 @@ class CliTests(unittest.TestCase):
                 str(sample),
                 "--out",
                 str(out_dir),
+                "--provider",
+                "mock",
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -166,6 +170,8 @@ class CliTests(unittest.TestCase):
                 str(sample),
                 "--out",
                 str(out_dir),
+                "--provider",
+                "mock",
                 "--rollback",
             )
 
@@ -247,6 +253,8 @@ class CliTests(unittest.TestCase):
                 str(sample),
                 "--out",
                 str(out_dir),
+                "--provider",
+                "mock",
             )
             self.assertEqual(run_result.returncode, 0, run_result.stderr)
 
@@ -1107,6 +1115,7 @@ class CliTests(unittest.TestCase):
             plan.write_text(
                 json.dumps(
                     {
+                        "target_sha256": __import__("hashlib").sha256(original).hexdigest(),
                         "operations": [
                             {"kind": "replace_offset", "offset": 2, "expected": "90", "replacement": "cc"}
                         ]

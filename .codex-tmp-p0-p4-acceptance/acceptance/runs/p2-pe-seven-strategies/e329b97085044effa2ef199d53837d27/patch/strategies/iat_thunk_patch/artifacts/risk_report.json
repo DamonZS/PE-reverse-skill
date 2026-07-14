@@ -1,0 +1,39 @@
+{
+  "counts": {
+    "critical": 2,
+    "high": 0,
+    "info": 0,
+    "low": 0,
+    "medium": 0
+  },
+  "findings": [
+    {
+      "category": "pe_directory",
+      "evidence": {
+        "directory": "iat",
+        "directory_file_offset": 1120,
+        "directory_rva": 8288,
+        "directory_size": 8
+      },
+      "id": "directory_intersection:iat",
+      "message": "patch intersects the PE iat directory",
+      "operation_id": "iat-thunk",
+      "severity": "critical"
+    },
+    {
+      "category": "import",
+      "evidence": {
+        "pointer_size": 4,
+        "thunk_offset": 1120
+      },
+      "id": "iat_loader_overwrite_risk",
+      "message": "IAT contents may be overwritten by the PE loader unless the selected thunk is bound/runtime-patched",
+      "operation_id": "iat-thunk",
+      "severity": "critical"
+    }
+  ],
+  "overall_risk": "critical",
+  "risk_score": 100,
+  "schema_version": 1,
+  "status": "ok"
+}

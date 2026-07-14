@@ -1,0 +1,12 @@
+{
+  "status": "ok",
+  "provider": "windows_native_hook",
+  "evidence_class": "live_host_proof",
+  "executed_tests": 2,
+  "skipped_tests": 0,
+  "live_operations": 2,
+  "actions": [
+    "inline_trampoline",
+    "vtable_pointer"
+  ]
+}

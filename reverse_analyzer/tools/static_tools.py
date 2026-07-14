@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections import Counter
 import hashlib
+import json
 import math
 import os
 from pathlib import Path
@@ -19,7 +20,14 @@ from typing import Any, Dict, Iterable, List
 
 from .executor import ToolExecutor, ToolResult
 from .frida import frida_check, frida_hook_profiles, frida_install_guide, frida_trace
-from .patch import binary_patch_apply_plan, binary_patch_rollback_plan, validate_patch_plan
+from .patch import (
+    android_elf_patch_plan,
+    android_elf_patch_verify,
+    binary_patch_apply_plan,
+    binary_patch_rollback_plan,
+    dll_proxy_generate,
+    validate_patch_plan,
+)
 from .procmon import procmon_check, procmon_install_guide, procmon_trace
 from .ghidra import ghidra_check, ghidra_decompile, ghidra_install_guide
 from .gui import (
@@ -29,6 +37,7 @@ from .gui import (
     gui_strategy_select,
     gui_visual_parse,
     gui_visual_regression,
+    gui_world_projection,
     reconstruct_gui_project,
 )
 from .gui_evidence import build_gui_evidence_graph
@@ -40,9 +49,10 @@ from .gui_xaml import extract_xaml_ui_evidence
 from .memory import memory_address_map, memory_diff, memory_snapshot
 from .engine import engine_analyze
 from .android import android_analyze
-from .protocol import protocol_analyze
+from .ios import ios_analyze, ipa_analyze
+from .protocol import protocol_analyze, protocol_capture, protocol_infer, protocol_summarize
 from .pe_deep import pe_deep_scan
-from .reconstruct import reconstruct_project
+from ..source_reconstruction import attach_source_validation, reconstruct_source_project
 from .yara_tools import yara_scan
 
 PRINTABLE_RE = re.compile(rb"[\x20-\x7e]{4,}")
@@ -56,6 +66,114 @@ PACKER_IMPORT_HINTS = {
     "VirtualProtect",
     "WriteProcessMemory",
 }
+
+
+def reconstruct_project(
+    path: str | os.PathLike[str],
+    out_dir: str | os.PathLike[str],
+    analysis: Dict[str, Any] | None = None,
+    *,
+    strategy: str = "auto",
+    validate: bool = False,
+    validation_options: Dict[str, Any] | None = None,
+    runtime_validation_spec: Dict[str, Any] | str | os.PathLike[str] | None = None,
+    behavior_validation_spec: Dict[str, Any] | str | os.PathLike[str] | None = None,
+    behavior_original_dir: str | os.PathLike[str] | None = None,
+) -> Dict[str, Any]:
+    """Adapt the legacy tool call shape to the multi-stack source API."""
+
+    result = reconstruct_source_project(
+        path,
+        out_dir,
+        analysis,
+        strategy=strategy,
+        validate=False,
+        runtime_validation_spec=runtime_validation_spec,
+        behavior_validation_spec=behavior_validation_spec,
+        behavior_original_dir=behavior_original_dir,
+    )
+    _attach_reconstruction_compatibility(result)
+    if validate:
+        attach_source_validation(result, validation_options=validation_options)
+    return result
+
+
+def _attach_reconstruction_compatibility(result: Dict[str, Any]) -> None:
+    """Preserve the legacy report/session contract around multi-stack output."""
+
+    project_dir_value = result.get("project_dir")
+    project = result.get("project")
+    if not isinstance(project_dir_value, (str, os.PathLike)) or not isinstance(project, dict):
+        return
+    project_dir = Path(project_dir_value)
+    if not project_dir.is_dir():
+        return
+
+    relative_sources = sorted(
+        {
+            str(item.get("path") or "").replace("\\", "/")
+            for item in project.get("files") or []
+            if isinstance(item, dict)
+            and Path(str(item.get("path") or "")).suffix.lower()
+            in {".c", ".cc", ".cpp", ".cxx", ".cs", ".java", ".js", ".kt", ".kts", ".mjs", ".py"}
+        }
+        - {""}
+    )
+
+    if result.get("output_stack") == "cmake-c":
+        implementation = project_dir / "src" / "reconstructed.c"
+        compatibility_source = project_dir / "src" / "functions.c"
+        if implementation.is_file():
+            compatibility_source.write_text(implementation.read_text(encoding="utf-8"), encoding="utf-8")
+            relative_sources.append("src/functions.c")
+            _declare_reconstruction_artifact(result, project_dir, "src/functions.c", "source")
+
+    relative_sources = sorted(set(relative_sources))
+    tasks = []
+    for index, relative_path in enumerate(relative_sources, start=1):
+        module = Path(relative_path).stem
+        task_slug = re.sub(r"[^A-Za-z0-9_]+", "_", module).strip("_").lower() or f"module_{index}"
+        tasks.append(
+            {
+                "name": f"reconstruct_{task_slug}_{index:02d}",
+                "description": f"Review and refine generated source `{relative_path}`.",
+                "status": "pending",
+                "metadata": {"module": module, "module_file": relative_path},
+                "result": None,
+                "error": None,
+                "subtasks": [],
+            }
+        )
+
+    plan = {"status": "planned", "tasks": tasks}
+    plan_relative = "analysis/reconstruction_plan.json"
+    plan_path = project_dir / Path(plan_relative)
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_path.write_text(json.dumps(plan, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _declare_reconstruction_artifact(result, project_dir, plan_relative, "analysis")
+
+    result["reconstruction_plan"] = plan
+    result["task_count"] = len(tasks)
+    result["next_task"] = tasks[0]["name"] if tasks else None
+    result["module_count"] = len({task["metadata"]["module"] for task in tasks})
+    result["module_files"] = relative_sources
+
+
+def _declare_reconstruction_artifact(
+    result: Dict[str, Any],
+    project_dir: Path,
+    relative_path: str,
+    kind: str,
+) -> None:
+    absolute_path = str(project_dir / Path(relative_path))
+    artifacts = result.setdefault("artifacts", [])
+    if isinstance(artifacts, list) and not any(
+        isinstance(item, dict) and item.get("name") == relative_path for item in artifacts
+    ):
+        artifacts.append({"name": relative_path, "path": absolute_path, "kind": kind})
+    generated_files = result.setdefault("generated_files", [])
+    if isinstance(generated_files, list) and absolute_path not in generated_files:
+        generated_files.append(absolute_path)
 
 
 def register_builtin_tools(executor: ToolExecutor | None = None) -> ToolExecutor:
@@ -84,6 +202,9 @@ def register_builtin_tools(executor: ToolExecutor | None = None) -> ToolExecutor
     executor.register("binary_patch_apply", binary_patch_apply_plan)
     executor.register("binary_patch_rollback", binary_patch_rollback_plan)
     executor.register("validate_patch_plan", validate_patch_plan)
+    executor.register("android_elf_patch_plan", android_elf_patch_plan)
+    executor.register("android_elf_patch_verify", android_elf_patch_verify)
+    executor.register("dll_proxy_generate", dll_proxy_generate)
     executor.register("procmon_check", procmon_check)
     executor.register("procmon_trace", procmon_trace)
     executor.register("procmon_install_guide", procmon_install_guide)
@@ -96,6 +217,7 @@ def register_builtin_tools(executor: ToolExecutor | None = None) -> ToolExecutor
     executor.register("gui_strategy_select", gui_strategy_select)
     executor.register("gui_visual_parse", gui_visual_parse)
     executor.register("gui_visual_regression", gui_visual_regression)
+    executor.register("gui_world_projection", gui_world_projection)
     executor.register("gui_evidence_graph", build_gui_evidence_graph)
     executor.register("gui_behavior_graph", build_behavior_evidence_graph)
     executor.register("semantic_ir_build", build_semantic_ir)
@@ -105,6 +227,11 @@ def register_builtin_tools(executor: ToolExecutor | None = None) -> ToolExecutor
     executor.register("reconstruct_gui_project", reconstruct_gui_project)
     executor.register("engine_analyze", engine_analyze)
     executor.register("android_analyze", android_analyze)
+    executor.register("ios_analyze", ios_analyze)
+    executor.register("ipa_analyze", ipa_analyze)
+    executor.register("protocol_capture", protocol_capture)
+    executor.register("protocol_infer", protocol_infer)
+    executor.register("protocol_summarize", protocol_summarize)
     executor.register("protocol_analyze", protocol_analyze)
     return executor
 

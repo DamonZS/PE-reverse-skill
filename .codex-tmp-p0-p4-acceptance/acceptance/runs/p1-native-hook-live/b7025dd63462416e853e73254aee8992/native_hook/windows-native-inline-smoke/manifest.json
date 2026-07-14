@@ -1,0 +1,29 @@
+{
+  "action": "inline_trampoline",
+  "artifacts": [
+    {
+      "description": "Native hook lifecycle audit record",
+      "kind": "native-hook-audit",
+      "path": "native_hook/windows-native-inline-smoke/audit.json",
+      "session_id": "windows-native-inline-smoke",
+      "sha256": "98892b5851c39953e93cfc6a75cc91ccb8d1367bf83f5ace30872dc331201836",
+      "size": 41066,
+      "status": "ok"
+    },
+    {
+      "description": "Native hook lifecycle and bounded trace events",
+      "kind": "native-hook-events",
+      "path": "native_hook/windows-native-inline-smoke/events.json",
+      "session_id": "windows-native-inline-smoke",
+      "sha256": "7c57054f10ad94d420c8bab5e6441f10f9cb54414814c50165adf05f1479272a",
+      "size": 949,
+      "status": "ok"
+    }
+  ],
+  "capability": "native_hook",
+  "generated_at": "2026-07-14T13:11:31.407857+00:00",
+  "provider": "windows_native_hook",
+  "schema_version": 1,
+  "session_id": "windows-native-inline-smoke",
+  "status": "ok"
+}

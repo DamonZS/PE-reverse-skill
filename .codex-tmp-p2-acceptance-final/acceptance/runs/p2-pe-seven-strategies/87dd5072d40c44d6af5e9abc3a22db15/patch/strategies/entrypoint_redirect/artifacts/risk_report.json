@@ -1,0 +1,37 @@
+{
+  "counts": {
+    "critical": 1,
+    "high": 1,
+    "info": 0,
+    "low": 0,
+    "medium": 0
+  },
+  "findings": [
+    {
+      "category": "control_flow",
+      "evidence": {
+        "new_rva": 4128,
+        "old_rva": 4096
+      },
+      "id": "entrypoint_redirect",
+      "message": "AddressOfEntryPoint is redirected to a different executable RVA",
+      "operation_id": "entrypoint-redirect-header",
+      "severity": "critical"
+    },
+    {
+      "category": "pe_layout",
+      "evidence": {
+        "file_offset": 168,
+        "size_of_headers": 512
+      },
+      "id": "pe_header_modification",
+      "message": "patch intersects PE headers",
+      "operation_id": "entrypoint-redirect-header",
+      "severity": "high"
+    }
+  ],
+  "overall_risk": "critical",
+  "risk_score": 80,
+  "schema_version": 1,
+  "status": "ok"
+}

@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "fixture_id": "p1-loadlibrary-injector",
+  "phase": "P1",
+  "capability": "injector",
+  "evidence_level": "live-child-process",
+  "session_id": "b7a8f671921e4345bbc18c91d341551e",
+  "target_identity": {
+    "kind": "controlled_child_process",
+    "path": "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "pid": 44232,
+    "sha256": "d932e5e2f324d57f392e8fd063dcf6d0185be8a664c57c6d24e7762ed02c28ca",
+    "display_name": "python.exe"
+  },
+  "target_identity_source": "artifact",
+  "started_at": "2026-07-14T13:35:58.200914+00:00",
+  "finished_at": "2026-07-14T13:35:58.799976+00:00",
+  "workspace": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance",
+  "run_directory": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p1-loadlibrary-injector\\b7a8f671921e4345bbc18c91d341551e",
+  "record_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\records\\p1-loadlibrary-injector--b7a8f671921e4345bbc18c91d341551e.json",
+  "command": [
+    "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "-m",
+    "unittest",
+    "tests.test_injector_provider.InjectorProviderTests.test_acceptance_runner_retains_real_loadlibrary_artifacts"
+  ],
+  "command_display": "python -m unittest tests.test_injector_provider.InjectorProviderTests.test_acceptance_runner_retains_real_loadlibrary_artifacts",
+  "contract_sha256": "0267fb8425755994249f222e4159727f27b79c312ff9e9a3f3cc2697fbfcf923",
+  "environment_gates": {
+    "status": "ready_to_run",
+    "configured": [],
+    "missing": [],
+    "workflow_states": {}
+  },
+  "provider_versions": {
+    "python": "3.13.7",
+    "platform": "Windows-11-10.0.26100-SP0"
+  },
+  "expected_artifacts": [
+    "injector/*/injection.json",
+    "injector/audit.json",
+    "injector/target-identity.json",
+    "injector/rollback.json",
+    "injector/cleanup.json"
+  ],
+  "observed_artifacts": [
+    {
+      "path": "environment-validation.json",
+      "size": 31034,
+      "sha256": "f9449406ec88b0c6e13a450d52d244132d3cd23ca1e76050d5bacc39f215474b"
+    },
+    {
+      "path": "injector/audit.json",
+      "size": 91262,
+      "sha256": "cc4b6e2aeac7c28c7ccad1c907ed60d39f67d9e715779541febb5a8a41b7e61c"
+    },
+    {
+      "path": "injector/b7a8f671921e4345bbc18c91d341551e/injection.json",
+      "size": 91262,
+      "sha256": "cc4b6e2aeac7c28c7ccad1c907ed60d39f67d9e715779541febb5a8a41b7e61c"
+    },
+    {
+      "path": "injector/cleanup.json",
+      "size": 98,
+      "sha256": "838931347f3364522f49b89541e15257b0f00992720b99ea1b7fd8caca1ba9ca"
+    },
+    {
+      "path": "injector/execution-proof.json",
+      "size": 269,
+      "sha256": "1c165576b8f01f64abdbac5b1e8b6967e87485afbcdfbfa8a18a409293f79c76"
+    },
+    {
+      "path": "injector/rollback.json",
+      "size": 7769,
+      "sha256": "37d55e864b878f2cf140a4cd11546ca9291e01775c951a1251efffc2ea5ecd76"
+    },
+    {
+      "path": "injector/target-identity.json",
+      "size": 263,
+      "sha256": "2de8a002021cc012d66335c8631e896f1e9e45d363374cc4b8d3c8885150e343"
+    },
+    {
+      "path": "stderr.log",
+      "size": 103,
+      "sha256": "bc4d17e21931f356c5842043777e77470bd51b2803a9732430dcf6c55d92fb3a"
+    },
+    {
+      "path": "stdout.log",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "missing_artifacts": [],
+  "rejected_provenance": [],
+  "execution_proof": {
+    "status": "ok",
+    "provider": "windows_controlled_injector",
+    "evidence_class": "live_host_proof",
+    "executed_tests": 1,
+    "skipped_tests": 0,
+    "live_operations": 13,
+    "actions": [
+      "load_library",
+      "free_library"
+    ],
+    "synthetic": false
+  },
+  "execution_proof_errors": [],
+  "execution_proof_artifact": "injector/execution-proof.json",
+  "rollback_result": {
+    "status": "ok",
+    "verified": true,
+    "artifacts": [
+      "D:/Project/pe-reverse-analyzer-main/.codex-tmp-p0-p4-acceptance/acceptance/runs/p1-loadlibrary-injector/b7a8f671921e4345bbc18c91d341551e/injector/rollback.json"
+    ]
+  },
+  "cleanup_result": {
+    "status": "ok",
+    "verified": true,
+    "artifacts": [
+      "D:/Project/pe-reverse-analyzer-main/.codex-tmp-p0-p4-acceptance/acceptance/runs/p1-loadlibrary-injector/b7a8f671921e4345bbc18c91d341551e/injector/cleanup.json"
+    ]
+  },
+  "exit_code": 0,
+  "execution_error": null,
+  "outcome": "passed",
+  "verification_constraints": {
+    "registered_fixture": true,
+    "structured_argv": true,
+    "host_and_dependencies_ready": true,
+    "execution_passed": true,
+    "live_evidence_level": true,
+    "execution_proof_valid": true,
+    "target_identity_present": true,
+    "target_identity_matches_artifact": true,
+    "expected_artifacts_complete": true,
+    "provenance_non_synthetic": true,
+    "rollback_verified": true,
+    "cleanup_verified": true
+  },
+  "live_verified": true
+}

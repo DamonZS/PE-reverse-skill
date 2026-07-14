@@ -1,0 +1,7 @@
+{
+  "kind": "controlled_child_process",
+  "pid": 23872,
+  "path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmp_1pb806g\\manual_map_target.exe",
+  "sha256": "f5b4d07ab4aa1bced0e5e35a904aee1233bf08fe16fc0208457899c1c06b0a01",
+  "injected_image_sha256": "3711066c88dc5a14f076cb3db025c05aaa89e996cdce677bf4bedba75db59225"
+}

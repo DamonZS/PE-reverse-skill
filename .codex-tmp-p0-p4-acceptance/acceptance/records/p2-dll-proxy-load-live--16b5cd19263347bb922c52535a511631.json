@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "fixture_id": "p2-dll-proxy-load-live",
+  "phase": "P2",
+  "capability": "dll_proxy_generation",
+  "evidence_level": "live-child-process",
+  "session_id": "16b5cd19263347bb922c52535a511631",
+  "target_identity": {},
+  "target_identity_source": "missing",
+  "started_at": "2026-07-14T13:51:45.257105+00:00",
+  "finished_at": "2026-07-14T13:51:48.373550+00:00",
+  "workspace": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance",
+  "run_directory": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-dll-proxy-load-live\\16b5cd19263347bb922c52535a511631",
+  "record_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\records\\p2-dll-proxy-load-live--16b5cd19263347bb922c52535a511631.json",
+  "command": [
+    "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "-m",
+    "unittest",
+    "tests.test_dll_proxy_generator.DllProxyProjectGeneratorTests.test_generated_x64_proxy_loads_resolves_and_unloads"
+  ],
+  "command_display": "$env:RUN_DLL_PROXY_LIVE='1'; python -m unittest tests.test_dll_proxy_generator.DllProxyProjectGeneratorTests.test_generated_x64_proxy_loads_resolves_and_unloads",
+  "contract_sha256": "8dc92799362045fea52793d960f50e924d91f67e3e0d47f75656ed979a2edd32",
+  "environment_gates": {
+    "status": "ready_to_run",
+    "configured": [
+      "RUN_DLL_PROXY_LIVE"
+    ],
+    "missing": [],
+    "workflow_states": {}
+  },
+  "provider_versions": {
+    "python": "3.13.7",
+    "platform": "Windows-11-10.0.26100-SP0"
+  },
+  "expected_artifacts": [
+    "proxy/build/fixture.dll",
+    "proxy/build/fixture_original.dll",
+    "proxy/validation_report.json",
+    "proxy/toolchain-proof.json",
+    "proxy/load-proof.json",
+    "proxy/unload-proof.json",
+    "proxy/target-identity.json"
+  ],
+  "observed_artifacts": [
+    {
+      "path": "environment-validation.json",
+      "size": 32758,
+      "sha256": "1d3fc7cdb2e73c468a2eda2a25fe929fe043c99f16cca2d785043689add5f4c7"
+    },
+    {
+      "path": "proxy/build/fixture.dll",
+      "size": 44659,
+      "sha256": "51a897d447f057cc95004544bde9efcb7124946ee303083025adbd2b2537af1f"
+    },
+    {
+      "path": "proxy/build/fixture_original.dll",
+      "size": 2048,
+      "sha256": "c7e8f8f3f62acf8b86ddb7575c3ce99312dec19b9509d28b2fbebd9100f8b8ca"
+    },
+    {
+      "path": "proxy/toolchain-proof.json",
+      "size": 2055,
+      "sha256": "4fe4073d939240a16022d6435509b5b5b89492fea0b966fbb1e68ab383ae04fc"
+    },
+    {
+      "path": "proxy/validation_report.json",
+      "size": 1287,
+      "sha256": "ad757cf042721b9575c051db178911c30468a76cfccd279122cd59620b56dae7"
+    },
+    {
+      "path": "stderr.log",
+      "size": 1050,
+      "sha256": "211b0f16eeb9d86cbbead590ddb369df08cc06297049c96192c01b64b565b3e0"
+    },
+    {
+      "path": "stdout.log",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "missing_artifacts": [
+    "proxy/load-proof.json",
+    "proxy/unload-proof.json",
+    "proxy/target-identity.json",
+    "proxy/execution-proof.json"
+  ],
+  "rejected_provenance": [],
+  "execution_proof": {},
+  "execution_proof_errors": [
+    "execution proof is missing or invalid"
+  ],
+  "execution_proof_artifact": "proxy/execution-proof.json",
+  "rollback_result": {
+    "status": "missing_or_unverified",
+    "verified": false,
+    "artifacts": []
+  },
+  "cleanup_result": {
+    "status": "missing_or_unverified",
+    "verified": false,
+    "artifacts": []
+  },
+  "exit_code": 1,
+  "execution_error": null,
+  "outcome": "failed",
+  "verification_constraints": {
+    "registered_fixture": true,
+    "structured_argv": true,
+    "host_and_dependencies_ready": true,
+    "execution_passed": false,
+    "live_evidence_level": true,
+    "execution_proof_valid": false,
+    "target_identity_present": false,
+    "target_identity_matches_artifact": true,
+    "expected_artifacts_complete": false,
+    "provenance_non_synthetic": true,
+    "rollback_verified": false,
+    "cleanup_verified": false
+  },
+  "live_verified": false
+}

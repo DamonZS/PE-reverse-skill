@@ -1,0 +1,14 @@
+.......................E..............
+======================================================================
+ERROR: test_acceptance_runner_retains_production_provider_lifecycle_artifacts (tests.test_patch_capability_provider.PatchCapabilityProviderTests.test_acceptance_runner_retains_production_provider_lifecycle_artifacts)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\Project\pe-reverse-analyzer-main\tests\test_patch_capability_provider.py", line 110, in test_acceptance_runner_retains_production_provider_lifecycle_artifacts
+    self.assertEqual(result.status, "ok", result.error)
+                                          ^^^^^^^^^^^^
+AttributeError: 'CapabilityExecutionResult' object has no attribute 'error'
+
+----------------------------------------------------------------------
+Ran 38 tests in 19.395s
+
+FAILED (errors=1)

@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "fixture_id": "p1-manual-map-live",
+  "phase": "P1",
+  "capability": "injector_manual_map",
+  "evidence_level": "live-target",
+  "session_id": "da7b349871c949babc3e1f947b705f27",
+  "target_identity": {
+    "kind": "controlled_child_process",
+    "pid": 23872,
+    "path": "C:\\Users\\Damon\\AppData\\Local\\Temp\\tmp_1pb806g\\manual_map_target.exe",
+    "sha256": "f5b4d07ab4aa1bced0e5e35a904aee1233bf08fe16fc0208457899c1c06b0a01",
+    "injected_image_sha256": "3711066c88dc5a14f076cb3db025c05aaa89e996cdce677bf4bedba75db59225"
+  },
+  "target_identity_source": "artifact",
+  "started_at": "2026-07-14T13:12:33.158492+00:00",
+  "finished_at": "2026-07-14T13:12:35.728332+00:00",
+  "workspace": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance",
+  "run_directory": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p1-manual-map-live\\da7b349871c949babc3e1f947b705f27",
+  "record_path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\records\\p1-manual-map-live--da7b349871c949babc3e1f947b705f27.json",
+  "command": [
+    "C:\\Users\\Damon\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+    "-m",
+    "unittest",
+    "tests.test_injector_manual_map_live"
+  ],
+  "command_display": "$env:RUN_INJECTOR_MANUAL_MAP_WINDOWS_LIVE='1'; python -m unittest tests.test_injector_manual_map_live",
+  "contract_sha256": "42329587610ee589fc9c009f4b3a9ffbc0b1abf4435f0df4d1c5c8c3b3d18ba3",
+  "environment_gates": {
+    "status": "ready_to_run",
+    "configured": [
+      "RUN_INJECTOR_MANUAL_MAP_WINDOWS_LIVE"
+    ],
+    "missing": [],
+    "workflow_states": {}
+  },
+  "provider_versions": {
+    "python": "3.13.7",
+    "platform": "Windows-11-10.0.26100-SP0"
+  },
+  "expected_artifacts": [
+    "injector/*/injection.json",
+    "injector/target-identity.json",
+    "injector/manual-map-rollback.json"
+  ],
+  "observed_artifacts": [
+    {
+      "path": "environment-validation.json",
+      "size": 29311,
+      "sha256": "73aad828dab05c187079410dfc3dedd58ca0bd96f7a876ef19cbb950ee744d10"
+    },
+    {
+      "path": "injector/execution-proof.json",
+      "size": 244,
+      "sha256": "21b9a98b3c751812e951b88b5e4d6d13a9981fdd8ea9f7c1623cf797df8a3983"
+    },
+    {
+      "path": "injector/injector-manual-map-live-cfeaa5bcd787be3e562f4219e989e516/injection.json",
+      "size": 240102,
+      "sha256": "81ed5741cb47ffbf8db33e9cfb54e56a1fb5c66ba9e5dc0b2b4c03be4725a567"
+    },
+    {
+      "path": "injector/manual-map-rollback.json",
+      "size": 158,
+      "sha256": "d83206d49df115521d74d6d9b0e21aac173d6dbb2c21b437db310c3877dbfa40"
+    },
+    {
+      "path": "injector/target-identity.json",
+      "size": 327,
+      "sha256": "0a5d31ef5157b51d63a9d9827cc19352ce878788cd457afb7c9f9c7c314b62d4"
+    },
+    {
+      "path": "stderr.log",
+      "size": 103,
+      "sha256": "5bf989fc0a44e3ba6118ab18448e99f4d7da21d6b6e51e2e34b966918def2852"
+    },
+    {
+      "path": "stdout.log",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "missing_artifacts": [],
+  "rejected_provenance": [],
+  "execution_proof": {
+    "status": "ok",
+    "provider": "windows_controlled_injector",
+    "evidence_class": "live_host_proof",
+    "executed_tests": 1,
+    "skipped_tests": 0,
+    "live_operations": 10,
+    "actions": [
+      "manual_map",
+      "manual_unmap"
+    ]
+  },
+  "execution_proof_errors": [],
+  "execution_proof_artifact": "injector/execution-proof.json",
+  "rollback_result": {
+    "status": "ok",
+    "verified": true,
+    "artifacts": [
+      "D:/Project/pe-reverse-analyzer-main/.codex-tmp-p0-p4-acceptance/acceptance/runs/p1-manual-map-live/da7b349871c949babc3e1f947b705f27/injector/manual-map-rollback.json"
+    ]
+  },
+  "cleanup_result": {
+    "status": "ok",
+    "verified": true,
+    "artifacts": [
+      "D:/Project/pe-reverse-analyzer-main/.codex-tmp-p0-p4-acceptance/acceptance/runs/p1-manual-map-live/da7b349871c949babc3e1f947b705f27/injector/manual-map-rollback.json"
+    ]
+  },
+  "exit_code": 0,
+  "execution_error": null,
+  "outcome": "passed",
+  "verification_constraints": {
+    "registered_fixture": true,
+    "structured_argv": true,
+    "host_and_dependencies_ready": true,
+    "execution_passed": true,
+    "live_evidence_level": true,
+    "execution_proof_valid": true,
+    "target_identity_present": true,
+    "target_identity_matches_artifact": true,
+    "expected_artifacts_complete": true,
+    "provenance_non_synthetic": true,
+    "rollback_verified": true,
+    "cleanup_verified": true
+  },
+  "live_verified": true
+}

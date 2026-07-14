@@ -1,0 +1,48 @@
+{
+  "operations": [
+    {
+      "expected": "9090",
+      "id": "code-cave",
+      "kind": "replace_offset",
+      "offset": 522,
+      "replacement": "cccc",
+      "role": "code_cave_payload"
+    }
+  ],
+  "planner": {
+    "explicit_intent": true,
+    "layout_preserving": true,
+    "name": "pe_aware_patch_planner",
+    "operation_model": "checked_equal_length_byte_replacements",
+    "schema_version": 1
+  },
+  "schema_version": 1,
+  "strategy": "code_cave_patch",
+  "strategy_details": {
+    "accepted_fill_bytes": [
+      "00",
+      "90",
+      "CC"
+    ],
+    "cave_offset": 522,
+    "cave_rva": 4106,
+    "control_transfer_modified": false,
+    "mode": "existing_executable_cave",
+    "payload_size": 2,
+    "section": ".text",
+    "section_index": 0
+  },
+  "target": {
+    "bits": 32,
+    "entrypoint_rva": 4096,
+    "format": "pe",
+    "has_overlay": false,
+    "image_base": 4194304,
+    "machine": "0x014C",
+    "path": "D:\\Project\\pe-reverse-analyzer-main\\.codex-tmp-p0-p4-acceptance\\acceptance\\runs\\p2-pe-seven-strategies\\e329b97085044effa2ef199d53837d27\\patch\\strategies\\code_cave_patch\\fixture.exe",
+    "section_count": 2,
+    "sha256": "626e023d2b3b8baabb21aac86da6ebad4899a36d29ac55c4d98fc83e54b56645",
+    "size": 1536
+  },
+  "target_sha256": "626e023d2b3b8baabb21aac86da6ebad4899a36d29ac55c4d98fc83e54b56645"
+}

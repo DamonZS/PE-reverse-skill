@@ -1,0 +1,41 @@
+[Version]
+Signature="$WINDOWS NT$"
+Class=System
+ClassGuid={4D36E97D-E325-11CE-BFC1-08002BE10318}
+Provider=%ProviderName%
+DriverVer=07/14/2026,1.0.0.0
+CatalogFile=ReverseAnalyzerKernelMemory.cat
+PnpLockdown=1
+
+[DestinationDirs]
+DriverCopyFiles=12
+
+[DefaultInstall.NTamd64]
+CopyFiles=DriverCopyFiles
+
+[DefaultInstall.NTamd64.Services]
+AddService=ReverseAnalyzerKernelMemory,0x00000002,ServiceInstall
+
+[DriverCopyFiles]
+ReverseAnalyzerKernelMemory.sys
+
+[ServiceInstall]
+DisplayName=%ServiceDisplayName%
+Description=%ServiceDescription%
+ServiceType=1
+StartType=3
+ErrorControl=1
+ServiceBinary=%12%\ReverseAnalyzerKernelMemory.sys
+
+[SourceDisksNames]
+1=%InstallDisk%,,
+
+[SourceDisksFiles]
+ReverseAnalyzerKernelMemory.sys=1
+
+[Strings]
+ProviderName="Reverse Analyzer Lab"
+ServiceDisplayName="Reverse Analyzer Kernel Memory Lab Driver"
+ServiceDescription="Bounded allowlisted memory evidence and repair transport"
+InstallDisk="Reverse Analyzer Kernel Memory Driver"
+

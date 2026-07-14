@@ -57,6 +57,7 @@ class CapabilityPlan(JsonMixin):
     session_id: str
     target: TargetIdentity
     action: str
+    parameters: Dict[str, Any] = field(default_factory=dict)
     steps: List[Dict[str, Any]] = field(default_factory=list)
     precondition_hash: Optional[str] = None
     before_snapshot: Dict[str, Any] = field(default_factory=dict)

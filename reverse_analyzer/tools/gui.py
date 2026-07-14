@@ -3,18 +3,25 @@
 from __future__ import annotations
 
 from collections import Counter
+import hashlib
 import json
 import math
 import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import zipfile
 from typing import Any, Dict, Iterable, Mapping
-from xml.etree import ElementTree
 
+from ..gui.world_projection import WorldProjectionEngine, write_projection_artifact
+from ..gui.vlm_provider import load_vlm_provider
+from ..gui.windows_uia import WINDOWS_UIA_BACKEND, probe_windows_uia
 from .executor import ToolResult
+from .gui_runtime_adapters import (
+    RuntimeProviderError,
+    probe_android_uiautomator,
+    probe_ios_accessibility,
+)
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".ico", ".webp"}
 SCREENSHOT_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
@@ -131,6 +138,65 @@ STRATEGY_MAP: Dict[str, Dict[str, Any]] = {
         "reason": "No strong GUI framework signal was found.",
     },
 }
+
+
+def gui_world_projection(
+    *,
+    matrix: Iterable[float],
+    viewport: Mapping[str, Any],
+    out_dir: str | os.PathLike[str],
+    points: Iterable[Iterable[float]] | None = None,
+    aabbs: Iterable[Any] | None = None,
+    matrix_layout: str = "row-major",
+    clip_convention: str = "d3d",
+    handedness: str = "left-handed",
+    reversed_z: bool = False,
+    matrix_source: str | Mapping[str, Any] = "explicit-cli-input",
+    coordinate_system: str | Mapping[str, Any] = "world",
+    metadata: Mapping[str, Any] | None = None,
+) -> ToolResult:
+    """Project world geometry and persist deterministic GUI evidence."""
+
+    try:
+        engine = WorldProjectionEngine(
+            matrix,
+            matrix_layout=matrix_layout,
+            clip_convention=clip_convention,
+            handedness=handedness,
+            viewport=viewport,
+            matrix_source=matrix_source,
+            coordinate_system=coordinate_system,
+            reversed_z=reversed_z,
+        )
+        payload = engine.build_artifact(
+            points=points,
+            aabbs=aabbs,
+            metadata=metadata,
+        )
+        output_root = Path(out_dir).expanduser().resolve()
+        gui_dir = output_root if output_root.name.casefold() == "gui" else output_root / "gui"
+        artifact_path = gui_dir / "world_projection.json"
+        written = write_projection_artifact(artifact_path, payload)
+        return ToolResult(
+            tool="gui_world_projection",
+            status="ok",
+            data={
+                "status": "ok",
+                "artifact_type": payload.get("artifact_type"),
+                "summary": payload.get("summary", {}),
+                "provenance": payload.get("provenance", {}),
+                "artifact_path": written["path"],
+                "artifact_sha256": written["sha256"],
+                "artifacts": [written["path"], written["hash_path"]],
+            },
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        return ToolResult(
+            tool="gui_world_projection",
+            status="failed",
+            error=f"{type(exc).__name__}: {exc}",
+            data={"status": "failed", "artifacts": []},
+        )
 
 
 def gui_fingerprint(path: str | os.PathLike[str], out_dir: str | os.PathLike[str] | None = None) -> Dict[str, Any]:
@@ -344,54 +410,118 @@ def gui_runtime_probe(
     attach_pid: int | None = None,
     adb_path: str | os.PathLike[str] | None = None,
     android_serial: str | None = None,
+    ios_provider_command: Iterable[str | os.PathLike[str]] | str | None = None,
 ) -> ToolResult:
     sample = Path(path)
     data = {
         "path": str(sample),
         "attach_pid": attach_pid,
         "android_serial": android_serial,
+        "status": "unavailable",
+        "backend": "none",
+        "coverage": {"scope": "none", "hierarchy": "none", "properties": []},
+        "reason": "runtime UI probe requires an attached or externally managed GUI target",
+        "provenance": {"target_executed": False, "attempts": []},
         "window_count": 0,
         "control_count": 0,
         "windows": [],
     }
     status = "unavailable"
-    error = "runtime UI probe requires an attached/launched GUI target"
-    if os.name == "nt" and attach_pid:
+    reason = str(data["reason"])
+    attempts: list[Dict[str, Any]] = []
+
+    def record_success(result: Mapping[str, Any]) -> None:
+        nonlocal status, reason
+        data.update(dict(result))
+        status = str(result.get("status") or "ok")
+        reason = str(result.get("reason") or "runtime UI provider completed")
+        attempts.append({"backend": data.get("backend"), "status": status, "reason": reason})
+
+    def record_failure(backend: str, exc: Exception) -> None:
+        nonlocal reason
+        if isinstance(exc, RuntimeProviderError):
+            attempts.append(exc.as_attempt())
+            reason = exc.reason
+        else:
+            reason = f"{type(exc).__name__}: {exc}"
+            attempts.append({"backend": backend, "status": "failed", "reason": reason})
+
+    if _is_windows_runtime() and attach_pid:
         try:
-            data.update(_win32_runtime_tree(int(attach_pid)))
+            record_success(probe_windows_uia(int(attach_pid)))
+        except Exception as exc:  # noqa: BLE001 - UIA is optional and Win32 remains the fallback.
+            record_failure(WINDOWS_UIA_BACKEND, exc)
+        if status != "ok":
+            try:
+                data.update(_win32_runtime_tree(int(attach_pid)))
+                uia_reason = reason
+                reason = f"Windows UI Automation was unavailable ({uia_reason}); used Win32 window enumeration fallback."
+                attempts.append({
+                    "backend": "win32-enumwindows",
+                    "status": "ok",
+                    "reason": "EnumWindows and EnumChildWindows completed for the attached process.",
+                })
+                data["status"] = "ok"
+                data["reason"] = reason
+                data["coverage"] = {
+                    "scope": "attached-process",
+                    "hierarchy": "top-level and child HWNDs",
+                    "properties": ["handle", "title", "class_name", "visible", "bounds"],
+                    "limits": {"windows": 100, "controls_per_window": 500},
+                    "limitations": ["No UI Automation ids, semantic control types, enabled state, or offscreen state."],
+                }
+                data["provenance"] = {
+                    "provider": "user32 EnumWindows/EnumChildWindows",
+                    "source": "live attached process",
+                    "process_id": int(attach_pid),
+                    "target_executed": False,
+                }
+                status = "ok"
+            except Exception as exc:  # noqa: BLE001 - runtime probing remains optional.
+                record_failure("win32-enumwindows", exc)
+                reason = f"Windows runtime UI providers failed: {reason}"
+        if status == "ok" and data.get("backend") != WINDOWS_UIA_BACKEND:
             data["backend"] = "win32-enumwindows"
-            status = "ok"
-            error = None
-        except Exception as exc:  # noqa: BLE001 - runtime probing remains optional.
-            error = f"Windows runtime UI probe failed: {type(exc).__name__}: {exc}"
     elif sample.suffix.lower() == ".apk":
         try:
-            data.update(_android_runtime_tree(adb_path=adb_path, android_serial=android_serial))
-            data["backend"] = "android-uiautomator"
-            status = "ok"
-            error = None
+            record_success(_android_runtime_tree(adb_path=adb_path, android_serial=android_serial))
         except Exception as exc:  # noqa: BLE001 - an unavailable emulator must not block static GUI analysis.
+            record_failure("android-uiautomator", exc)
             data["setup_hint"] = "Android runtime UI probing requires a connected device/emulator and uiautomator dump support."
-            error = f"Android runtime UI probe unavailable: {type(exc).__name__}: {exc}"
+            reason = f"Android runtime UI probe unavailable: {reason}"
     elif sample.suffix.lower() == ".ipa":
-        data["setup_hint"] = "iOS runtime UI probing requires an accessibility dump via XCUITest or a compatible device bridge."
-        error = "iOS runtime UI probe requires an accessibility-capable target"
-    elif os.name == "nt":
+        command = ios_provider_command
+        if command is not None and not isinstance(command, str):
+            command = list(command)
+        try:
+            record_success(probe_ios_accessibility(provider_command=command))
+        except Exception as exc:  # noqa: BLE001 - external XCUITest providers remain optional.
+            record_failure("ios-accessibility-provider", exc)
+            data["setup_hint"] = "On macOS, configure an xcrun/XCUITest accessibility provider command that emits JSON or XML."
+            reason = f"iOS runtime UI probe unavailable: {reason}"
+    elif _is_windows_runtime():
         data["setup_hint"] = "Pass --attach-pid for a launched Windows target; the probe then enumerates top-level and child Win32 controls."
-        error = "Windows runtime UI probe requires --attach-pid"
+        reason = "Windows runtime UI probe requires --attach-pid"
     else:
         data["setup_hint"] = "Runtime UI probing requires a launched target plus Windows UIA, uiautomator, or XCUITest."
+    data["status"] = status
+    data["reason"] = reason
+    provenance = dict(data.get("provenance") or {})
+    provenance["target_executed"] = False
+    provenance["attempts"] = attempts
+    data["provenance"] = provenance
     if out_dir:
         gui_dir = Path(out_dir) / "gui"
         gui_dir.mkdir(parents=True, exist_ok=True)
         raw_xml = data.pop("raw_xml", None)
         path_obj = gui_dir / "runtime_tree.json"
-        _write_json(path_obj, {"status": status, **data})
+        _write_json(path_obj, data)
         data["artifacts"] = [{"name": "gui/runtime_tree.json", "path": str(path_obj), "kind": "gui-runtime-tree"}]
         if isinstance(raw_xml, str) and raw_xml:
             xml_path = gui_dir / "runtime_tree.xml"
             xml_path.write_text(raw_xml, encoding="utf-8")
             data["artifacts"].append({"name": "gui/runtime_tree.xml", "path": str(xml_path), "kind": "gui-runtime-tree"})
+    error = None if status == "ok" else reason
     return ToolResult(tool="gui_runtime_probe", status=status, error=error, data=data)
 
 
@@ -399,20 +529,40 @@ def gui_visual_parse(
     screenshot_dir: str | os.PathLike[str] | None = None,
     out_dir: str | os.PathLike[str] | None = None,
     vlm_provider: Any = None,
+    vlm_timeout_seconds: float | None = None,
 ) -> ToolResult | Dict[str, Any]:
+    """Parse screenshots with local tooling and an optional production VLM.
+
+    ``vlm_provider`` accepts the legacy injected callable, a ``module:callable``
+    import path, or a JSON-compatible provider configuration mapping. When it
+    is omitted the provider loader consults the GUI VLM environment settings.
+    """
+
     screenshots = _screenshot_files(Path(screenshot_dir)) if screenshot_dir else []
     local_visual = _local_visual_parse(screenshots)
-    provider_name = (
-        getattr(vlm_provider, "name", None)
-        or getattr(vlm_provider, "__name__", None)
-        or (str(vlm_provider) if vlm_provider and not callable(vlm_provider) else "not_configured")
+    provider_visual = _provider_visual_parse(
+        screenshots,
+        vlm_provider,
+        timeout_seconds=vlm_timeout_seconds,
     )
-    provider_visual = _provider_visual_parse(screenshots, vlm_provider) if callable(vlm_provider) else {}
     text_regions = list(local_visual.get("text_regions") or []) + list(provider_visual.get("text_regions") or [])
     widgets = list(local_visual.get("widgets") or []) + list(provider_visual.get("widgets") or [])
+    local_components = local_visual.get("components") if isinstance(local_visual.get("components"), Mapping) else {}
+    components = {
+        "image_decode": dict(local_components.get("image_decode") or {}),
+        "segmentation": dict(local_components.get("segmentation") or {}),
+        "ocr": dict(local_components.get("ocr") or {}),
+        "vlm": dict(provider_visual.get("component") or {}),
+    }
+    provider_name = str(components["vlm"].get("provider") or "not_configured")
+    status, reason = _visual_parse_outcome(len(screenshots), components)
     data = {
+        "schema_version": 1,
+        "status": status,
+        "reason": reason,
         "screenshot_dir": str(screenshot_dir) if screenshot_dir else None,
         "screenshot_count": len(screenshots),
+        "decoded_screenshot_count": int(components["image_decode"].get("succeeded_count") or 0),
         "screenshots": [str(path) for path in screenshots],
         "ocr_text_count": len(text_regions),
         "detected_widget_count": len(widgets),
@@ -421,16 +571,18 @@ def gui_visual_parse(
         "image_metadata": local_visual.get("image_metadata") or [],
         "errors": list(local_visual.get("errors") or []) + list(provider_visual.get("errors") or []),
         "vlm_provider": provider_name,
+        "vlm_provenance": dict(components["vlm"].get("provenance") or {}),
+        "components": components,
     }
     if out_dir:
         gui_dir = Path(out_dir) / "gui"
         gui_dir.mkdir(parents=True, exist_ok=True)
         path_obj = gui_dir / "visual_parse.json"
-        _write_json(path_obj, {"status": "ok" if screenshots else "unavailable", **data})
+        _write_json(path_obj, data)
         data["artifacts"] = [{"name": "gui/visual_parse.json", "path": str(path_obj), "kind": "gui-visual-parse"}]
     if not screenshots:
-        return ToolResult(tool="gui_visual_parse", status="unavailable", error="no screenshots supplied; pass --gui-screenshot-dir", data=data)
-    return {"status": "ok", **data}
+        return ToolResult(tool="gui_visual_parse", status="unavailable", error=reason, data=data)
+    return data
 
 
 def reconstruct_gui_project(
@@ -572,27 +724,73 @@ def gui_visual_regression(
     reconstructed = _screenshot_files(Path(reconstructed_screenshot_dir)) if reconstructed_screenshot_dir else []
     pair_count = min(len(originals), len(reconstructed))
     pairs = [_visual_pair_metrics(original, rebuilt) for original, rebuilt in zip(originals[:pair_count], reconstructed[:pair_count])]
-    visual_similarity = round(sum(float(item.get("visual_similarity") or 0.0) for item in pairs) / pair_count, 3) if pair_count else 0.0
-    style_delta = _average_style_delta([item.get("style_delta") for item in pairs]) if pairs else None
+    valid_pairs = [item for item in pairs if item.get("status") == "ok" and isinstance(item.get("visual_similarity"), (int, float))]
+    failed_pairs = [item for item in pairs if item.get("status") != "ok"]
+    valid_pair_count = len(valid_pairs)
+    failed_pair_count = len(failed_pairs)
+    unpaired_original_count = max(0, len(originals) - pair_count)
+    unpaired_reconstructed_count = max(0, len(reconstructed) - pair_count)
+    visual_similarity = (
+        round(sum(float(item["visual_similarity"]) for item in valid_pairs) / valid_pair_count, 3)
+        if valid_pair_count
+        else None
+    )
+    style_delta = _average_style_delta([item.get("style_delta") for item in valid_pairs]) if valid_pairs else None
+    status, reason = _visual_regression_outcome(
+        pair_count=pair_count,
+        valid_pair_count=valid_pair_count,
+        unpaired_original_count=unpaired_original_count,
+        unpaired_reconstructed_count=unpaired_reconstructed_count,
+    )
+    decode_status = _regression_decode_status(pair_count, valid_pair_count, pairs)
+    pair_errors = [str(item.get("error")) for item in failed_pairs if item.get("error")]
     data = {
+        "schema_version": 1,
+        "status": status,
+        "reason": reason,
         "original_screenshot_count": len(originals),
         "reconstructed_screenshot_count": len(reconstructed),
         "pair_count": pair_count,
+        "valid_pair_count": valid_pair_count,
+        "failed_pair_count": failed_pair_count,
+        "unpaired_original_count": unpaired_original_count,
+        "unpaired_reconstructed_count": unpaired_reconstructed_count,
         "visual_similarity": visual_similarity,
         "text_match_rate": 0.0,
         "control_match_rate": 0.0,
         "style_delta": style_delta,
         "pairs": pairs,
+        "errors": pair_errors,
+        "components": {
+            "image_decode": {
+                "status": decode_status,
+                "provider": "Pillow",
+                "optional": False,
+                "requested_count": pair_count,
+                "succeeded_count": valid_pair_count,
+                "failed_count": failed_pair_count,
+                "reason": _regression_component_reason(decode_status, valid_pair_count, pair_count),
+            },
+            "visual_comparison": {
+                "status": status,
+                "provider": "normalized RGB pixel delta",
+                "optional": False,
+                "requested_count": pair_count,
+                "succeeded_count": valid_pair_count,
+                "failed_count": failed_pair_count,
+                "reason": reason,
+            },
+        },
     }
     if out_dir:
         gui_dir = Path(out_dir) / "gui"
         gui_dir.mkdir(parents=True, exist_ok=True)
         path_obj = gui_dir / "regression.json"
-        _write_json(path_obj, {"status": "ok" if pair_count else "unavailable", **data})
+        _write_json(path_obj, data)
         data["artifacts"] = [{"name": "gui/regression.json", "path": str(path_obj), "kind": "gui-visual-regression"}]
     if not pair_count:
-        return ToolResult(tool="gui_visual_regression", status="unavailable", error="original and reconstructed screenshot pairs are required", data=data)
-    return {"status": "ok", **data}
+        return ToolResult(tool="gui_visual_regression", status="unavailable", error=reason, data=data)
+    return data
 
 
 def _require_path(path: str | os.PathLike[str]) -> Path:
@@ -801,6 +999,10 @@ def _safe_resource_component(value: Any) -> str:
     return text[:80] or "resource"
 
 
+def _is_windows_runtime() -> bool:
+    return os.name == "nt"
+
+
 def _win32_runtime_tree(process_id: int) -> Dict[str, Any]:
     """Enumerate visible top-level windows and child controls for one PID."""
 
@@ -872,60 +1074,9 @@ def _android_runtime_tree(
     adb_path: str | os.PathLike[str] | None = None,
     android_serial: str | None = None,
 ) -> Dict[str, Any]:
-    """Dump and normalize a connected Android device's accessibility hierarchy."""
+    """Compatibility wrapper around the bounded Android adapter."""
 
-    requested_adb = str(adb_path) if adb_path else "adb"
-    executable = shutil.which(requested_adb) or (requested_adb if Path(requested_adb).is_file() else None)
-    if not executable:
-        raise RuntimeError(f"adb not found: {requested_adb}")
-    prefix = [str(executable)]
-    if android_serial:
-        prefix.extend(["-s", str(android_serial)])
-    remote_path = "/sdcard/reverse_analyzer_uiautomator.xml"
-    dump = subprocess.run(
-        [*prefix, "shell", "uiautomator", "dump", remote_path],
-        capture_output=True,
-        text=True,
-        timeout=20,
-        check=False,
-    )
-    if dump.returncode != 0:
-        raise RuntimeError((dump.stderr or dump.stdout or "uiautomator dump failed").strip())
-    pulled = subprocess.run(
-        [*prefix, "exec-out", "cat", remote_path],
-        capture_output=True,
-        text=True,
-        timeout=20,
-        check=False,
-    )
-    if pulled.returncode != 0 or not pulled.stdout.strip():
-        raise RuntimeError((pulled.stderr or pulled.stdout or "unable to read uiautomator XML").strip())
-    raw_xml = pulled.stdout[pulled.stdout.find("<") :]
-    root = ElementTree.fromstring(raw_xml)
-    controls: list[Dict[str, Any]] = []
-    for node in root.iter("node"):
-        attributes = node.attrib
-        bounds = _android_bounds(attributes.get("bounds"))
-        controls.append(
-            {
-                "class_name": attributes.get("class"),
-                "resource_id": attributes.get("resource-id"),
-                "text": attributes.get("text"),
-                "content_description": attributes.get("content-desc"),
-                "clickable": attributes.get("clickable") == "true",
-                "enabled": attributes.get("enabled") != "false",
-                "bounds": bounds,
-            }
-        )
-        if len(controls) >= 2_000:
-            break
-    package = next((str(item.get("resource_id") or "").split(":")[0] for item in controls if item.get("resource_id")), None)
-    return {
-        "window_count": 1,
-        "control_count": len(controls),
-        "windows": [{"title": package or "Android UI hierarchy", "controls": controls}],
-        "raw_xml": raw_xml,
-    }
+    return probe_android_uiautomator(adb_path=adb_path, android_serial=android_serial)
 
 
 def _android_bounds(value: Any) -> Dict[str, int]:
@@ -1173,42 +1324,174 @@ def _screenshot_files(path: Path) -> list[Path]:
     return sorted(item for item in path.iterdir() if item.is_file() and item.suffix.lower() in SCREENSHOT_SUFFIXES)
 
 
+def _new_visual_component(
+    provider: str,
+    requested_count: int,
+    *,
+    optional: bool,
+    configured: bool = True,
+) -> Dict[str, Any]:
+    return {
+        "status": "unavailable",
+        "provider": provider,
+        "optional": optional,
+        "configured": configured,
+        "available": None,
+        "requested_count": requested_count,
+        "attempted_count": 0,
+        "succeeded_count": 0,
+        "failed_count": 0,
+        "skipped_count": requested_count,
+        "degraded_count": 0,
+        "evidence_count": 0,
+        "errors": [],
+        "reason": "not evaluated",
+    }
+
+
+def _finalize_visual_component(component: Dict[str, Any], *, unavailable_reason: str | None = None) -> None:
+    requested = int(component.get("requested_count") or 0)
+    attempted = int(component.get("attempted_count") or 0)
+    succeeded = int(component.get("succeeded_count") or 0)
+    failed = int(component.get("failed_count") or 0)
+    degraded = int(component.get("degraded_count") or 0)
+    component["skipped_count"] = max(0, requested - attempted)
+    if requested <= 0:
+        component["status"] = "unavailable"
+        component["reason"] = unavailable_reason or "no screenshots were supplied"
+    elif unavailable_reason and succeeded <= 0:
+        component["status"] = "unavailable"
+        component["reason"] = unavailable_reason
+    elif succeeded >= requested and failed == 0 and degraded == 0:
+        component["status"] = "ok"
+        component["reason"] = f"completed for all {requested} screenshot(s)"
+    elif succeeded > 0:
+        component["status"] = "partial"
+        component["reason"] = f"completed for {succeeded} of {requested} screenshot(s)"
+    elif attempted > 0 or failed > 0:
+        component["status"] = "failed"
+        component["reason"] = f"failed for all {attempted or requested} attempted screenshot(s)"
+    else:
+        component["status"] = "unavailable"
+        component["reason"] = "provider was not run"
+
+
+def _visual_parse_outcome(screenshot_count: int, components: Mapping[str, Mapping[str, Any]]) -> tuple[str, str]:
+    if screenshot_count <= 0:
+        return "unavailable", "no screenshots supplied; pass --gui-screenshot-dir"
+    image_decode = components.get("image_decode") or {}
+    segmentation = components.get("segmentation") or {}
+    ocr = components.get("ocr") or {}
+    vlm = components.get("vlm") or {}
+    decoded_count = int(image_decode.get("succeeded_count") or 0)
+    provider_evidence_count = int(vlm.get("evidence_count") or 0)
+    if decoded_count <= 0:
+        if provider_evidence_count > 0:
+            return "partial", "VLM evidence was recovered, but no screenshot could be decoded locally"
+        return "failed", "no screenshot could be decoded and no valid VLM evidence was recovered"
+    if image_decode.get("status") != "ok" or segmentation.get("status") != "ok":
+        return "partial", "only part of the screenshot set produced local decode and segmentation evidence"
+    if ocr.get("status") in {"failed", "partial"}:
+        return "partial", "local image parsing completed, but OCR failed for one or more screenshots"
+    if vlm.get("configured") and vlm.get("status") != "ok":
+        return "partial", "local image parsing completed, but the configured VLM provider did not complete"
+    return "ok", "all screenshots were decoded and segmented without critical errors"
+
+
 def _local_visual_parse(screenshots: Iterable[Path]) -> Dict[str, Any]:
     """Extract lightweight visual evidence using optional local image tooling."""
 
+    screenshot_list = list(screenshots)
     image_metadata: list[Dict[str, Any]] = []
     text_regions: list[Dict[str, Any]] = []
     widgets: list[Dict[str, Any]] = []
     errors: list[str] = []
+    components = {
+        "image_decode": _new_visual_component("Pillow", len(screenshot_list), optional=False),
+        "segmentation": _new_visual_component("Pillow.ImageFilter.FIND_EDGES", len(screenshot_list), optional=False),
+        "ocr": _new_visual_component("pytesseract", len(screenshot_list), optional=True),
+    }
+    if not screenshot_list:
+        for component in components.values():
+            _finalize_visual_component(component)
+        return {
+            "image_metadata": image_metadata,
+            "text_regions": text_regions,
+            "widgets": widgets,
+            "errors": errors,
+            "components": components,
+        }
+
     try:
         from PIL import Image, ImageFilter  # type: ignore[import-not-found]
     except Exception as exc:
-        return {"image_metadata": image_metadata, "text_regions": text_regions, "widgets": widgets, "errors": [f"Pillow unavailable: {exc}"]}
+        reason = f"Pillow unavailable: {type(exc).__name__}: {exc}"
+        components["image_decode"]["available"] = False
+        components["image_decode"]["errors"].append(reason)
+        components["segmentation"]["available"] = False
+        _finalize_visual_component(components["image_decode"], unavailable_reason=reason)
+        _finalize_visual_component(components["segmentation"], unavailable_reason="segmentation requires Pillow")
+        _finalize_visual_component(components["ocr"], unavailable_reason="OCR requires a decodable screenshot")
+        return {
+            "image_metadata": image_metadata,
+            "text_regions": text_regions,
+            "widgets": widgets,
+            "errors": [reason],
+            "components": components,
+        }
 
-    for screenshot in screenshots:
+    components["image_decode"]["available"] = True
+    components["segmentation"]["available"] = True
+    pytesseract_module: Any = None
+    ocr_unavailable_reason: str | None = None
+    try:
+        import pytesseract  # type: ignore[import-not-found]
+
+        pytesseract_module = pytesseract
+        components["ocr"]["available"] = True
+    except Exception as exc:
+        components["ocr"]["available"] = False
+        ocr_unavailable_reason = f"pytesseract unavailable: {type(exc).__name__}: {exc}"
+        components["ocr"]["errors"].append(ocr_unavailable_reason)
+
+    for screenshot in screenshot_list:
+        image_component = components["image_decode"]
+        image_component["attempted_count"] += 1
         try:
             with Image.open(screenshot) as source:
                 source.load()
                 rgb = source.convert("RGB")
                 width, height = rgb.size
+        except Exception as exc:  # noqa: BLE001 - corrupt screenshots remain isolated.
+            message = f"{screenshot.name}: {type(exc).__name__}: {exc}"
+            image_component["failed_count"] += 1
+            image_component["errors"].append(message)
+            continue
+
+        image_component["succeeded_count"] += 1
+        image_component["evidence_count"] += 1
+        metadata = {
+            "path": str(screenshot),
+            "width": width,
+            "height": height,
+            "mode": rgb.mode,
+            "dominant_colors": [],
+        }
+        image_metadata.append(metadata)
+        try:
+            segmentation_component = components["segmentation"]
+            segmentation_component["attempted_count"] += 1
+            try:
                 preview = rgb.copy()
                 preview.thumbnail((320, 320))
                 colors = preview.getcolors(maxcolors=max(1, preview.width * preview.height)) or []
-                top_colors = [
+                metadata["dominant_colors"] = [
                     {"rgb": list(color), "count": int(count)}
                     for count, color in sorted(colors, key=lambda item: item[0], reverse=True)[:5]
                 ]
-                image_metadata.append(
-                    {
-                        "path": str(screenshot),
-                        "width": width,
-                        "height": height,
-                        "mode": rgb.mode,
-                        "dominant_colors": top_colors,
-                    }
-                )
                 scale_x = width / max(1, preview.width)
                 scale_y = height / max(1, preview.height)
+                region_count = 0
                 for bbox in _edge_regions(preview, image_filter=ImageFilter):
                     x, y, w, h = bbox
                     widgets.append(
@@ -1224,10 +1507,54 @@ def _local_visual_parse(screenshots: Iterable[Path]) -> Dict[str, Any]:
                             "screenshot": str(screenshot),
                         }
                     )
-                text_regions.extend(_ocr_regions(rgb, screenshot))
-        except Exception as exc:  # noqa: BLE001 - optional visual evidence must degrade safely.
-            errors.append(f"{screenshot.name}: {type(exc).__name__}: {exc}")
-    return {"image_metadata": image_metadata, "text_regions": text_regions, "widgets": widgets, "errors": errors}
+                    region_count += 1
+                segmentation_component["succeeded_count"] += 1
+                segmentation_component["evidence_count"] += region_count
+            except Exception as exc:  # noqa: BLE001 - segmentation failures must not discard decode evidence.
+                message = f"{screenshot.name}: {type(exc).__name__}: {exc}"
+                segmentation_component["failed_count"] += 1
+                segmentation_component["errors"].append(message)
+
+            if pytesseract_module is not None:
+                ocr_component = components["ocr"]
+                ocr_component["attempted_count"] += 1
+                try:
+                    regions = _extract_ocr_regions(rgb, screenshot, pytesseract_module)
+                    text_regions.extend(regions)
+                    ocr_component["succeeded_count"] += 1
+                    ocr_component["evidence_count"] += len(regions)
+                except Exception as exc:  # noqa: BLE001 - OCR is optional but its state must be explicit.
+                    message = f"{screenshot.name}: {type(exc).__name__}: {exc}"
+                    ocr_component["failed_count"] += 1
+                    ocr_component["errors"].append(message)
+                    if _ocr_dependency_unavailable(exc):
+                        ocr_component["available"] = False
+                        ocr_unavailable_reason = message
+                        pytesseract_module = None
+        finally:
+            rgb.close()
+
+    _finalize_visual_component(components["image_decode"])
+    decoded_count = int(components["image_decode"]["succeeded_count"])
+    _finalize_visual_component(
+        components["segmentation"],
+        unavailable_reason="no decodable screenshots available for segmentation" if not decoded_count else None,
+    )
+    _finalize_visual_component(
+        components["ocr"],
+        unavailable_reason=("no decodable screenshots available for OCR" if not decoded_count else ocr_unavailable_reason),
+    )
+    errors.extend(components["image_decode"]["errors"])
+    errors.extend(components["segmentation"]["errors"])
+    if components["ocr"]["status"] in {"failed", "partial"}:
+        errors.extend(components["ocr"]["errors"])
+    return {
+        "image_metadata": image_metadata,
+        "text_regions": text_regions,
+        "widgets": widgets,
+        "errors": errors,
+        "components": components,
+    }
 
 
 def _edge_regions(image: Any, *, image_filter: Any) -> list[tuple[int, int, int, int]]:
@@ -1274,10 +1601,13 @@ def _edge_regions(image: Any, *, image_filter: Any) -> list[tuple[int, int, int,
 def _ocr_regions(image: Any, screenshot: Path) -> list[Dict[str, Any]]:
     try:
         import pytesseract  # type: ignore[import-not-found]
-
-        result = pytesseract.image_to_data(image, output_type=pytesseract.Output.DICT)
+        return _extract_ocr_regions(image, screenshot, pytesseract)
     except Exception:
         return []
+
+
+def _extract_ocr_regions(image: Any, screenshot: Path, provider: Any) -> list[Dict[str, Any]]:
+    result = provider.image_to_data(image, output_type=provider.Output.DICT)
     regions: list[Dict[str, Any]] = []
     for index, text in enumerate(result.get("text") or []):
         value = str(text or "").strip()
@@ -1304,6 +1634,12 @@ def _ocr_regions(image: Any, screenshot: Path) -> list[Dict[str, Any]]:
     return regions
 
 
+def _ocr_dependency_unavailable(exc: Exception) -> bool:
+    name = type(exc).__name__.lower()
+    message = str(exc).lower()
+    return "notfound" in name or "not found" in message or "not installed" in message
+
+
 def _list_int(values: Any, index: int) -> int:
     try:
         return int(values[index])
@@ -1311,29 +1647,140 @@ def _list_int(values: Any, index: int) -> int:
         return 0
 
 
-def _provider_visual_parse(screenshots: Iterable[Path], provider: Any) -> Dict[str, Any]:
+def _provider_visual_parse(
+    screenshots: Iterable[Path],
+    provider: Any,
+    *,
+    timeout_seconds: float | None = None,
+) -> Dict[str, Any]:
+    screenshot_list = list(screenshots)
     text_regions: list[Any] = []
     widgets: list[Any] = []
     errors: list[str] = []
-    for screenshot in screenshots:
-        try:
-            response = provider(str(screenshot))
-            if not isinstance(response, Mapping):
-                errors.append(f"VLM provider returned non-mapping for {screenshot.name}")
-                continue
-            text_regions.extend(item for item in response.get("text_regions") or [] if isinstance(item, Mapping))
-            widgets.extend(item for item in response.get("widgets") or [] if isinstance(item, Mapping))
-        except Exception as exc:  # noqa: BLE001 - provider failures remain optional evidence failures.
-            errors.append(f"VLM provider failed for {screenshot.name}: {type(exc).__name__}: {exc}")
-    return {"text_regions": text_regions, "widgets": widgets, "errors": errors}
+    load_result = load_vlm_provider(provider, timeout_seconds=timeout_seconds)
+    load_provenance = dict(load_result.provenance)
+    provider_name = str(load_provenance.get("provider") or "not_configured")
+    configured = bool(load_provenance.get("configured"))
+    component = _new_visual_component(
+        provider_name,
+        len(screenshot_list),
+        optional=True,
+        configured=configured,
+    )
+    component.update(
+        {
+            "available": load_result.available,
+            "load_status": load_result.status,
+            "unavailable_count": 0,
+            "error_details": [],
+            "attempts": [],
+            "provenance": load_provenance,
+        }
+    )
+    if not screenshot_list:
+        if configured and load_result.status == "failed" and load_result.error is not None:
+            error_detail = load_result.error.to_dict()
+            component["status"] = "failed"
+            component["reason"] = error_detail["message"]
+            component["error_details"].append(error_detail)
+            component["errors"].append(error_detail["message"])
+            errors.append(error_detail["message"])
+        else:
+            _finalize_visual_component(component)
+        return {"text_regions": text_regions, "widgets": widgets, "errors": errors, "component": component}
+    if not load_result.available or load_result.provider is None:
+        error_detail = load_result.error.to_dict() if load_result.error is not None else {
+            "code": "provider_load_failed",
+            "status": load_result.status,
+            "message": "VLM provider did not load",
+        }
+        component["status"] = str(error_detail["status"])
+        component["reason"] = str(error_detail["message"])
+        component["error_details"].append(error_detail)
+        if configured:
+            component["errors"].append(str(error_detail["message"]))
+            errors.append(str(error_detail["message"]))
+        return {"text_regions": text_regions, "widgets": widgets, "errors": errors, "component": component}
+
+    loaded_provider = load_result.provider
+    for screenshot in screenshot_list:
+        component["attempted_count"] += 1
+        invocation = loaded_provider.invoke(screenshot)
+        attempt: Dict[str, Any] = {
+            "screenshot": str(screenshot),
+            "status": invocation.status,
+            "duration_ms": invocation.duration_ms,
+            "provenance": dict(invocation.provenance),
+        }
+        if invocation.error is not None:
+            error_detail = invocation.error.to_dict()
+            error_detail["screenshot"] = str(screenshot)
+            attempt["error"] = dict(error_detail)
+            component["error_details"].append(error_detail)
+            message = f"VLM provider {invocation.status} for {screenshot.name}: {invocation.error.message}"
+            component["errors"].append(message)
+            errors.append(message)
+        if invocation.status == "unavailable":
+            component["unavailable_count"] += 1
+        elif invocation.status == "failed":
+            component["failed_count"] += 1
+        elif invocation.output is not None:
+            response = invocation.output
+            screenshot_text = [dict(item) for item in response.get("text_regions") or []]
+            screenshot_widgets = [dict(item) for item in response.get("widgets") or []]
+            for item in [*screenshot_text, *screenshot_widgets]:
+                item["source"] = provider_name
+                item["screenshot"] = str(screenshot)
+            text_regions.extend(screenshot_text)
+            widgets.extend(screenshot_widgets)
+            component["succeeded_count"] += 1
+            if invocation.status == "partial":
+                component["degraded_count"] += 1
+            component["evidence_count"] += len(screenshot_text) + len(screenshot_widgets)
+            attempt["evidence_count"] = len(screenshot_text) + len(screenshot_widgets)
+        component["attempts"].append(attempt)
+    if (
+        component["unavailable_count"] >= len(screenshot_list)
+        and component["failed_count"] == 0
+        and component["succeeded_count"] == 0
+    ):
+        component["status"] = "unavailable"
+        component["reason"] = "VLM provider was unavailable for all requested screenshots"
+        component["skipped_count"] = 0
+    else:
+        _finalize_visual_component(component)
+    return {"text_regions": text_regions, "widgets": widgets, "errors": errors, "component": component}
 
 
 def _visual_pair_metrics(original: Path, reconstructed: Path) -> Dict[str, Any]:
-    pair = {"original": str(original), "reconstructed": str(reconstructed)}
+    original_hash = _file_hash_evidence(original)
+    reconstructed_hash = _file_hash_evidence(reconstructed)
+    byte_identical = bool(
+        original_hash.get("status") == "ok"
+        and reconstructed_hash.get("status") == "ok"
+        and original_hash.get("size_bytes") == reconstructed_hash.get("size_bytes")
+        and original_hash.get("sha256") == reconstructed_hash.get("sha256")
+    )
+    pair = {
+        "status": "failed",
+        "original": str(original),
+        "reconstructed": str(reconstructed),
+        "visual_similarity": None,
+        "style_delta": None,
+        "decode": {"status": "failed", "provider": "Pillow"},
+        "hash_evidence": {
+            "algorithm": "sha256",
+            "original": original_hash,
+            "reconstructed": reconstructed_hash,
+            "byte_identical": byte_identical,
+        },
+    }
     try:
         from PIL import Image  # type: ignore[import-not-found]
 
         with Image.open(original) as left_source, Image.open(reconstructed) as right_source:
+            left_source.load()
+            right_source.load()
             left = left_source.convert("RGB").resize((160, 160))
             right = right_source.convert("RGB").resize((160, 160))
             left_pixels = list(left.getdata())
@@ -1347,6 +1794,7 @@ def _visual_pair_metrics(original: Path, reconstructed: Path) -> Dict[str, Any]:
         mean_delta = sum(channel_deltas) / 3.0
         pair.update(
             {
+                "status": "ok",
                 "visual_similarity": round(max(0.0, 1.0 - mean_delta / 255.0), 3),
                 "style_delta": {
                     "mean_channel_delta": round(mean_delta, 3),
@@ -1354,20 +1802,67 @@ def _visual_pair_metrics(original: Path, reconstructed: Path) -> Dict[str, Any]:
                     "green": round(channel_deltas[1], 3),
                     "blue": round(channel_deltas[2], 3),
                 },
+                "decode": {"status": "ok", "provider": "Pillow"},
             }
         )
-    except Exception as exc:  # noqa: BLE001 - compare raw bytes as a dependency-free fallback.
-        try:
-            same = original.read_bytes() == reconstructed.read_bytes()
-            pair.update(
-                {
-                    "visual_similarity": 1.0 if same else 0.0,
-                    "style_delta": {"fallback": "byte-comparison", "error": f"{type(exc).__name__}: {exc}"},
-                }
-            )
-        except OSError as read_exc:
-            pair.update({"visual_similarity": 0.0, "style_delta": {"error": f"{type(read_exc).__name__}: {read_exc}"}})
+    except Exception as exc:  # noqa: BLE001 - invalid images are evidence failures, not visual matches.
+        error = f"{type(exc).__name__}: {exc}"
+        decode_status = "unavailable" if isinstance(exc, (ImportError, ModuleNotFoundError)) else "failed"
+        pair["decode"] = {"status": decode_status, "provider": "Pillow", "error": error}
+        pair["error"] = error
     return pair
+
+
+def _file_hash_evidence(path: Path) -> Dict[str, Any]:
+    evidence: Dict[str, Any] = {"status": "failed", "path": str(path), "size_bytes": None, "sha256": None}
+    try:
+        digest = hashlib.sha256()
+        size = 0
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                size += len(chunk)
+                digest.update(chunk)
+        evidence.update({"status": "ok", "size_bytes": size, "sha256": digest.hexdigest()})
+    except OSError as exc:
+        evidence["error"] = f"{type(exc).__name__}: {exc}"
+    return evidence
+
+
+def _visual_regression_outcome(
+    *,
+    pair_count: int,
+    valid_pair_count: int,
+    unpaired_original_count: int,
+    unpaired_reconstructed_count: int,
+) -> tuple[str, str]:
+    if pair_count <= 0:
+        return "unavailable", "original and reconstructed screenshot pairs are required"
+    if valid_pair_count <= 0:
+        return "failed", "no screenshot pair could be decoded for visual comparison"
+    if valid_pair_count < pair_count or unpaired_original_count or unpaired_reconstructed_count:
+        return "partial", "only part of the screenshot set produced valid visual comparison pairs"
+    return "ok", "all screenshot pairs were decoded and compared"
+
+
+def _regression_decode_status(pair_count: int, valid_pair_count: int, pairs: Iterable[Mapping[str, Any]]) -> str:
+    if pair_count <= 0:
+        return "unavailable"
+    if valid_pair_count >= pair_count:
+        return "ok"
+    if valid_pair_count > 0:
+        return "partial"
+    decode_statuses = [str((item.get("decode") or {}).get("status")) for item in pairs]
+    return "unavailable" if decode_statuses and all(status == "unavailable" for status in decode_statuses) else "failed"
+
+
+def _regression_component_reason(status: str, valid_pair_count: int, pair_count: int) -> str:
+    if status == "ok":
+        return f"decoded all {pair_count} screenshot pair(s)"
+    if status == "partial":
+        return f"decoded {valid_pair_count} of {pair_count} screenshot pair(s)"
+    if status == "unavailable":
+        return "Pillow is unavailable"
+    return "no screenshot pair could be decoded"
 
 
 def _average_style_delta(values: Iterable[Any]) -> Dict[str, Any] | None:
