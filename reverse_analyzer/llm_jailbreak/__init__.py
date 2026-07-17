@@ -7,8 +7,10 @@ from .campaign import (
     load_campaign,
     run_campaign,
 )
+from .acceptance import PromotionResult, promote_output
 from .crescendo import CrescendoPlanner, CrescendoStage, CrescendoTurn
 from .evolution import EvolutionaryPromptOptimizer, PromptGenome
+from .doctor import DoctorError, DoctorResult, run_doctor
 from .instruction_assets import (
     InstructionAsset,
     InstructionBundle,
@@ -76,6 +78,8 @@ __all__ = [
     "CrescendoStage",
     "CrescendoTurn",
     "EvolutionaryPromptOptimizer",
+    "DoctorError",
+    "DoctorResult",
     "HeuristicSemanticJudge",
     "InstructionAsset",
     "InstructionBundle",
@@ -88,6 +92,7 @@ __all__ = [
     "PAIRCandidate",
     "PAIRPlanner",
     "PromptGenome",
+    "PromotionResult",
     "ResponseScorer",
     "SUPPORTED_ATTACK_MODES",
     "SUPPORTED_SEMANTIC_JUDGES",
@@ -111,5 +116,7 @@ __all__ = [
     "load_instruction_bundle",
     "render_strategy",
     "resolve_instruction_profile",
+    "promote_output",
+    "run_doctor",
     "run_campaign",
 ]

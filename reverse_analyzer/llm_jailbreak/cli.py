@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from .campaign import configure_campaign, load_campaign, run_campaign
+from .acceptance import promote_output
+from .doctor import DoctorError, run_doctor
 from .instruction_assets import list_instruction_profiles
 from .models import (
     Campaign,
@@ -70,6 +72,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="list repository-backed instruction profiles",
     )
     profiles.add_argument("--json", action="store_true", dest="json_output")
+
+    doctor = commands.add_parser("doctor", help="probe endpoint production readiness")
+    doctor.add_argument("--base-url", required=True)
+    doctor.add_argument("--model", required=True)
+    doctor.add_argument("--api-key-env", default="OPENAI_API_KEY")
+    doctor.add_argument("--timeout", type=float, default=30.0)
+    doctor.add_argument("--json", action="store_true", dest="json_output")
+
+    promote = commands.add_parser("promote", help="validate retained campaign evidence")
+    promote.add_argument("path", type=Path)
+    promote.add_argument("--secret-env", action="append", default=[])
+    promote.add_argument("--json", action="store_true", dest="json_output")
     return parser
 
 
@@ -174,6 +188,34 @@ def _profiles_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _doctor_command(args: argparse.Namespace) -> int:
+    result = run_doctor(
+        base_url=args.base_url,
+        model=args.model,
+        api_key_env=args.api_key_env,
+        timeout_seconds=args.timeout,
+    )
+    payload = result.to_dict()
+    if args.json_output:
+        print(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False))
+    else:
+        print(f"doctor={result.status} model={result.model} checks={len(result.checks)}")
+    return 0
+
+
+def _promote_command(args: argparse.Namespace) -> int:
+    result = promote_output(args.path, secret_env_names=args.secret_env)
+    payload = result.to_dict()
+    if args.json_output:
+        print(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False))
+    else:
+        print(
+            f"promotion={result.status} checks={len(result.checks)} "
+            f"record={result.promotion_path}"
+        )
+    return 0 if result.ok else 4
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -186,7 +228,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return _strategies_command(args)
         if args.command == "profiles":
             return _profiles_command(args)
-    except (CampaignValidationError, CheckpointError, TransportError, OSError, ValueError) as exc:
+        if args.command == "doctor":
+            return _doctor_command(args)
+        if args.command == "promote":
+            return _promote_command(args)
+    except (CampaignValidationError, CheckpointError, DoctorError, TransportError, OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     parser.error(f"unknown command: {args.command}")

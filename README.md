@@ -574,6 +574,31 @@ python -m reverse_analyzer capability run `
 
 Registry capability 是 `llm_jailbreak`，生产 provider 是 `openai_compatible_jailbreak`，支持 `run` 和 `resume`。provider 在 `llm_jailbreak/{session_id}/` 下生成 4 个平台汇总文件 `campaign.json`、`result.json`、`attempts.json`、`rollback.json`，收集 `engine/` 下的完整 campaign 工件（包括 transcript、逐次 prompt/response 和 engine manifest），并把当前稳定 checkpoint 固化为该 session 的 `checkpoint.json` 快照。每项工件都带 SHA-256、大小、来源和 collection root 元数据，随后进入平台 `report.json`/`report.md`、capability audit、evidence manifest、Dashboard trace 与 KnowledgeBase 策略结果。
 
+真实 endpoint 验收分为预检和晋级两步。`doctor` 会检查 `/models`、认证、non-stream chat schema、SSE stream schema、请求超时和可见的限流 header；它只发送无害连通性 canary，不启动 campaign：
+
+```powershell
+python -m reverse_analyzer jailbreak doctor `
+  --base-url https://endpoint.example/v1 `
+  --model model-name `
+  --api-key-env MODEL_API_KEY
+
+python -m reverse_analyzer jailbreak promote .\platform-jailbreak-out `
+  --secret-env MODEL_API_KEY
+```
+
+`promote` 同时接受独立 CLI 输出目录和平台输出根目录，校验 production HTTP transport 证据、campaign/checkpoint/bundle 身份、attempt/transcript/judge 可追溯性、engine/evidence manifest 哈希，以及密钥和非操作内容中的主机绝对路径脱敏；平台审计用于定位工件的受控路径字段仍可保留。结果写入 `promotion.json`，失败返回退出码 `4`。它不会自动修改能力矩阵；只有保留的真实 E2E 工件通过后，发布提交才能把状态晋级为 `done`。
+
+opt-in live 测试默认跳过。运行时必须显式设置 `RUN_LLM_JAILBREAK_LIVE=1`、`LLM_JAILBREAK_E2E_BASE_URL`、`LLM_JAILBREAK_E2E_MODEL`、`LLM_JAILBREAK_E2E_OUT` 和密钥环境变量；测试依次执行 doctor、平台 run、跨 session resume、report 和 promote：
+
+```powershell
+$env:RUN_LLM_JAILBREAK_LIVE = '1'
+$env:LLM_JAILBREAK_E2E_BASE_URL = 'https://endpoint.example/v1'
+$env:LLM_JAILBREAK_E2E_MODEL = 'model-name'
+$env:LLM_JAILBREAK_E2E_OUT = 'D:\retained-evidence\llm-jailbreak'
+$env:LLM_JAILBREAK_E2E_API_KEY_ENV = 'MODEL_API_KEY'
+python -m unittest tests.e2e.test_llm_jailbreak_live
+```
+
 API key 值只能从 `api_key_env` 指定的环境变量读取；campaign 和 capability 参数禁止内联 `api_key`，密钥值不会写入工件。Provider 还会对 engine 工件和 checkpoint 做二次脱敏，并在脱敏后重算 engine manifest 的大小与 SHA-256。`OPENAI_API_KEY` 只是默认环境变量名，可由 campaign 或 CLI 改名。真实执行依赖外部 OpenAI-compatible endpoint 与相应 API key；仓库中的成功测试使用 fake/injected transport，尚无 checked-in live endpoint E2E，因此 `llm_jailbreak_campaign_engine` 准确标记为 `dependency-gated`。
 
 该产品路径独立于 `analyze` 的分析模型 provider：默认 `RuleBasedProvider` 仍是本地、确定性且无需网络，`OpenAICompatibleProvider` 仍只是分析 provider 适配边界。设置 API 环境变量本身不会自动上传样本或启动越狱 campaign。

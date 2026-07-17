@@ -2935,6 +2935,49 @@ def jailbreak_profiles_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def jailbreak_doctor_command(args: argparse.Namespace) -> int:
+    """Probe a configured endpoint without starting a campaign."""
+
+    try:
+        from .llm_jailbreak import run_doctor
+
+        result = run_doctor(
+            base_url=args.base_url,
+            model=args.model,
+            api_key_env=args.api_key_env,
+            timeout_seconds=args.timeout,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    payload = result.to_dict()
+    if bool(getattr(args, "json", False)):
+        _print_json_payload(payload)
+    else:
+        print(f"doctor={result.status} model={result.model} checks={len(result.checks)}")
+    return 0
+
+
+def jailbreak_promote_command(args: argparse.Namespace) -> int:
+    """Validate retained live endpoint evidence for release promotion."""
+
+    try:
+        from .llm_jailbreak import promote_output
+
+        result = promote_output(args.path, secret_env_names=args.secret_env)
+    except (OSError, TypeError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if bool(getattr(args, "json", False)):
+        _print_json_payload(result.to_dict())
+    else:
+        print(
+            f"promotion={result.status} checks={len(result.checks)} "
+            f"record={result.promotion_path}"
+        )
+    return 0 if result.ok else 4
+
+
 def _dedicated_capability_command(args: argparse.Namespace) -> int:
     """Normalize ergonomic command groups into the audited capability runner."""
 
@@ -4494,6 +4537,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     jailbreak_profiles.add_argument("--json", action="store_true", help="Emit JSON.")
     jailbreak_profiles.set_defaults(func=jailbreak_profiles_command)
+
+    jailbreak_doctor = jailbreak_commands.add_parser(
+        "doctor",
+        help="Probe endpoint authentication, model, chat schema, streaming, timeout, and rate-limit signals.",
+    )
+    jailbreak_doctor.add_argument("--base-url", required=True)
+    jailbreak_doctor.add_argument("--model", required=True)
+    jailbreak_doctor.add_argument("--api-key-env", default="OPENAI_API_KEY")
+    jailbreak_doctor.add_argument("--timeout", type=float, default=30.0)
+    jailbreak_doctor.add_argument("--json", action="store_true", help="Emit JSON.")
+    jailbreak_doctor.set_defaults(func=jailbreak_doctor_command)
+
+    jailbreak_promote = jailbreak_commands.add_parser(
+        "promote",
+        help="Verify retained HTTP campaign evidence and write promotion.json.",
+    )
+    jailbreak_promote.add_argument("path", type=Path, help="Standalone output or platform output root.")
+    jailbreak_promote.add_argument(
+        "--secret-env",
+        action="append",
+        default=[],
+        help="Environment variable whose value must not appear in retained artifacts; repeatable.",
+    )
+    jailbreak_promote.add_argument("--json", action="store_true", help="Emit JSON.")
+    jailbreak_promote.set_defaults(func=jailbreak_promote_command)
 
     capability = subparsers.add_parser("capability", help="Run registry-backed capability providers with audit/report artifacts.")
     capability_commands = capability.add_subparsers(dest="capability_command", required=True)

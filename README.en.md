@@ -574,6 +574,31 @@ python -m reverse_analyzer capability run `
 
 The Registry capability is `llm_jailbreak`, its production provider is `openai_compatible_jailbreak`, and the supported actions are `run` and `resume`. Under `llm_jailbreak/{session_id}/`, the provider writes four platform summaries (`campaign.json`, `result.json`, `attempts.json`, and `rollback.json`), collects the complete campaign-engine artifact tree under `engine/` (including the transcript, per-attempt prompts/responses, and engine manifest), and materializes the current stable checkpoint as a session-fixed `checkpoint.json` snapshot. Every collected artifact records SHA-256, size, source, and collection-root metadata before entering platform `report.json`/`report.md`, the capability audit, evidence manifest, Dashboard trace, and KnowledgeBase strategy results.
 
+Live endpoint acceptance has separate readiness and promotion steps. `doctor` checks `/models`, authentication, the non-stream chat schema, the SSE stream schema, request timeout behavior, and visible rate-limit headers. It sends only a harmless connectivity canary and does not start a campaign:
+
+```powershell
+python -m reverse_analyzer jailbreak doctor `
+  --base-url https://endpoint.example/v1 `
+  --model model-name `
+  --api-key-env MODEL_API_KEY
+
+python -m reverse_analyzer jailbreak promote .\platform-jailbreak-out `
+  --secret-env MODEL_API_KEY
+```
+
+`promote` accepts either a standalone output directory or a platform output root. It verifies production HTTP transport evidence, campaign/checkpoint/bundle identity, attempt/transcript/judge traceability, engine/evidence manifest hashes, and redaction of secrets and host absolute paths in non-operational content; controlled platform audit fields used to locate artifacts may retain their paths. It then writes `promotion.json`, and a failed promotion returns exit code `4`. It does not edit the capability matrix automatically; only retained live E2E evidence that passes promotion can support a release change to `done`.
+
+The opt-in live test is skipped by default. Set `RUN_LLM_JAILBREAK_LIVE=1`, `LLM_JAILBREAK_E2E_BASE_URL`, `LLM_JAILBREAK_E2E_MODEL`, `LLM_JAILBREAK_E2E_OUT`, and the key environment variable explicitly. The test runs doctor, platform run, cross-session resume, report validation, and promote:
+
+```powershell
+$env:RUN_LLM_JAILBREAK_LIVE = '1'
+$env:LLM_JAILBREAK_E2E_BASE_URL = 'https://endpoint.example/v1'
+$env:LLM_JAILBREAK_E2E_MODEL = 'model-name'
+$env:LLM_JAILBREAK_E2E_OUT = 'D:\retained-evidence\llm-jailbreak'
+$env:LLM_JAILBREAK_E2E_API_KEY_ENV = 'MODEL_API_KEY'
+python -m unittest tests.e2e.test_llm_jailbreak_live
+```
+
 API key values are read only from the environment variable named by `api_key_env`. Campaign and capability parameters reject an inline `api_key`, and secret values are not persisted in artifacts. The provider also re-redacts engine artifacts and checkpoints, then recomputes engine-manifest sizes and SHA-256 values after redaction. `OPENAI_API_KEY` is only the default variable name and can be changed in campaign or CLI configuration. Real execution depends on an external OpenAI-compatible endpoint and its API key. Checked-in success tests use fake/injected transports and there is no checked-in live-endpoint E2E, so `llm_jailbreak_campaign_engine` is accurately classified as `dependency-gated`.
 
 This product path is independent from the `analyze` model provider. The default `RuleBasedProvider` remains local, deterministic, and network-free, while `OpenAICompatibleProvider` remains an analysis-provider adapter boundary. Setting API environment variables alone does not upload samples or start a jailbreak campaign.
