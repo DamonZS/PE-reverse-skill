@@ -1238,6 +1238,7 @@ _CAPABILITY_REPORT_SECTIONS = {
     "imgui_renderer_runtime": "gui_analysis",
     "render_overlay_runtime": "gui_analysis",
     "target_control_simulation": "gui_analysis",
+    "llm_jailbreak": "llm_jailbreak_analysis",
 }
 
 
@@ -2141,6 +2142,22 @@ def _capability_result_outcome(result: Any, rollback_result: Any = None) -> tupl
     return "failed", 2
 
 
+def _required_jailbreak_success_missing(args: argparse.Namespace, result: Any) -> bool:
+    """Return whether the CLI explicitly required a confirmed jailbreak success."""
+
+    if not bool(getattr(args, "require_success", False)):
+        return False
+    if str(getattr(args, "capability", "") or "").strip().lower() != "llm_jailbreak":
+        return False
+    result_payload = result.to_dict() if hasattr(result, "to_dict") else dict(result or {})
+    report_section = (
+        result_payload.get("report_section")
+        if isinstance(result_payload.get("report_section"), Mapping)
+        else {}
+    )
+    return report_section.get("success") is not True
+
+
 def _capability_failure_phase(result: Any) -> str | None:
     provenance = getattr(result, "provenance", None)
     if provenance is None and isinstance(result, Mapping):
@@ -2200,7 +2217,8 @@ def _capability_section_payload(
 
 
 def _capability_markdown_section(capability_name: str, section: Mapping[str, Any]) -> str:
-    lines = ["", "## Capability Execution", ""]
+    heading = "Model Jailbreak" if capability_name == "llm_jailbreak" else "Capability Execution"
+    lines = ["", f"## {heading}", ""]
     lines.append(f"- **Capability:** {capability_name}")
     lines.append(f"- **Action:** {section.get('action') or 'unknown'}")
     lines.append(f"- **Status:** {section.get('status') or 'unknown'}")
@@ -2226,6 +2244,18 @@ def _capability_markdown_section(capability_name: str, section: Mapping[str, Any
             lines.append(f"- **Target:** {target_label}")
     if section.get("artifact_count") is not None:
         lines.append(f"- **Artifacts:** {section.get('artifact_count', 0)}")
+    if capability_name == "llm_jailbreak":
+        for label, key in (
+            ("Model", "model"),
+            ("Campaign", "campaign_id"),
+            ("Strategy", "strategy"),
+            ("Attempts", "attempt_count"),
+            ("Success", "success"),
+            ("Score", "score"),
+            ("Latency (ms)", "latency_ms"),
+        ):
+            if section.get(key) is not None:
+                lines.append(f"- **{label}:** {section[key]}")
     rollback = section.get("rollback") if isinstance(section.get("rollback"), Mapping) else {}
     if rollback:
         lines.append(f"- **Rollback:** ok={rollback.get('ok')} restored={rollback.get('restored')}")
@@ -2274,7 +2304,8 @@ def capability_run_command(args: argparse.Namespace) -> int:
     if CapabilityRequest is None or CapabilityAuditBuilder is None or build_default_registry is None:
         print("Capability execution runtime is unavailable because core modules could not be imported.", file=sys.stderr)
         return 3
-    if not args.sample and args.pid is None:
+    target_identity_override = getattr(args, "target_identity_override", None)
+    if not args.sample and args.pid is None and target_identity_override is None:
         print("error: capability run requires --sample or --pid", file=sys.stderr)
         return 2
 
@@ -2295,7 +2326,10 @@ def capability_run_command(args: argparse.Namespace) -> int:
         return 2
 
     try:
-        target = _capability_target_identity(str(sample_path) if sample_path is not None else None, args.pid)
+        target = target_identity_override or _capability_target_identity(
+            str(sample_path) if sample_path is not None else None,
+            args.pid,
+        )
         session = _new_capability_session(target, out_dir, args.capability, args.action, args.provider)
     except Exception as exc:  # noqa: BLE001 - runtime bootstrap must fail clearly
         print(f"error: capability bootstrap failed: {type(exc).__name__}: {exc}", file=sys.stderr)
@@ -2363,11 +2397,22 @@ def capability_run_command(args: argparse.Namespace) -> int:
         return 2
 
     terminal_status, exit_code = _capability_result_outcome(execution_result, rollback_result)
+    required_success_missing = (
+        exit_code == 0 and _required_jailbreak_success_missing(args, execution_result)
+    )
+    if required_success_missing:
+        exit_code = 3
     _record_capability_lifecycle_knowledge(
         config,
         session,
         execution_result,
         rollback_result,
+    )
+    llm_jailbreak_knowledge = _record_llm_jailbreak_strategy_knowledge(
+        config,
+        session,
+        target,
+        execution_result,
     )
     compatibility_payload = getattr(args, "compatibility_payload", None)
     supplemental_results = getattr(args, "supplemental_artifact_results", ()) or ()
@@ -2559,6 +2604,8 @@ def capability_run_command(args: argparse.Namespace) -> int:
         rollback_result=rollback_result,
         artifact_paths=artifact_paths,
     )
+    if llm_jailbreak_knowledge:
+        section_payload["knowledge"] = dict(llm_jailbreak_knowledge)
     report_data[section_name] = section_payload
     metadata = _ensure_session_metadata(session)
     report_context = metadata.get("report_context")
@@ -2646,7 +2693,12 @@ def capability_run_command(args: argparse.Namespace) -> int:
             refresh_patch_data=bool(getattr(args, "compatibility_refresh_patch_data", False)),
         )
     _print_json_payload(output_payload)
-    if exit_code:
+    if required_success_missing:
+        print(
+            "error: jailbreak campaign completed without a confirmed breakthrough",
+            file=sys.stderr,
+        )
+    elif exit_code:
         result_payload = payload["result"] if isinstance(payload.get("result"), Mapping) else {}
         report_section = (
             result_payload.get("report_section")
@@ -2660,6 +2712,227 @@ def capability_run_command(args: argparse.Namespace) -> int:
         )
         print(f"error: capability execution did not succeed: {reason}", file=sys.stderr)
     return exit_code
+
+
+def _jailbreak_extra_body(value: Any) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    try:
+        payload = json.loads(str(value))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"--extra-body must be a JSON object: {exc}") from exc
+    if not isinstance(payload, Mapping):
+        raise ValueError("--extra-body must be a JSON object")
+    return dict(payload)
+
+
+def jailbreak_run_command(args: argparse.Namespace) -> int:
+    """Run an active adaptive jailbreak campaign through the audited registry."""
+
+    if TargetIdentity is None:
+        print("Model-jailbreak capability runtime is unavailable.", file=sys.stderr)
+        return 3
+    try:
+        from .llm_jailbreak import configure_campaign, load_campaign
+
+        campaign_path = Path(args.campaign).resolve()
+        campaign = load_campaign(campaign_path)
+        extra_body = _jailbreak_extra_body(getattr(args, "extra_body", None))
+    except (OSError, TypeError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    out_root = Path(args.out).expanduser().resolve()
+    params = [
+        f"campaign_path={json.dumps(str(campaign_path), ensure_ascii=False)}",
+    ]
+    for argument_name, parameter_name in (
+        ("base_url", "base_url"),
+        ("model", "model"),
+        ("api_key_env", "api_key_env"),
+        ("timeout", "timeout"),
+        ("max_attempts", "max_attempts"),
+        ("max_rounds", "max_rounds"),
+    ):
+        value = getattr(args, argument_name, None)
+        if value is not None:
+            params.append(
+                f"{parameter_name}={json.dumps(value, ensure_ascii=False)}"
+            )
+
+    strategies = list(getattr(args, "strategies", None) or [])
+    if strategies:
+        params.append(f"strategies={json.dumps(strategies, ensure_ascii=False)}")
+
+    attack_modes = getattr(args, "attack_modes", None)
+    semantic_judge = getattr(args, "semantic_judge", None)
+    judge_model = getattr(args, "judge_model", None)
+    instruction_profile = getattr(args, "instruction_profile", None)
+    instruction_files = getattr(args, "instruction_files", None)
+
+    options: dict[str, Any] = {}
+    for argument_name, option_name in (
+        ("temperature", "temperature"),
+        ("max_tokens", "max_tokens"),
+        ("max_retries", "max_retries"),
+        ("retry_backoff_seconds", "retry_backoff_seconds"),
+        ("requests_per_minute", "requests_per_minute"),
+    ):
+        value = getattr(args, argument_name, None)
+        if value is not None:
+            options[option_name] = value
+    if extra_body is not None:
+        options["extra_body"] = extra_body
+    if options:
+        params.append(f"options={json.dumps(options, ensure_ascii=False)}")
+
+    try:
+        configured_campaign = configure_campaign(
+            campaign,
+            base_url=getattr(args, "base_url", None),
+            model=getattr(args, "model", None),
+            api_key_env=getattr(args, "api_key_env", None),
+            timeout=getattr(args, "timeout", None),
+            max_attempts=getattr(args, "max_attempts", None),
+            max_rounds=getattr(args, "max_rounds", None),
+            strategies=strategies or None,
+            attack_modes=attack_modes,
+            semantic_judge=semantic_judge,
+            judge_model=judge_model,
+            instruction_profile=instruction_profile,
+            instruction_files=instruction_files,
+            options=options or None,
+        )
+    except (TypeError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    for parameter_name, explicit_value, effective_value in (
+        ("attack_modes", attack_modes, list(configured_campaign.attack_modes)),
+        ("semantic_judge", semantic_judge, configured_campaign.semantic_judge),
+        ("judge_model", judge_model, configured_campaign.judge_model),
+        (
+            "instruction_profile",
+            instruction_profile,
+            configured_campaign.instruction_profile,
+        ),
+        (
+            "instruction_files",
+            instruction_files,
+            list(configured_campaign.instruction_files),
+        ),
+    ):
+        if explicit_value is not None:
+            params.append(
+                f"{parameter_name}={json.dumps(effective_value, ensure_ascii=False)}"
+            )
+
+    checkpoint_argument = getattr(args, "checkpoint", None)
+    checkpoint_path = (
+        Path(checkpoint_argument).expanduser().resolve()
+        if checkpoint_argument is not None
+        else (
+            out_root
+            / "llm_jailbreak"
+            / "checkpoints"
+            / f"{configured_campaign.fingerprint()}.json"
+        ).resolve()
+    )
+    params.insert(
+        1,
+        f"checkpoint_path={json.dumps(str(checkpoint_path), ensure_ascii=False)}",
+    )
+
+    resume = bool(getattr(args, "resume", False))
+    if resume:
+        params.append("resume=true")
+    model = configured_campaign.target.model
+    base_url = configured_campaign.target.base_url
+    target = TargetIdentity(
+        kind="model",
+        display_name=model,
+        metadata={
+            "model": model,
+            "base_url": base_url,
+            "campaign_id": configured_campaign.id,
+            "campaign_path": str(campaign_path),
+            "campaign_fingerprint": configured_campaign.fingerprint(),
+            "checkpoint_path": str(checkpoint_path),
+            "attack_modes": list(configured_campaign.attack_modes),
+            "semantic_judge": configured_campaign.semantic_judge,
+            "judge_model": configured_campaign.judge_model,
+            "instruction_profile": configured_campaign.instruction_profile,
+            "instruction_files": list(configured_campaign.instruction_files),
+        },
+    )
+    forwarded = argparse.Namespace(
+        capability="llm_jailbreak",
+        action="resume" if resume else "run",
+        sample=None,
+        pid=None,
+        out=args.out,
+        provider=getattr(args, "provider", None) or "openai_compatible_jailbreak",
+        param=params,
+        rollback=False,
+        target_identity_override=target,
+        entrypoint="cli.jailbreak.run",
+        require_success=bool(getattr(args, "require_success", False)),
+    )
+    return capability_run_command(forwarded)
+
+
+def jailbreak_validate_command(args: argparse.Namespace) -> int:
+    """Validate and normalize a jailbreak campaign without contacting a model."""
+
+    try:
+        from .llm_jailbreak import load_campaign
+
+        campaign = load_campaign(Path(args.campaign).resolve())
+    except (OSError, TypeError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    payload = campaign.to_dict()
+    if bool(getattr(args, "json", False)):
+        _print_json_payload(payload)
+    else:
+        print(
+            f"valid campaign={campaign.id} model={campaign.target.model} "
+            f"rounds={campaign.max_rounds} strategies={len(campaign.strategies)}"
+        )
+    return 0
+
+
+def jailbreak_strategies_command(args: argparse.Namespace) -> int:
+    """List built-in active jailbreak strategy identifiers."""
+
+    try:
+        from .llm_jailbreak import SUPPORTED_STRATEGIES
+    except ImportError as exc:
+        print(f"error: model-jailbreak core is unavailable: {exc}", file=sys.stderr)
+        return 3
+    if bool(getattr(args, "json", False)):
+        _print_json_payload({"strategies": list(SUPPORTED_STRATEGIES)})
+    else:
+        for strategy in SUPPORTED_STRATEGIES:
+            print(strategy)
+    return 0
+
+
+def jailbreak_profiles_command(args: argparse.Namespace) -> int:
+    """List repository-backed instruction profile identifiers."""
+
+    try:
+        from .llm_jailbreak import list_instruction_profiles
+    except ImportError as exc:
+        print(f"error: model-jailbreak core is unavailable: {exc}", file=sys.stderr)
+        return 3
+    profiles = list_instruction_profiles()
+    if bool(getattr(args, "json", False)):
+        _print_json_payload({"profiles": list(profiles)})
+    else:
+        for profile in profiles:
+            print(profile)
+    return 0
 
 
 def _dedicated_capability_command(args: argparse.Namespace) -> int:
@@ -3288,6 +3561,112 @@ def _record_capability_lifecycle_knowledge(
     return outcome
 
 
+def _record_llm_jailbreak_strategy_knowledge(
+    config: AnalyzerConfig,
+    session: Any,
+    target: Any,
+    execution_result: Any,
+) -> Mapping[str, Any] | None:
+    """Persist one model-jailbreak outcome without exposing provider credentials."""
+
+    result_payload = _tool_result_dict(execution_result)
+    if not isinstance(result_payload, Mapping):
+        return None
+    if str(result_payload.get("capability") or "").strip().lower() != "llm_jailbreak":
+        return None
+
+    metadata = _ensure_session_metadata(session)
+    if KnowledgeBase is None:
+        metadata["llm_jailbreak_knowledge"] = {"status": "unavailable"}
+        return None
+
+    report_section = (
+        result_payload.get("report_section")
+        if isinstance(result_payload.get("report_section"), Mapping)
+        else {}
+    )
+    source = {**result_payload, **dict(report_section)}
+    strategy_value = source.get("strategy") or source.get("best_strategy") or "adaptive"
+    if isinstance(strategy_value, Mapping):
+        strategy_value = (
+            strategy_value.get("name")
+            or strategy_value.get("strategy")
+            or strategy_value.get("key")
+            or "adaptive"
+        )
+    elif isinstance(strategy_value, Sequence) and not isinstance(
+        strategy_value,
+        (str, bytes, bytearray),
+    ):
+        strategy_value = next((str(item) for item in strategy_value if item), "adaptive")
+
+    target_payload = target.to_dict() if hasattr(target, "to_dict") else dict(target or {})
+    target_metadata = (
+        target_payload.get("metadata")
+        if isinstance(target_payload.get("metadata"), Mapping)
+        else {}
+    )
+    model = str(
+        source.get("model")
+        or target_metadata.get("model")
+        or target_payload.get("display_name")
+        or "unknown"
+    )
+    campaign_id = str(
+        source.get("campaign_id")
+        or target_metadata.get("campaign_id")
+        or getattr(session, "session_id", "unknown")
+    )
+    success = source.get("success")
+    raw_status = str(source.get("status") or "unknown").strip().lower()
+    if success is True:
+        status = "ok"
+    elif raw_status in {"unavailable", "unsupported", "not_available", "skipped"}:
+        status = "unavailable"
+    else:
+        status = "failed"
+
+    try:
+        knowledge = KnowledgeBase(config.knowledge_dir)
+        record = knowledge.record_llm_jailbreak_strategy_result(
+            str(strategy_value),
+            model=model,
+            status=status,
+            score=_safe_float(source.get("score"), default=0.0),
+            attempts=_safe_int(source.get("attempt_count"), default=0),
+            latency_ms=_safe_float(source.get("latency_ms"), default=0.0),
+            sample_id=campaign_id,
+        )
+        recommendation = knowledge.recommend_llm_jailbreak_strategy(model=model)
+        summary = {
+            "status": "recorded",
+            "record": record,
+            "recommendation": recommendation,
+        }
+        metadata["llm_jailbreak_knowledge"] = summary
+        knowledge.append_session_summary(
+            {
+                "session_id": getattr(session, "session_id", None),
+                "target": model,
+                "status": status,
+                "campaign_id": campaign_id,
+                "llm_jailbreak_strategy_records": [record],
+                "recommended_llm_jailbreak_strategy": recommendation,
+            }
+        )
+        return summary
+    except Exception as exc:  # noqa: BLE001 - campaign evidence remains valid if KB is unavailable
+        metadata["llm_jailbreak_knowledge"] = {
+            "status": "failed",
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+        print(
+            f"llm_jailbreak_knowledge.failed: {type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
+        return None
+
+
 def _parse_capability_params(values: Sequence[str] | None) -> dict[str, Any]:
     params: dict[str, Any] = {}
     for item in values or []:
@@ -3396,6 +3775,13 @@ def _materialize_capability_artifacts(
     materialized_entries: list[dict[str, Any]] = []
     paths: list[str] = []
 
+    manifest_entry_lookup: dict[str, dict[str, Any]] = {}
+    for entry in manifest_entries:
+        payload = entry.to_dict() if hasattr(entry, "to_dict") else dict(entry or {})
+        path_value = payload.get("path")
+        if path_value:
+            manifest_entry_lookup[str(path_value)] = payload
+
     artifact_lookup: dict[str, dict[str, Any]] = {}
     for artifact in artifacts:
         payload = artifact.to_dict() if hasattr(artifact, "to_dict") else dict(artifact or {})
@@ -3426,13 +3812,27 @@ def _materialize_capability_artifacts(
                 json.dumps(content, ensure_ascii=False, indent=2, default=str) + "\n",
                 encoding="utf-8",
             )
+        manifest_payload = manifest_entry_lookup.get(str(path_value), {})
         artifact_record = {
+            **manifest_payload,
             **payload,
             "path": str(destination),
             "name": payload.get("name") or destination.name,
-            "tool": getattr(result, "capability", None),
-            "status": getattr(result, "status", None),
-            "role": payload.get("role") or "capability_artifact",
+            "tool": (
+                payload.get("tool")
+                or manifest_payload.get("tool")
+                or getattr(result, "capability", None)
+            ),
+            "status": (
+                payload.get("status")
+                or manifest_payload.get("status")
+                or getattr(result, "status", None)
+            ),
+            "role": (
+                payload.get("role")
+                or manifest_payload.get("role")
+                or "capability_artifact"
+            ),
         }
         materialized_artifacts.append(artifact_record)
         artifact_lookup[str(path_value)] = artifact_record
@@ -3971,6 +4371,129 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--host", default="127.0.0.1", help="Dashboard server host when --serve is used.")
     dashboard.add_argument("--port", type=int, default=None, help="Dashboard server port; defaults to configuration or 8088.")
     dashboard.set_defaults(func=dashboard_command)
+
+    jailbreak = subparsers.add_parser(
+        "jailbreak",
+        help="Run the standalone active model-jailbreak engine through the platform audit pipeline.",
+    )
+    jailbreak_commands = jailbreak.add_subparsers(
+        dest="jailbreak_command",
+        required=True,
+    )
+
+    jailbreak_run = jailbreak_commands.add_parser(
+        "run",
+        help="Generate, mutate, and execute an adaptive jailbreak campaign.",
+    )
+    jailbreak_run.add_argument("campaign", help="Campaign JSON file.")
+    jailbreak_run.add_argument(
+        "--out",
+        required=True,
+        help="Output root for campaign, audit, report, evidence, and dashboard artifacts.",
+    )
+    jailbreak_run.add_argument("--base-url", default=None, help="OpenAI-compatible API base URL override.")
+    jailbreak_run.add_argument("--model", default=None, help="Target model override, including any GPT-family model identifier.")
+    jailbreak_run.add_argument(
+        "--api-key-env",
+        default=None,
+        help="Environment variable containing the API key; the key value is never persisted.",
+    )
+    jailbreak_run.add_argument("--timeout", type=float, default=None, help="Per-request timeout in seconds.")
+    jailbreak_run.add_argument("--max-attempts", type=int, default=None, help="Maximum remote attempts.")
+    jailbreak_run.add_argument("--max-rounds", type=int, default=None, help="Maximum adaptive rounds.")
+    jailbreak_run.add_argument(
+        "--strategy",
+        action="append",
+        dest="strategies",
+        default=None,
+        help="Built-in jailbreak strategy override; repeat to define the strategy set.",
+    )
+    jailbreak_run.add_argument(
+        "--attack-mode",
+        action="append",
+        dest="attack_modes",
+        metavar="MODE",
+        help="Attack algorithm; repeat the option or provide a comma-separated list.",
+    )
+    jailbreak_run.add_argument(
+        "--semantic-judge",
+        choices=("disabled", "heuristic", "model"),
+        default=None,
+        help="Semantic success judge override.",
+    )
+    jailbreak_run.add_argument(
+        "--judge-model",
+        default=None,
+        help="Model used by the model-backed semantic judge.",
+    )
+    jailbreak_run.add_argument(
+        "--instruction-profile",
+        default=None,
+        metavar="PROFILE",
+        help="Named instruction bundle from the repository asset registry.",
+    )
+    jailbreak_run.add_argument(
+        "--instruction-file",
+        "--instruction-files",
+        action="append",
+        dest="instruction_files",
+        default=None,
+        metavar="PATH",
+        help="Additional Markdown instruction asset; repeat for an ordered bundle.",
+    )
+    jailbreak_run.add_argument("--temperature", type=float, default=None)
+    jailbreak_run.add_argument("--max-tokens", type=int, default=None)
+    jailbreak_run.add_argument("--max-retries", type=int, default=None)
+    jailbreak_run.add_argument("--retry-backoff-seconds", type=float, default=None)
+    jailbreak_run.add_argument("--requests-per-minute", type=float, default=None)
+    jailbreak_run.add_argument(
+        "--extra-body",
+        default=None,
+        help="Additional OpenAI-compatible request body fields encoded as a JSON object.",
+    )
+    jailbreak_run.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Stable checkpoint path; defaults to "
+            "<out>/llm_jailbreak/checkpoints/<campaign-fingerprint>.json."
+        ),
+    )
+    jailbreak_run.add_argument("--resume", action="store_true", help="Resume the campaign checkpoint when present.")
+    jailbreak_run.add_argument(
+        "--require-success",
+        action="store_true",
+        help="Return exit code 3 when no attempt is classified as a successful breakthrough.",
+    )
+    jailbreak_run.add_argument(
+        "--provider",
+        default="openai_compatible_jailbreak",
+        help="Capability provider override.",
+    )
+    jailbreak_run.set_defaults(func=jailbreak_run_command)
+
+    jailbreak_validate = jailbreak_commands.add_parser(
+        "validate",
+        help="Validate and normalize a campaign without contacting a model.",
+    )
+    jailbreak_validate.add_argument("campaign", help="Campaign JSON file.")
+    jailbreak_validate.add_argument("--json", action="store_true", help="Emit the normalized campaign as JSON.")
+    jailbreak_validate.set_defaults(func=jailbreak_validate_command)
+
+    jailbreak_strategies = jailbreak_commands.add_parser(
+        "strategies",
+        help="List the built-in active jailbreak strategies.",
+    )
+    jailbreak_strategies.add_argument("--json", action="store_true", help="Emit JSON.")
+    jailbreak_strategies.set_defaults(func=jailbreak_strategies_command)
+
+    jailbreak_profiles = jailbreak_commands.add_parser(
+        "profiles",
+        help="List repository-backed instruction profiles.",
+    )
+    jailbreak_profiles.add_argument("--json", action="store_true", help="Emit JSON.")
+    jailbreak_profiles.set_defaults(func=jailbreak_profiles_command)
 
     capability = subparsers.add_parser("capability", help="Run registry-backed capability providers with audit/report artifacts.")
     capability_commands = capability.add_subparsers(dest="capability_command", required=True)

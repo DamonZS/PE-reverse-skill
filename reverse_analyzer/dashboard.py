@@ -100,6 +100,10 @@ def build_dashboard(
         "engine": _load_json(knowledge_root / "engine_strategies.json", diagnostics),
         "protocol": _load_json(knowledge_root / "protocol_formats.json", diagnostics),
         "source": _load_json(knowledge_root / "source_restoration.json", diagnostics),
+        "llm_jailbreak": _load_json(
+            knowledge_root / "llm_jailbreak_strategies.json",
+            diagnostics,
+        ),
     }
     knowledge_sessions = _knowledge_session_records(
         _load_json(knowledge_root / "sessions.json", diagnostics),
@@ -168,6 +172,7 @@ def build_dashboard(
             "engine_strategy": knowledge_recommendations["engine"]["recommendation"],
             "protocol_format": knowledge_recommendations["protocol"]["recommendation"],
             "source_restoration": knowledge_recommendations["source"]["recommendation"],
+            "llm_jailbreak_strategy": knowledge_recommendations["llm_jailbreak"]["recommendation"],
         },
         "knowledge_recommendations": knowledge_recommendations,
         "analysis_views": analysis_views,
@@ -1244,6 +1249,7 @@ def _build_knowledge_recommendations(
         "engine": "Engine strategy",
         "protocol": "Protocol format",
         "source": "Source restoration",
+        "llm_jailbreak": "Model jailbreak strategy",
     }
     results: dict[str, dict[str, Any]] = {}
     for namespace in labels:
@@ -1298,6 +1304,14 @@ def _recommend_strategy_store(data: Any, *, namespace: str) -> dict[str, Any]:
             candidate["target_format"] = str(
                 record.get("target_format") or key.split(":", 1)[0] or "unknown"
             )
+        elif namespace == "llm_jailbreak":
+            model, _, strategy = key.partition(":")
+            known_models = record.get("models") if isinstance(record.get("models"), dict) else {}
+            fallback_model = next(iter(known_models), model or "unknown")
+            candidate["model"] = str(
+                record.get("model") or record.get("last_model") or fallback_model
+            )
+            candidate["strategy"] = str(record.get("strategy") or strategy or key)
         for metric_name, metric_value in record.items():
             if metric_name.startswith("avg_") and isinstance(metric_value, (int, float)):
                 candidate[metric_name] = metric_value
@@ -1309,6 +1323,7 @@ def _recommend_strategy_store(data: Any, *, namespace: str) -> dict[str, Any]:
             "engine": {"key": "unknown:static_engine_fingerprint"},
             "protocol": {"key": "protocol:protocol_strings_dynamic_fusion"},
             "source": {"key": "source:source_summary"},
+            "llm_jailbreak": {"strategy": "roleplay"},
         }
         return {
             **defaults.get(namespace, {"key": None}),
@@ -1915,7 +1930,7 @@ def _html_document(data: dict[str, Any]) -> str:
         rows.forEach(item => {{ const tr=document.createElement('tr'); const values=[item.name || item.id || item.experiment_id || item.source_file, item.target || item.sample_id || item.path, item.status || 'unknown', item.updated_at || item.timestamp || item.created_at]; values.forEach((value,index) => {{ const td=document.createElement('td'); if(index===2) {{ const badge=document.createElement('span'); badge.className='badge'; badge.textContent=text(value); td.append(badge); }} else td.textContent=text(value); tr.append(td); }}); body.append(tr); }}); table.append(thead,body); box.append(table);
       }}
       function recommendation(title, value) {{ const box=document.createElement('div'); box.className='recommendation'; const name=document.createElement('strong'); name.textContent=title; const detail=document.createElement('div'); detail.className='meta'; detail.textContent=Object.entries(value).filter(([key]) => key !== 'reason').map(([key,val]) => key + ': ' + text(val)).join(' | ') || text(value.reason); box.append(name,detail); return box; }}
-      [['Dynamic profile','dynamic_profile'],['GUI strategy','gui_strategy'],['Patch strategy','patch_strategy'],['Engine strategy','engine_strategy'],['Protocol format','protocol_format'],['Source restoration','source_restoration']].forEach(([label,key]) => el('recommendations').append(recommendation(label, data.recommendations[key] || {{}})));
+      [['Dynamic profile','dynamic_profile'],['GUI strategy','gui_strategy'],['Patch strategy','patch_strategy'],['Engine strategy','engine_strategy'],['Protocol format','protocol_format'],['Source restoration','source_restoration'],['Model jailbreak strategy','llm_jailbreak_strategy']].forEach(([label,key]) => el('recommendations').append(recommendation(label, data.recommendations[key] || {{}})));
       const sessions=el('sessions'); if (!data.sessions.length) {{ sessions.innerHTML='<div class="empty">No sessions recorded.</div>'; }} else {{ const list=document.createElement('ul'); data.sessions.forEach(item => {{ const line=document.createElement('li'); line.textContent=[item.session_id || item.id || item.target || item.source_file, item.status || 'unknown', item.updated_at || item.timestamp || item.created_at].filter(Boolean).join(' | '); list.append(line); }}); sessions.append(list); }}
       const diagnostics=el('diagnostics'); diagnostics.textContent='Loaded ' + data.diagnostics.files_loaded + '/' + data.diagnostics.files_scanned + ' JSON files; malformed: ' + data.diagnostics.malformed_json + '; invalid records: ' + data.diagnostics.invalid_records + '.';
 

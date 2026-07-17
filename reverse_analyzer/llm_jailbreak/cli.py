@@ -1,0 +1,197 @@
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Optional, Sequence
+
+from .campaign import configure_campaign, load_campaign, run_campaign
+from .instruction_assets import list_instruction_profiles
+from .models import (
+    Campaign,
+    CampaignValidationError,
+    CheckpointError,
+    SUPPORTED_ATTACK_MODES,
+    SUPPORTED_SEMANTIC_JUDGES,
+    SUPPORTED_STRATEGIES,
+)
+from .transport import OpenAICompatibleTransport, TransportError
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="python -m reverse_analyzer.llm_jailbreak",
+        description="Run adaptive model-jailbreak campaigns against OpenAI-compatible chat endpoints.",
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    run = commands.add_parser("run", help="execute a jailbreak campaign")
+    run.add_argument("campaign", type=Path, help="campaign JSON file")
+    run.add_argument("--out", type=Path, default=Path("llm-jailbreak-out"))
+    run.add_argument("--checkpoint", type=Path)
+    run.add_argument("--resume", action="store_true")
+    run.add_argument("--base-url")
+    run.add_argument("--model")
+    run.add_argument("--api-key-env")
+    run.add_argument("--timeout", type=float)
+    run.add_argument("--max-retries", type=int)
+    run.add_argument("--requests-per-minute", type=float)
+    run.add_argument(
+        "--attack-mode",
+        action="append",
+        dest="attack_modes",
+        metavar="MODE",
+        help="attack mode; repeat the option or provide a comma-separated list",
+    )
+    run.add_argument("--semantic-judge", choices=SUPPORTED_SEMANTIC_JUDGES)
+    run.add_argument("--judge-model")
+    run.add_argument("--instruction-profile", metavar="PROFILE")
+    run.add_argument(
+        "--instruction-file",
+        "--instruction-files",
+        action="append",
+        dest="instruction_files",
+        metavar="PATH",
+        help="instruction Markdown file; repeat the option to preserve file order",
+    )
+    run.add_argument("--require-success", action="store_true")
+    run.add_argument("--json", action="store_true", dest="json_output")
+
+    validate = commands.add_parser("validate", help="validate and normalize campaign JSON")
+    validate.add_argument("campaign", type=Path)
+    validate.add_argument("--json", action="store_true", dest="json_output")
+
+    strategies = commands.add_parser("strategies", help="list built-in jailbreak strategies")
+    strategies.add_argument("--json", action="store_true", dest="json_output")
+
+    profiles = commands.add_parser(
+        "profiles",
+        help="list repository-backed instruction profiles",
+    )
+    profiles.add_argument("--json", action="store_true", dest="json_output")
+    return parser
+
+
+def _override_campaign(campaign: Campaign, args: argparse.Namespace) -> Campaign:
+    override_names = (
+        "base_url",
+        "model",
+        "api_key_env",
+        "timeout",
+        "max_retries",
+        "requests_per_minute",
+        "attack_modes",
+        "semantic_judge",
+        "judge_model",
+        "instruction_profile",
+        "instruction_files",
+    )
+    if all(getattr(args, name, None) is None for name in override_names):
+        return campaign
+
+    options = {
+        name: getattr(args, name)
+        for name in ("max_retries", "requests_per_minute")
+        if getattr(args, name, None) is not None
+    }
+    effective_semantic_judge = (
+        getattr(args, "semantic_judge", None) or campaign.semantic_judge
+    )
+    effective_judge_model = (
+        campaign.judge_model
+        if getattr(args, "judge_model", None) is None
+        else str(args.judge_model).strip()
+    )
+    if effective_semantic_judge == "model" and not effective_judge_model:
+        raise CampaignValidationError(
+            ["--judge-model is required when --semantic-judge is model"]
+        )
+    return configure_campaign(
+        campaign,
+        base_url=getattr(args, "base_url", None),
+        model=getattr(args, "model", None),
+        api_key_env=getattr(args, "api_key_env", None),
+        timeout=getattr(args, "timeout", None),
+        attack_modes=getattr(args, "attack_modes", None),
+        semantic_judge=getattr(args, "semantic_judge", None),
+        judge_model=getattr(args, "judge_model", None),
+        instruction_profile=getattr(args, "instruction_profile", None),
+        instruction_files=getattr(args, "instruction_files", None),
+        options=options or None,
+    )
+
+
+def _run_command(args: argparse.Namespace) -> int:
+    campaign = _override_campaign(load_campaign(args.campaign), args)
+    transport = OpenAICompatibleTransport.from_target(campaign.target)
+    result = run_campaign(
+        campaign,
+        transport=transport,
+        out_dir=args.out,
+        resume=args.resume,
+        checkpoint_path=args.checkpoint,
+    )
+    if args.json_output:
+        print(json.dumps(result.to_dict(), indent=2, sort_keys=True, ensure_ascii=False))
+    else:
+        print(
+            f"campaign={result.campaign_id} status={result.status} "
+            f"success={str(result.success).lower()} attempts={len(result.attempts)}"
+        )
+        print(f"result={args.out / 'result.json'}")
+    return 3 if args.require_success and not result.success else 0
+
+
+def _validate_command(args: argparse.Namespace) -> int:
+    campaign = load_campaign(args.campaign)
+    if args.json_output:
+        print(json.dumps(campaign.to_dict(), indent=2, sort_keys=True, ensure_ascii=False))
+    else:
+        print(
+            f"valid campaign={campaign.id} model={campaign.target.model} "
+            f"rounds={campaign.max_rounds}"
+        )
+    return 0
+
+
+def _strategies_command(args: argparse.Namespace) -> int:
+    if args.json_output:
+        print(json.dumps({"strategies": list(SUPPORTED_STRATEGIES)}, indent=2))
+    else:
+        for name in SUPPORTED_STRATEGIES:
+            print(name)
+    return 0
+
+
+def _profiles_command(args: argparse.Namespace) -> int:
+    profiles = list_instruction_profiles()
+    if args.json_output:
+        print(json.dumps({"profiles": list(profiles)}, indent=2))
+    else:
+        for name in profiles:
+            print(name)
+    return 0
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        if args.command == "run":
+            return _run_command(args)
+        if args.command == "validate":
+            return _validate_command(args)
+        if args.command == "strategies":
+            return _strategies_command(args)
+        if args.command == "profiles":
+            return _profiles_command(args)
+    except (CampaignValidationError, CheckpointError, TransportError, OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    parser.error(f"unknown command: {args.command}")
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

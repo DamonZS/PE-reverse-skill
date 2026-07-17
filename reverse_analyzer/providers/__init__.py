@@ -18,6 +18,7 @@ from .injector import InjectorMockProvider, InjectorProvider
 from .ios_instrumentation import IOSInstrumentationProvider
 from .ios_rebuild import IOSRebuildProvider, IosRebuildProvider
 from .kernel_memory import KernelDriverMemoryProvider
+from .llm_jailbreak import LLMJailbreakProvider
 from .memory_runtime import MemoryRuntimeMockProvider, MemoryRuntimeProvider
 from .mock import MockCapabilityProvider
 from .native_debugger import NativeDebuggerProvider
@@ -53,6 +54,7 @@ def build_default_registry() -> CapabilityRegistry:
         HardwareIdentityProvider(),
         ImGuiRendererProvider(),
         KernelDriverMemoryProvider(),
+        LLMJailbreakProvider(),
         MemoryRuntimeProvider(),
         MemoryRuntimeMockProvider(),
         InjectorProvider(),
@@ -120,6 +122,7 @@ __all__ = [
     "IOSRebuildProvider",
     "IosRebuildProvider",
     "KernelDriverMemoryProvider",
+    "LLMJailbreakProvider",
     "MemoryRuntimeMockProvider",
     "MemoryRuntimeProvider",
     "MockCapabilityProvider",

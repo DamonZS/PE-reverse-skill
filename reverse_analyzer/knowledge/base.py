@@ -40,6 +40,7 @@ class KnowledgeBase(CapabilityOutcomeKnowledgeMixin):
     - ``dynamic_profiles.json``: Frida profile outcome statistics.
     - ``gui_strategies.json``: GUI reconstruction strategy outcome statistics.
     - ``patch_strategies.json``: patch lifecycle strategy outcome statistics.
+    - ``llm_jailbreak_strategies.json``: model jailbreak strategy outcomes.
     - ``sessions.json``: historical session summaries.
     """
 
@@ -54,6 +55,7 @@ class KnowledgeBase(CapabilityOutcomeKnowledgeMixin):
         self.engine_strategies_path = self.root / "engine_strategies.json"
         self.protocol_formats_path = self.root / "protocol_formats.json"
         self.source_restoration_path = self.root / "source_restoration.json"
+        self.llm_jailbreak_strategies_path = self.root / "llm_jailbreak_strategies.json"
         self.sessions_path = self.root / "sessions.json"
         self._strategy_namespace_paths = {
             "gui": self.gui_strategies_path,
@@ -414,6 +416,260 @@ class KnowledgeBase(CapabilityOutcomeKnowledgeMixin):
 
     def save_gui_strategies(self, data: Dict[str, Any]) -> None:
         self._write_json(self.gui_strategies_path, data)
+
+    def load_llm_jailbreak_strategies(self) -> Dict[str, Any]:
+        default = {"version": 1, "strategies": {}}
+        data = self._read_json(self.llm_jailbreak_strategies_path, default=default)
+        if not isinstance(data, dict):
+            return default
+        data.setdefault("version", 1)
+        if not isinstance(data.get("strategies"), dict):
+            data["strategies"] = {}
+        return data
+
+    def save_llm_jailbreak_strategies(self, data: Dict[str, Any]) -> None:
+        self._write_json(self.llm_jailbreak_strategies_path, data)
+
+    def record_llm_jailbreak_strategy_result(
+        self,
+        strategy: str,
+        *,
+        model: str = "unknown",
+        status: str = "unknown",
+        score: float = 0.0,
+        attempts: int = 0,
+        latency_ms: float = 0.0,
+        sample_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Accumulate jailbreak outcomes globally and for each target model."""
+
+        strategy_name = str(strategy or "unknown").strip().lower() or "unknown"
+        model_name = str(model or "unknown").strip().lower() or "unknown"
+        status_value = self._normalize_llm_jailbreak_status(status)
+        score_value = min(1.0, max(0.0, self._finite_number(score)))
+        attempts_value = max(0, _int(attempts))
+        latency_value = max(0.0, self._finite_number(latency_ms))
+
+        data = self.load_llm_jailbreak_strategies()
+        strategies = data.setdefault("strategies", {})
+        existing = strategies.get(strategy_name)
+        record = dict(existing) if isinstance(existing, dict) else {}
+        record["strategy"] = strategy_name
+        self._update_llm_jailbreak_bucket(
+            record,
+            status=status_value,
+            score=score_value,
+            attempts=attempts_value,
+            latency_ms=latency_value,
+        )
+
+        raw_models = record.get("models")
+        models = {
+            str(name).strip().lower(): max(0, _int(count))
+            for name, count in raw_models.items()
+            if str(name).strip()
+        } if isinstance(raw_models, dict) else {}
+        models[model_name] = models.get(model_name, 0) + 1
+        record["models"] = models
+
+        raw_model_stats = record.get("model_stats")
+        model_stats = dict(raw_model_stats) if isinstance(raw_model_stats, dict) else {}
+        existing_model_record = model_stats.get(model_name)
+        model_record = dict(existing_model_record) if isinstance(existing_model_record, dict) else {}
+        model_record["model"] = model_name
+        self._update_llm_jailbreak_bucket(
+            model_record,
+            status=status_value,
+            score=score_value,
+            attempts=attempts_value,
+            latency_ms=latency_value,
+        )
+
+        sample_value = str(sample_id).strip() if sample_id not in (None, "") else ""
+        samples = record.get("samples")
+        recent_samples = list(samples) if isinstance(samples, list) else []
+        model_samples = model_record.get("samples")
+        recent_model_samples = list(model_samples) if isinstance(model_samples, list) else []
+        if sample_value:
+            recent_samples = [item for item in recent_samples if item != sample_value]
+            recent_samples.append(sample_value)
+            recent_model_samples = [item for item in recent_model_samples if item != sample_value]
+            recent_model_samples.append(sample_value)
+        record["samples"] = recent_samples[-25:]
+        model_record["samples"] = recent_model_samples[-25:]
+        model_stats[model_name] = model_record
+        record["model_stats"] = model_stats
+
+        timestamp = utc_now()
+        record["last_status"] = status_value
+        record["last_model"] = model_name
+        record["last_updated"] = timestamp
+        model_record["last_status"] = status_value
+        model_record["last_updated"] = timestamp
+        strategies[strategy_name] = record
+        data["last_updated"] = timestamp
+        self.save_llm_jailbreak_strategies(data)
+        return record
+
+    def recommend_llm_jailbreak_strategy(
+        self,
+        *,
+        model: Optional[str] = None,
+        default: str = "adaptive",
+    ) -> Dict[str, Any]:
+        """Recommend a strategy using outcome quality, cost, and stability."""
+
+        requested_model = str(model or "").strip().lower()
+        candidates: list[Dict[str, Any]] = []
+        strategies = self.load_llm_jailbreak_strategies().get("strategies") or {}
+        for strategy_key, record in strategies.items():
+            if not isinstance(record, dict):
+                continue
+            strategy_name = str(record.get("strategy") or strategy_key).strip().lower()
+            scoped_record = record
+            if requested_model:
+                model_stats = record.get("model_stats")
+                scoped = None
+                if isinstance(model_stats, dict):
+                    scoped = next(
+                        (
+                            value
+                            for name, value in model_stats.items()
+                            if str(name).strip().lower() == requested_model
+                        ),
+                        None,
+                    )
+                if isinstance(scoped, dict):
+                    scoped_record = scoped
+                else:
+                    models = record.get("models")
+                    model_runs = sum(
+                        max(0, _int(count))
+                        for name, count in models.items()
+                        if str(name).strip().lower() == requested_model
+                    ) if isinstance(models, dict) else 0
+                    if model_runs <= 0:
+                        continue
+
+            metrics = self._llm_jailbreak_bucket_metrics(scoped_record)
+            runs = metrics["runs"]
+            if runs <= 0:
+                continue
+            unavailable_rate = metrics["unavailable"] / runs
+            stability = min(2.0, math.log2(runs + 1) * 0.5) * (1.0 - unavailable_rate)
+            attempt_penalty = min(3.0, metrics["avg_attempts"] * 0.25)
+            latency_penalty = min(2.0, metrics["avg_latency_ms"] / 20000.0)
+            utility = (
+                metrics["success_rate"] * 10.0
+                + metrics["avg_score"] * 5.0
+                + stability
+                - attempt_penalty
+                - latency_penalty
+            )
+            candidates.append(
+                {
+                    "model": requested_model or None,
+                    "strategy": strategy_name,
+                    "score": round(utility, 3),
+                    "runs": runs,
+                    "success_rate": round(metrics["success_rate"], 3),
+                    "avg_score": round(metrics["avg_score"], 3),
+                    "avg_attempts": round(metrics["avg_attempts"], 3),
+                    "avg_latency_ms": round(metrics["avg_latency_ms"], 3),
+                    "stability_score": round(stability, 3),
+                    "models": dict(record.get("models") or {})
+                    if isinstance(record.get("models"), dict)
+                    else {},
+                    "samples": list(scoped_record.get("samples") or [])
+                    if isinstance(scoped_record.get("samples"), list)
+                    else [],
+                }
+            )
+
+        if not candidates:
+            return {
+                "model": requested_model or None,
+                "strategy": str(default or "adaptive").strip() or "adaptive",
+                "score": 0.0,
+                "reason": "no LLM jailbreak strategy history",
+            }
+        candidates.sort(
+            key=lambda item: (
+                -self._finite_number(item.get("score"), default=float("-inf")),
+                -self._finite_number(item.get("success_rate")),
+                -_int(item.get("runs")),
+                str(item.get("strategy") or ""),
+            )
+        )
+        return candidates[0]
+
+    @staticmethod
+    def _normalize_llm_jailbreak_status(status: Any) -> str:
+        normalized = "_".join(
+            str(status or "unknown").strip().lower().replace("-", "_").split()
+        )
+        if normalized in {"jailbroken", "bypassed", "breakthrough", "compromised"}:
+            return "ok"
+        if normalized in {"blocked", "refused", "rejected", "failure", "failed", "error"}:
+            return "failed"
+        return _normalize_strategy_status_impl(normalized)
+
+    @staticmethod
+    def _finite_number(value: Any, *, default: float = 0.0) -> float:
+        if isinstance(value, bool):
+            return default
+        number = _float(value, default)
+        return number if math.isfinite(number) else default
+
+    @classmethod
+    def _update_llm_jailbreak_bucket(
+        cls,
+        bucket: Dict[str, Any],
+        *,
+        status: str,
+        score: float,
+        attempts: int,
+        latency_ms: float,
+    ) -> None:
+        bucket["runs"] = max(0, _int(bucket.get("runs"))) + 1
+        bucket["successes"] = max(0, _int(bucket.get("successes")))
+        bucket["failures"] = max(0, _int(bucket.get("failures")))
+        bucket["unavailable"] = max(0, _int(bucket.get("unavailable")))
+        if status == "ok":
+            bucket["successes"] += 1
+        elif status == "unavailable":
+            bucket["unavailable"] += 1
+        else:
+            bucket["failures"] += 1
+
+        bucket["total_score"] = max(0.0, cls._finite_number(bucket.get("total_score"))) + score
+        bucket["total_attempts"] = max(0, _int(bucket.get("total_attempts"))) + attempts
+        bucket["total_latency_ms"] = max(
+            0.0,
+            cls._finite_number(bucket.get("total_latency_ms")),
+        ) + latency_ms
+        runs = bucket["runs"]
+        bucket["success_rate"] = round(bucket["successes"] / runs, 3)
+        bucket["avg_score"] = round(bucket["total_score"] / runs, 3)
+        bucket["avg_attempts"] = round(bucket["total_attempts"] / runs, 3)
+        bucket["avg_latency_ms"] = round(bucket["total_latency_ms"] / runs, 3)
+
+    @classmethod
+    def _llm_jailbreak_bucket_metrics(cls, bucket: Dict[str, Any]) -> Dict[str, float | int]:
+        runs = max(0, _int(bucket.get("runs")))
+        successes = max(0, min(runs, _int(bucket.get("successes"))))
+        unavailable = max(0, min(runs, _int(bucket.get("unavailable"))))
+        success_rate = successes / runs if runs else 0.0
+        if "successes" not in bucket:
+            success_rate = min(1.0, max(0.0, cls._finite_number(bucket.get("success_rate"))))
+        return {
+            "runs": runs,
+            "unavailable": unavailable,
+            "success_rate": success_rate,
+            "avg_score": min(1.0, max(0.0, cls._finite_number(bucket.get("avg_score")))),
+            "avg_attempts": max(0.0, cls._finite_number(bucket.get("avg_attempts"))),
+            "avg_latency_ms": max(0.0, cls._finite_number(bucket.get("avg_latency_ms"))),
+        }
 
     def load_patch_strategies(self) -> Dict[str, Any]:
         data = self._read_json(
@@ -839,6 +1095,11 @@ class KnowledgeBase(CapabilityOutcomeKnowledgeMixin):
             self._write_json(self.dynamic_profiles_path, {"version": 1, "profiles": {}, "last_updated": utc_now()})
         if not self.gui_strategies_path.exists():
             self._write_json(self.gui_strategies_path, {"version": 1, "strategies": {}, "last_updated": utc_now()})
+        if not self.llm_jailbreak_strategies_path.exists():
+            self._write_json(
+                self.llm_jailbreak_strategies_path,
+                {"version": 1, "strategies": {}, "last_updated": utc_now()},
+            )
         for path in (
             self.patch_strategies_path,
             self.engine_strategies_path,

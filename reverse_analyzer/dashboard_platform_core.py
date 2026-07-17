@@ -15,6 +15,7 @@ ANALYSIS_DOMAINS = (
     ("protocol", "Protocol", "protocol_analysis"),
     ("gui", "GUI", "gui_analysis"),
     ("source", "Source", "source_reconstruction"),
+    ("llm_jailbreak", "Model Jailbreak", "llm_jailbreak_analysis"),
 )
 
 LOW_CONFIDENCE_THRESHOLD = 0.6
@@ -153,6 +154,21 @@ _DOMAIN_METRICS = {
         ("Behavior equivalent", "behavior_equivalent"),
         ("Strategy", "strategy"),
     ),
+    "llm_jailbreak": (
+        ("Model", "model"),
+        ("Campaign", "campaign_id"),
+        ("Strategy", "strategy"),
+        ("Attack modes", "attack_modes"),
+        ("Semantic judge", "semantic_judge"),
+        ("Judge model", "judge_model"),
+        ("Instruction profile", "instruction_profile"),
+        ("Instruction bundle digest", "instruction_bundle_digest"),
+        ("Instruction asset count", "instruction_asset_count"),
+        ("Attempts", "attempt_count"),
+        ("Success", "success"),
+        ("Score", "score"),
+        ("Latency (ms)", "latency_ms"),
+    ),
 }
 
 _CONFIDENCE_PATHS = {
@@ -164,6 +180,7 @@ _CONFIDENCE_PATHS = {
     "protocol": ("confidence", "inference.confidence"),
     "gui": ("confidence", "reconstruction_verification.score"),
     "source": ("confidence", "runtime_validation_confidence.score", "verification_score"),
+    "llm_jailbreak": ("score", "confidence"),
 }
 
 _SEVERITY_RANK = {
@@ -652,6 +669,10 @@ def _analysis_view(
     ):
         if key in normalized_payload:
             view[key] = _compact_value(normalized_payload.get(key))
+    if domain == "llm_jailbreak":
+        provenance = normalized_payload.get("instruction_bundle_provenance")
+        if isinstance(provenance, Mapping):
+            view["instruction_bundle_provenance"] = dict(provenance)
     return view
 
 
@@ -700,7 +721,13 @@ def _analysis_metrics(domain: str, payload: Mapping[str, Any]) -> list[dict[str,
     seen_labels: set[str] = set()
     for label, path in _DOMAIN_METRICS.get(domain, ()):
         value = _path_value(payload, path)
-        compact = _metric_value(value)
+        compact = (
+            _compact_value(value)
+            if domain == "llm_jailbreak"
+            and label == "Attack modes"
+            and isinstance(value, list)
+            else _metric_value(value)
+        )
         if compact is None:
             continue
         metrics.append({"label": label, "value": compact})

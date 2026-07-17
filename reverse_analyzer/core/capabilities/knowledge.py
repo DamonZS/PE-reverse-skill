@@ -36,6 +36,7 @@ KNOWLEDGE_MANAGED_CAPABILITIES = frozenset(
         "ios_instrumentation",
         "ios_rebuild",
         "kernel_driver_memory_runtime",
+        "llm_jailbreak",
         "memory_runtime",
         "native_debugger",
         "native_hook",

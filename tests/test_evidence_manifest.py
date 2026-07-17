@@ -13,6 +13,7 @@ from reverse_analyzer.evidence import (
     verify_manifest,
     write_manifest,
 )
+from reverse_analyzer.llm_jailbreak import load_instruction_bundle
 
 
 class EvidenceManifestTests(unittest.TestCase):
@@ -125,6 +126,81 @@ class EvidenceManifestTests(unittest.TestCase):
             self.assertEqual(manifest["artifacts"][0]["tool"], "gui_behavior_graph")
             self.assertEqual(manifest["artifacts"][0]["generated_by"]["tool"], "gui_behavior_graph")
             self.assertEqual(manifest["derivations"][0]["generated_by"]["tool"], "gui_behavior_graph")
+
+    def test_capability_audit_fields_survive_manifest_normalization(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "out"
+            out.mkdir()
+            artifact = out / "instruction-assets.json"
+            artifact.write_text("{}\n", encoding="utf-8")
+            provenance = {
+                "algorithm": "sha256",
+                "sources": ["reverse-skills/llm-security/SKILL.md"],
+            }
+
+            manifest = build_manifest(
+                out,
+                [
+                    {
+                        "path": artifact,
+                        "kind": "llm-jailbreak-instruction-assets",
+                        "provider": "fixture-provider",
+                        "session_id": "fixture-session",
+                        "attack_modes": ["pair", "tap"],
+                        "semantic_judge": "model",
+                        "judge_model": "fixture-judge",
+                        "instruction_profile": "codex-unified",
+                        "instruction_bundle_digest": "a" * 64,
+                        "instruction_asset_count": 2,
+                        "instruction_bundle_provenance": provenance,
+                    }
+                ],
+            )
+
+            record = manifest["artifacts"][0]
+            self.assertEqual(record["provider"], "fixture-provider")
+            self.assertEqual(record["attack_modes"], ["pair", "tap"])
+            self.assertEqual(record["instruction_bundle_provenance"], provenance)
+
+    def test_instruction_bundle_manifest_identity_is_stable_across_roots(self) -> None:
+        manifests = []
+        serialized_manifests = []
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            for root_name in ("machine-a", "machine-b"):
+                root = workspace / root_name
+                source = root / "private" / "campaign-rules.md"
+                source.parent.mkdir(parents=True)
+                source.write_text("stable campaign instruction\n", encoding="utf-8")
+                bundle = load_instruction_bundle(files=[source])
+
+                out = root / "out"
+                out.mkdir()
+                artifact = out / "instruction-assets.json"
+                artifact.write_text(
+                    json.dumps(bundle.to_dict(), sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                manifest = build_manifest(
+                    out,
+                    [
+                        {
+                            "path": artifact,
+                            "kind": "llm-jailbreak-instruction-assets",
+                            "tool": "llm_jailbreak",
+                            "instruction_bundle_digest": bundle.digest,
+                            "instruction_asset_count": len(bundle.assets),
+                            "instruction_bundle_provenance": bundle.provenance,
+                        }
+                    ],
+                )
+                manifests.append(manifest)
+                serialized_manifests.append(json.dumps(manifest, sort_keys=True))
+
+            self.assertEqual(manifests[0]["manifest_id"], manifests[1]["manifest_id"])
+            self.assertEqual(manifests[0]["artifacts"], manifests[1]["artifacts"])
+            for root_name, serialized in zip(("machine-a", "machine-b"), serialized_manifests):
+                self.assertNotIn(str((workspace / root_name).resolve()), serialized)
 
 
 if __name__ == "__main__":

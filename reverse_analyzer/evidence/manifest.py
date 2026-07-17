@@ -28,6 +28,22 @@ _IDENTITY_EXCLUDED_KEYS = {
 }
 _OK_STATUSES = {"ok", "succeeded", "success", "available", "complete", "completed"}
 _UNAVAILABLE_STATUSES = {"unavailable", "skipped", "missing", "not_run", "not-run"}
+_ARTIFACT_AUDIT_FIELDS = (
+    "provider",
+    "session_id",
+    "target_identity",
+    "precondition_hash",
+    "materialized",
+    "source",
+    "attack_modes",
+    "semantic_judge",
+    "judge_model",
+    "instruction_profile",
+    "instruction_files",
+    "instruction_bundle_digest",
+    "instruction_asset_count",
+    "instruction_bundle_provenance",
+)
 
 
 def canonical_json_bytes(value: Any) -> bytes:
@@ -263,6 +279,10 @@ def _normalize_artifact(root: Path, candidate: Mapping[str, Any]) -> tuple[dict[
         value = source.get(key)
         if value is not None:
             record[key] = value
+    for key in _ARTIFACT_AUDIT_FIELDS:
+        value = source.get(key)
+        if value is not None:
+            record[key] = copy.deepcopy(value)
     if tool is not None:
         record["tool"] = str(tool)
     generated_by = {
