@@ -265,6 +265,27 @@ class LLMJailbreakProviderTests(unittest.TestCase):
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.report_section["latency_ms"], 1250.0)
 
+    def test_nested_attempt_score_is_reported_as_scalar(self):
+        def fake_runner(**request):
+            return {
+                "status": "completed",
+                "success": True,
+                "attempts": [
+                    {
+                        "attempt": 1,
+                        "success": True,
+                        "score": {"score": 1.0, "success": True},
+                    }
+                ],
+            }
+
+        provider = LLMJailbreakProvider(runner=fake_runner, transport=object())
+        result = provider.execute(provider.plan(self._request()))
+
+        self.assertEqual(result.report_section["score"], 1.0)
+        self.assertEqual(result.after_snapshot["score"], 1.0)
+        self.assertEqual(result.dashboard_trace[0]["score"], 1.0)
+
     def test_explicit_runner_receives_every_parameter_and_session_engine_directory(self):
         seen = {}
         transport = object()

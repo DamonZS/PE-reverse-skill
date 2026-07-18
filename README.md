@@ -599,7 +599,7 @@ $env:LLM_JAILBREAK_E2E_API_KEY_ENV = 'MODEL_API_KEY'
 python -m unittest tests.e2e.test_llm_jailbreak_live
 ```
 
-API key 值只能从 `api_key_env` 指定的环境变量读取；campaign 和 capability 参数禁止内联 `api_key`，密钥值不会写入工件。Provider 还会对 engine 工件和 checkpoint 做二次脱敏，并在脱敏后重算 engine manifest 的大小与 SHA-256。`OPENAI_API_KEY` 只是默认环境变量名，可由 campaign 或 CLI 改名。真实执行依赖外部 OpenAI-compatible endpoint 与相应 API key；仓库中的成功测试使用 fake/injected transport，尚无 checked-in live endpoint E2E，因此 `llm_jailbreak_campaign_engine` 准确标记为 `dependency-gated`。
+API key 值只能从 `api_key_env` 指定的环境变量读取；campaign 和 capability 参数禁止内联 `api_key`，密钥值不会写入工件。Provider 还会对 engine 工件和 checkpoint 做二次脱敏，并在脱敏后重算 engine manifest 的大小与 SHA-256。`OPENAI_API_KEY` 只是默认环境变量名，可由 campaign 或 CLI 改名。2026-07-17 已使用真实 OpenAI-compatible endpoint 完成 `doctor → run → checkpoint → 跨 session resume → report → promote`，9 项 promotion 检查全部通过，仓库内脱敏摘要见 `docs/acceptance/llm_jailbreak_live_2026-07-17.json`；完整工件保留在仓库外。因此 `llm_jailbreak_campaign_engine` 标记为 `done`。
 
 该产品路径独立于 `analyze` 的分析模型 provider：默认 `RuleBasedProvider` 仍是本地、确定性且无需网络，`OpenAICompatibleProvider` 仍只是分析 provider 适配边界。设置 API 环境变量本身不会自动上传样本或启动越狱 campaign。
 

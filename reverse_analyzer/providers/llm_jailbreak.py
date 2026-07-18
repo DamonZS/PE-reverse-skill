@@ -1259,7 +1259,14 @@ def _execution_summary(
         best.get("score"),
         *[item.get("score") for item in attempts],
     ]
-    score = max((_safe_float(value) for value in score_candidates if value is not None), default=0.0)
+    score = max(
+        (
+            _safe_float(value.get("score") if isinstance(value, Mapping) else value)
+            for value in score_candidates
+            if value is not None
+        ),
+        default=0.0,
+    )
     attempt_count = _safe_int(result.get("attempt_count"), len(attempts))
     latency_ms = _safe_float(result.get("latency_ms"))
     result_summary = result.get("summary")

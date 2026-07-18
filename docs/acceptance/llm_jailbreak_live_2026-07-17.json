@@ -1,0 +1,42 @@
+{
+  "schema": "reverse_analyzer.llm_jailbreak.live_acceptance/v1",
+  "date": "2026-07-17",
+  "endpoint": "https://api.toporeduce.cn/v1",
+  "model": "gpt-5.6-sol",
+  "doctor": {"status": "ok", "check_count": 5},
+  "workflow": ["plan", "validate", "run", "checkpoint", "cross_session_resume", "report", "promote"],
+  "sessions": {
+    "run": "0e19bb17d66649a4a3543512ee1ef0bf",
+    "resume": "cb3ec5005e734470bd1712ceeb2241ae"
+  },
+  "evidence_manifest": {
+    "schema": "reverse_analyzer.evidence_manifest/v1",
+    "artifact_count": 18
+  },
+  "promotion": {
+    "status": "passed",
+    "check_count": 9,
+    "acceptance_digest": "26f9b92edece11b4d5d7f6659734a8e685d476e9a4eb54f42f307dca94b7da20",
+    "checks": [
+      "required_artifacts",
+      "attempts_transcript",
+      "http_transport",
+      "checkpoint",
+      "instruction_bundle",
+      "semantic_judge",
+      "engine_manifest",
+      "evidence_manifest",
+      "redaction_scan"
+    ]
+  },
+  "redaction": {
+    "exact_key_matches": 0,
+    "authorization_header_matches": 0,
+    "bearer_token_matches": 0
+  },
+  "retention": {
+    "complete_artifacts_outside_repository": true,
+    "api_key_persisted": false,
+    "host_path_persisted_in_summary": false
+  }
+}

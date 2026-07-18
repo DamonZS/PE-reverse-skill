@@ -2,6 +2,8 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+.venv/
+.codex-tmp*/
 .workbuddy/
 tmp/
 .reverse_analyzer/

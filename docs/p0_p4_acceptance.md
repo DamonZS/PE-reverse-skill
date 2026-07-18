@@ -151,3 +151,16 @@ The latest full repository regression at this checkpoint ran 980 tests in
 `python -m compileall reverse_analyzer tests` also completed successfully. A
 focused post-contract regression then ran 123 tests and passed with one
 platform-gated skip.
+
+## Artifact retention policy
+
+Acceptance workspaces are generated evidence, not source files. Local runs may
+use `.codex-tmp-*` directories, but those directories must remain ignored and
+must not be committed. Keep the executable fixture contracts and this curated
+checkpoint in the repository. When a release requires retained evidence,
+publish only the reviewed summary or manifest under `docs/acceptance/`, and
+store the full raw workspace in the designated external evidence archive.
+
+Python packages used to execute acceptance tests belong in an ignored virtual
+environment such as `.venv/`; dependency trees must not be vendored through a
+temporary acceptance directory.
