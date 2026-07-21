@@ -119,6 +119,105 @@ class HttpFixtureServer:
             connection.sendall(response[cursor:])
 
 
+class ConnectEchoTarget:
+    def __init__(self) -> None:
+        self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.listener.bind(("127.0.0.1", 0))
+        self.listener.listen(1)
+        self.listener.settimeout(0.1)
+        self.port = int(self.listener.getsockname()[1])
+        self.received = b""
+        self.errors: list[str] = []
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._serve, daemon=True)
+        self._thread.start()
+
+    def close(self) -> None:
+        self._stop.set()
+        try:
+            self.listener.close()
+        except OSError:
+            pass
+        self._thread.join(timeout=2)
+
+    def _serve(self) -> None:
+        while not self._stop.is_set():
+            try:
+                connection, _ = self.listener.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            try:
+                with connection:
+                    connection.settimeout(1)
+                    self.received = connection.recv(4096)
+                    connection.sendall(self.received.upper())
+                return
+            except OSError as exc:
+                self.errors.append(str(exc) or exc.__class__.__name__)
+                return
+
+
+class ConnectProxyFixture:
+    def __init__(self, target_port: int) -> None:
+        self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.listener.bind(("127.0.0.1", 0))
+        self.listener.listen(1)
+        self.listener.settimeout(0.1)
+        self.port = int(self.listener.getsockname()[1])
+        self.target_port = target_port
+        self.request = b""
+        self.errors: list[str] = []
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._serve, daemon=True)
+        self._thread.start()
+
+    def close(self) -> None:
+        self._stop.set()
+        try:
+            self.listener.close()
+        except OSError:
+            pass
+        self._thread.join(timeout=2)
+
+    def _serve(self) -> None:
+        while not self._stop.is_set():
+            try:
+                client, _ = self.listener.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            try:
+                with client:
+                    client.settimeout(1)
+                    request = bytearray()
+                    while b"\r\n\r\n" not in request:
+                        chunk = client.recv(4096)
+                        if not chunk:
+                            raise ConnectionError("CONNECT request ended before headers")
+                        request.extend(chunk)
+                    self.request = bytes(request)
+                    expected = f"127.0.0.1:{self.target_port}".encode("ascii")
+                    if not self.request.startswith(b"CONNECT " + expected + b" HTTP/1.1\r\n"):
+                        raise ValueError("CONNECT authority did not match the fixture target")
+                    with socket.create_connection(
+                        ("127.0.0.1", self.target_port), timeout=1
+                    ) as upstream:
+                        client.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+                        payload = client.recv(4096)
+                        upstream.sendall(payload)
+                        response = upstream.recv(4096)
+                        client.sendall(response)
+                return
+            except (OSError, ValueError) as exc:
+                self.errors.append(str(exc) or exc.__class__.__name__)
+                return
+
+
 class ProtocolRuntimeHttpTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()
@@ -735,6 +834,112 @@ class ProtocolRuntimeHttpTests(unittest.TestCase):
             result.after_snapshot["generalized_replay_limitations"],
         )
         self.assertFalse(result.after_snapshot["fixture_verified"])
+
+    def test_real_loopback_connect_tunnel_capture_mutation_and_rollback(self) -> None:
+        target = ConnectEchoTarget()
+        proxy = ConnectProxyFixture(target.port)
+        payload = b"tunnel-ping"
+        mutated_payload = b"tunnel-pong"
+        try:
+            request = CapabilityRequest(
+                capability="protocol_runtime",
+                action="loopback_http_capture",
+                target=TargetIdentity(
+                    kind="http-connect-proxy",
+                    display_name=f"http://127.0.0.1:{proxy.port}",
+                ),
+                params={
+                    "listen_host": "127.0.0.1",
+                    "listen_port": 0,
+                    "upstream_host": "127.0.0.1",
+                    "upstream_port": proxy.port,
+                    "mutation": {
+                        "enabled": True,
+                        "direction": "client_to_server",
+                        "find_hex": b"ping".hex(),
+                        "replace_hex": b"pong".hex(),
+                        "max_replacements": 1,
+                    },
+                    **self._limits(),
+                },
+                session_id="http-connect-live",
+                provenance={"test_case": self.id()},
+            )
+            plan = self.provider.plan(request)
+            validation = self.provider.validate(plan)
+            self.assertTrue(validation.ok, validation.errors)
+            ready: queue.Queue[dict[str, Any]] = queue.Queue()
+            outcome: dict[str, Any] = {}
+
+            def run() -> None:
+                outcome["result"] = self.provider.execute(
+                    plan,
+                    context={"protocol_runtime_ready": ready.put},
+                )
+
+            worker = threading.Thread(target=run, daemon=True)
+            worker.start()
+            endpoint = ready.get(timeout=2)
+            authority = f"127.0.0.1:{target.port}".encode("ascii")
+            with socket.create_connection(
+                (str(endpoint["host"]), int(endpoint["port"])), timeout=1
+            ) as client:
+                client.sendall(
+                    b"CONNECT "
+                    + authority
+                    + b" HTTP/1.1\r\nHost: "
+                    + authority
+                    + b"\r\n\r\n"
+                )
+                response = bytearray()
+                while b"\r\n\r\n" not in response:
+                    response.extend(client.recv(4096))
+                self.assertEqual(
+                    bytes(response),
+                    b"HTTP/1.1 200 Connection Established\r\n\r\n",
+                )
+                client.sendall(payload)
+                self.assertEqual(client.recv(4096), mutated_payload.upper())
+
+            worker.join(timeout=4)
+            self.assertFalse(worker.is_alive(), "CONNECT capture exceeded its bound")
+            result = outcome["result"]
+            self.assertEqual(
+                result.status,
+                "ok",
+                result.after_snapshot.get("errors"),
+            )
+            self.assertEqual(result.after_snapshot["connect_tunnel_count"], 1)
+            tunnel = result.after_snapshot["connect_tunnels"][0]
+            self.assertTrue(tunnel["established"])
+            self.assertTrue(tunnel["bidirectional_payload_observed"])
+            self.assertEqual(tunnel["authority"], authority.decode("ascii"))
+            self.assertEqual(
+                tunnel["client_to_server"]["sha256"],
+                hashlib.sha256(mutated_payload).hexdigest(),
+            )
+            self.assertEqual(
+                tunnel["server_to_client"]["sha256"],
+                hashlib.sha256(mutated_payload.upper()).hexdigest(),
+            )
+            self.assertEqual(result.after_snapshot["mutation_count"], 1)
+            self.assertEqual(target.received, mutated_payload)
+            self.assertFalse(proxy.errors)
+            self.assertFalse(target.errors)
+
+            artifact = self._materialize(result, "connect-live")
+            stored = json.loads(artifact.read_text(encoding="utf-8"))
+            self.assertEqual(
+                stored["after_snapshot"]["connect_tunnels"][0]["authority"],
+                authority.decode("ascii"),
+            )
+            rollback = self.provider.rollback(result)
+            self.assertTrue(rollback.ok)
+            self.assertTrue(rollback.details["completed"])
+            self.assertEqual(rollback.details["mode"], "close_ephemeral_sockets")
+        finally:
+            proxy.close()
+            target.close()
 
 
 if __name__ == "__main__":

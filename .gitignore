@@ -4,6 +4,9 @@ __pycache__/
 .pytest_cache/
 .venv/
 .codex-tmp*/
+.codegraph/daemon.pid
+build/
+*.egg-info/
 .workbuddy/
 tmp/
 .reverse_analyzer/

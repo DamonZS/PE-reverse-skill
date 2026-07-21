@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "fixture_id": "p6-protocol-runtime-loopback",
+  "phase": "P6",
+  "capability": "network_capture_mutation_replay",
+  "accepted_scope": "controlled IPv4 loopback TLS capture and certificate-bound ordered TCP session replay",
+  "started_at": "2026-07-21T17:31:23.738056+00:00",
+  "finished_at": "2026-07-21T17:31:24.591398+00:00",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "provider": "local_loopback_protocol_runtime",
+  "contract_sha256": "17cdd83f44f266fbe4e5bafdaa684b7fe70d308536cf35575a83b3be48cce9ea",
+  "outcome": "passed",
+  "live_verified": true,
+  "checks": {
+    "real_socket_evidence": true,
+    "tls_verify": true,
+    "certificate_pin_matched": true,
+    "source_order_preserved": true,
+    "expected_artifacts_complete": true,
+    "provenance_non_synthetic": true,
+    "target_identity_present": true,
+    "execution_proof_valid": true,
+    "rollback_verified": true,
+    "cleanup_verified": true
+  },
+  "artifact_digests": {
+    "protocol-runtime/execution-proof.json": "e255683f88a274b626bd51656ce6312b1309a83b57d0ad3b652f837f58cdee5b",
+    "protocol-runtime/rollback.json": "83a1283ab825a0917b11379a85ae75e2a0fad8f944562786c4f08fa127a632e6",
+    "protocol_runtime/capture/loopback_tcp_proxy_capture.json": "b7e69e02907ff585753955ee9b5b6db6bbfc58df20d5b590e8e38ba5672f6076",
+    "protocol_runtime/replay/replay.json": "0ead268cd226aaeb20e7510f0ccc0b7e1f8d03d055af94fd0e7ffd9bb631f267"
+  },
+  "excluded_scope": [
+    "arbitrary-interface capture",
+    "unmanaged TLS decryption",
+    "CONNECT tunnels",
+    "HTTP/2 and HTTP/3",
+    "unrestricted remote endpoint replay"
+  ],
+  "sanitized": true
+}

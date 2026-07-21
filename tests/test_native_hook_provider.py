@@ -870,6 +870,68 @@ class NativeHookWindowsSmokeTests(unittest.TestCase):
     "set RUN_NATIVE_HOOK_HARDWARE_SMOKE=1 in 64-bit Python on Windows",
 )
 class NativeHookWindowsHardwareSmokeTests(unittest.TestCase):
+    @staticmethod
+    def _retain_acceptance_artifacts(
+        provider: NativeHookProvider,
+        result: Any,
+        *,
+        pid: int,
+        thread_id: int,
+    ) -> None:
+        configured = str(os.environ.get("REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR") or "").strip()
+        if not configured:
+            return
+        root = Path(configured).expanduser().resolve()
+        provider.collect_artifacts(result, str(root))
+        evidence = root / "native-hook-hardware"
+        evidence.mkdir(parents=True, exist_ok=True)
+        (evidence / "target-identity.json").write_text(
+            json.dumps(
+                {
+                    "kind": "controlled_child_process_thread",
+                    "pid": pid,
+                    "thread_id": thread_id,
+                    "path": str(Path(sys.executable).resolve()),
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        restored = bool(result.rollback_plan.get("restored"))
+        detached = bool(result.rollback_plan.get("debug_detached"))
+        (evidence / "rollback.json").write_text(
+            json.dumps(
+                {
+                    "status": "ok" if restored and detached else "failed",
+                    "verified": restored and detached,
+                    "debug_registers_restored": restored,
+                    "debug_detached": detached,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (evidence / "execution-proof.json").write_text(
+            json.dumps(
+                {
+                    "status": "ok",
+                    "provider": result.provider,
+                    "evidence_class": "live_host_proof",
+                    "executed_tests": 1,
+                    "skipped_tests": 0,
+                    "live_operations": max(
+                        1, int(result.after_snapshot.get("trace_event_count") or 0)
+                    ),
+                    "actions": [result.action],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
     def test_real_child_thread_hardware_breakpoint_trace_and_cleanup(self) -> None:
         child_script = (
             "import ctypes, os, time\n"
@@ -893,6 +955,7 @@ class NativeHookWindowsHardwareSmokeTests(unittest.TestCase):
             stderr=subprocess.PIPE,
             text=True,
         )
+        result = None
         try:
             assert child.stdout is not None
             pid_text, thread_text, address_text = child.stdout.readline().split()
@@ -936,6 +999,13 @@ class NativeHookWindowsHardwareSmokeTests(unittest.TestCase):
             except subprocess.TimeoutExpired:
                 child.kill()
                 child.communicate(timeout=5)
+        if result is not None:
+            self._retain_acceptance_artifacts(
+                provider,
+                result,
+                pid=pid,
+                thread_id=thread_id,
+            )
 
 
 if __name__ == "__main__":

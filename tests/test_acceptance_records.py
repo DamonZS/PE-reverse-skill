@@ -63,6 +63,213 @@ def _write_live_memory_artifacts(
 
 
 class AcceptanceRecordTests(unittest.TestCase):
+    def test_graphics_combined_fixture_contract_retains_hash_backed_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            def runner(command, **kwargs):  # type: ignore[no-untyped-def]
+                run_dir = Path(kwargs["env"]["REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR"])
+                artifact_dir = run_dir / "graphics-combined"
+                artifact_dir.mkdir(parents=True)
+                artifacts = {
+                    "target-identity.json": {
+                        "kind": "process",
+                        "pid": 4321,
+                        "display_name": "controlled-graphics-host-4321",
+                    },
+                    "present-observation.json": {
+                        "status": "ok",
+                        "provider": "windows_presentmon",
+                        "event_count": 3,
+                    },
+                    "matrix-capture.json": {
+                        "status": "ok",
+                        "source": "native_host_bridge",
+                        "frame_id": "frame-3",
+                        "matrix": [1, 0, 0, 0] * 4,
+                    },
+                    "projection.json": {
+                        "status": "ok",
+                        "visible_point_count": 1,
+                    },
+                    "overlay-audit.json": {
+                        "status": "ok",
+                        "provider": "windows_gdi_overlay",
+                        "frame_count": 1,
+                    },
+                    "cleanup.json": {
+                        "status": "completed",
+                        "verified": True,
+                        "rollback_verified": True,
+                        "cleanup_verified": True,
+                    },
+                    "execution-proof.json": {
+                        "status": "ok",
+                        "provider": "native-graphics-bridge-plus-windows-gdi",
+                        "evidence_class": "live_host_proof",
+                        "executed_tests": 1,
+                        "skipped_tests": 0,
+                        "live_operations": 4,
+                    },
+                }
+                for name, payload in artifacts.items():
+                    (artifact_dir / name).write_text(json.dumps(payload), encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0, stdout="graphics live ok", stderr="")
+
+            environment = {
+                "RUN_GRAPHICS_COMBINED_LIVE": "1",
+                "REVERSE_ANALYZER_GRAPHICS_BRIDGE": "graphics-bridge.exe",
+                "REVERSE_ANALYZER_GRAPHICS_FIXTURE_PID": "4321",
+                "REVERSE_ANALYZER_GRAPHICS_FIXTURE_HWND": "9001",
+            }
+            ready_report = {
+                "status": "ok",
+                "acceptance_fixtures": [
+                    {
+                        "id": "p7-graphics-combined-live",
+                        "status": "ready_to_run",
+                        "configured_gates": sorted(environment),
+                        "missing_gates": [],
+                        "workflow_states": {},
+                    }
+                ],
+            }
+            with mock.patch(
+                "reverse_analyzer.acceptance.validate_external_environment",
+                return_value=ready_report,
+            ):
+                record = run_acceptance_fixture(
+                    "p7-graphics-combined-live",
+                    temporary,
+                    execute=True,
+                    environ=environment,
+                    system="Windows",
+                    runner=runner,
+                )
+
+            self.assertEqual(record["outcome"], "passed")
+            self.assertTrue(record["live_verified"])
+            self.assertEqual(record["missing_artifacts"], [])
+            self.assertTrue(record["rollback_result"]["verified"])
+            self.assertTrue(record["cleanup_result"]["verified"])
+            verification = verify_acceptance_record(record["record_path"])
+            self.assertEqual(verification["status"], "ok")
+            self.assertTrue(verification["live_verified"])
+
+    def test_vlm_fixture_contract_retains_hash_backed_live_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            def runner(command, **kwargs):  # type: ignore[no-untyped-def]
+                run_dir = Path(kwargs["env"]["REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR"])
+                artifact_dir = run_dir / "gui-vlm"
+                artifact_dir.mkdir(parents=True)
+                artifacts = {
+                    "target-identity.json": {
+                        "kind": "remote-openai-compatible-vlm",
+                        "endpoint_sha256": "a" * 64,
+                        "model": "fixture-vision",
+                        "sha256": "b" * 64,
+                        "image_sha256": "b" * 64,
+                    },
+                    "invocation.json": {"status": "ok", "duration_ms": 12},
+                    "output.json": {
+                        "status": "ok",
+                        "text_regions": [{"text": "Save"}],
+                        "widgets": [{"type": "button", "text": "Save"}],
+                    },
+                    "transport-audit.json": {
+                        "status": "ok",
+                        "transport": "openai-compatible-http",
+                        "authorization_persisted": False,
+                    },
+                    "execution-proof.json": {
+                        "status": "ok",
+                        "provider": "openai-compatible-vlm",
+                        "evidence_class": "live_target_proof",
+                        "executed_tests": 1,
+                        "skipped_tests": 0,
+                        "live_operations": 1,
+                    },
+                }
+                for name, payload in artifacts.items():
+                    (artifact_dir / name).write_text(json.dumps(payload), encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0, stdout="vlm live ok", stderr="")
+
+            environment = {
+                "REVERSE_ANALYZER_RUN_VLM_LIVE": "1",
+                "REVERSE_ANALYZER_VLM_BASE_URL": "https://vlm.example.invalid/v1",
+                "REVERSE_ANALYZER_VLM_MODEL": "fixture-vision",
+                "REVERSE_ANALYZER_VLM_API_KEY": "fixture-secret",
+                "REVERSE_ANALYZER_VLM_IMAGE": "fixture.png",
+            }
+            record = run_acceptance_fixture(
+                "p7-vlm-openai-live",
+                temporary,
+                execute=True,
+                environ=environment,
+                system="Windows",
+                runner=runner,
+            )
+
+            self.assertEqual(record["outcome"], "passed")
+            self.assertTrue(record["live_verified"])
+            self.assertEqual(record["missing_artifacts"], [])
+            verification = verify_acceptance_record(record["record_path"])
+            self.assertEqual(verification["status"], "ok")
+            self.assertTrue(verification["live_verified"])
+
+    def test_windows_uia_fixture_contract_retains_hash_backed_live_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            def runner(command, **kwargs):  # type: ignore[no-untyped-def]
+                run_dir = Path(kwargs["env"]["REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR"])
+                artifact_dir = run_dir / "gui-uia"
+                artifact_dir.mkdir(parents=True)
+                artifacts = {
+                    "target-identity.json": {
+                        "kind": "live-child-process",
+                        "pid": 4321,
+                        "path": "python.exe",
+                        "window_handle": 9001,
+                    },
+                    "runtime-tree-audit.json": {
+                        "status": "ok",
+                        "provider": {"name": "windows_uia", "api": "UIAutomationClient"},
+                        "session_id": run_dir.name,
+                        "window_count": 1,
+                        "node_count": 2,
+                        "evidence_class": "live_host_proof",
+                    },
+                    "fixture-cleanup.json": {
+                        "status": "stopped",
+                        "terminated": True,
+                    },
+                    "execution-proof.json": {
+                        "status": "ok",
+                        "provider": "windows-uia-comtypes",
+                        "evidence_class": "live_host_proof",
+                        "executed_tests": 1,
+                        "skipped_tests": 0,
+                        "live_operations": 2,
+                    },
+                }
+                for name, payload in artifacts.items():
+                    (artifact_dir / name).write_text(json.dumps(payload), encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0, stdout="uia live ok", stderr="")
+
+            record = run_acceptance_fixture(
+                "p7-windows-uia-live",
+                temporary,
+                execute=True,
+                environ={"REVERSE_ANALYZER_RUN_WINDOWS_UIA_LIVE": "1"},
+                system="Windows",
+                runner=runner,
+            )
+
+            self.assertEqual(record["outcome"], "passed")
+            self.assertTrue(record["live_verified"])
+            self.assertEqual(record["missing_artifacts"], [])
+            self.assertEqual(record["execution_proof"]["live_operations"], 2)
+            verification = verify_acceptance_record(record["record_path"])
+            self.assertEqual(verification["status"], "ok")
+            self.assertTrue(verification["live_verified"])
+
     def test_registered_live_fixture_can_produce_hash_backed_proof(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             def runner(command, **kwargs):  # type: ignore[no-untyped-def]

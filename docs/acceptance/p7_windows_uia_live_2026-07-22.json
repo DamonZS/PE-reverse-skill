@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "fixture_id": "p7-windows-uia-live",
+  "phase": "P7",
+  "capability": "windows_uia_runtime",
+  "accepted_at": "2026-07-22",
+  "host": {
+    "system": "Windows 11",
+    "python": "3.13.7"
+  },
+  "scope": "visible child-process, read-only HWND/PID UIAutomation Control View traversal",
+  "outcome": "passed",
+  "live_verified": true,
+  "contract_sha256": "d6e2c1f45c05455b944b1c414dbae0a406b02f4c691c70e415f20a0d16960df9",
+  "record_sha256": "fdddf056d9bb5ab355788bc1e7cab764cb0eb3cfd7d42a35974e76a0d77a64a5",
+  "execution_proof": {
+    "status": "ok",
+    "provider": "windows-uia-comtypes",
+    "evidence_class": "live_host_proof",
+    "executed_tests": 1,
+    "skipped_tests": 0,
+    "live_operations": 2
+  },
+  "artifacts": [
+    {
+      "path": "gui-uia/target-identity.json",
+      "sha256": "723c92cd65a35d765522f30485d0290673fe1fe2b1c210f653f41cf274bca8b7"
+    },
+    {
+      "path": "gui-uia/runtime-tree-audit.json",
+      "sha256": "cd42a98d363905dccd048a70f475748ead0431059fa3261655980600df9488ee"
+    },
+    {
+      "path": "gui-uia/fixture-cleanup.json",
+      "sha256": "9c8584713864c40415ee7177789fbe7f2abc78ad7612aa66e0131adb88b71e76"
+    },
+    {
+      "path": "gui-uia/execution-proof.json",
+      "sha256": "b5beff8ebf93e6a37aedb22da8ef252612210a1b4f096b29bcbb02a7bfef9528"
+    }
+  ],
+  "verification": {
+    "status": "ok",
+    "verified_artifacts": 7,
+    "errors": []
+  },
+  "boundaries": [
+    "no input automation",
+    "no hidden, elevated, or cross-session window claim",
+    "no arbitrary third-party framework claim",
+    "no VLM or graphics-rendering claim"
+  ]
+}

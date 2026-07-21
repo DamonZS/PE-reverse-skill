@@ -523,10 +523,18 @@ class ProtocolRuntimeProvider:
 
         for artifact in artifacts:
             destination = _artifact_destination(root, artifact.path)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            temporary = destination.with_name(f".{destination.name}.tmp")
-            temporary.write_bytes(encoded)
-            os.replace(temporary, destination)
+            _extended_filesystem_path(destination.parent).mkdir(
+                parents=True, exist_ok=True
+            )
+            # Acceptance workspaces can be deeply nested on Windows. Use the
+            # extended-length path form for the atomic write so evidence
+            # collection does not fail at the legacy MAX_PATH boundary.
+            temporary = destination.with_name(".protocol-runtime.tmp")
+            _extended_filesystem_path(temporary).write_bytes(encoded)
+            os.replace(
+                str(_extended_filesystem_path(temporary)),
+                str(_extended_filesystem_path(destination)),
+            )
             digest = hashlib.sha256(encoded).hexdigest()
             artifact.metadata.update(
                 {
@@ -1485,6 +1493,7 @@ class ProtocolRuntimeProvider:
 
         messages = list(evidence.get("messages") or [])
         pairs = list(evidence.get("request_response_pairs") or [])
+        tunnels = list(evidence.get("connect_tunnels") or [])
         after.update(
             {
                 "application_protocol": "http/1.1",
@@ -1497,6 +1506,8 @@ class ProtocolRuntimeProvider:
                 "request_response_pairs": pairs,
                 "http_transactions": pairs,
                 "http_sessions": list(evidence.get("sessions") or []),
+                "connect_tunnel_count": len(tunnels),
+                "connect_tunnels": tunnels,
                 "http_framing": dict(_mapping(evidence.get("framing"))),
                 "integrity": dict(_mapping(evidence.get("integrity"))),
                 "real_socket_evidence": real_socket_evidence,
@@ -2825,6 +2836,7 @@ class ProtocolRuntimeProvider:
             "session": dict(_mapping(after.get("session"))),
             "frame_count": int(after.get("frame_count") or 0),
             "message_count": int(after.get("message_count") or 0),
+            "connect_tunnel_count": int(after.get("connect_tunnel_count") or 0),
             "flow_count": int(after.get("flow_count") or 0),
             "application_protocol": after.get("application_protocol")
             or plan.parameters.get("application_protocol"),
@@ -2864,6 +2876,7 @@ class ProtocolRuntimeProvider:
                 "request_response_pair_count": int(
                     after.get("request_response_pair_count") or 0
                 ),
+                "connect_tunnel_count": int(after.get("connect_tunnel_count") or 0),
                 "dependency_state": after.get("dependency_state"),
                 "real_capture_success": bool(after.get("real_capture_success")),
                 "outcome_class": after.get("outcome_class") or status,
@@ -2877,6 +2890,7 @@ class ProtocolRuntimeProvider:
                 "request_response_pair_count": int(
                     after.get("request_response_pair_count") or 0
                 ),
+                "connect_tunnel_count": int(after.get("connect_tunnel_count") or 0),
                 "framing": dict(_mapping(after.get("http_framing"))),
                 "integrity": dict(_mapping(after.get("integrity"))),
                 "real_socket_evidence": bool(after.get("real_socket_evidence")),
@@ -4997,6 +5011,7 @@ def _build_http_capture_evidence(
     messages: list[dict[str, Any]] = []
     pairs: list[dict[str, Any]] = []
     sessions: list[dict[str, Any]] = []
+    tunnels: list[dict[str, Any]] = []
     framing_counts: dict[str, int] = {}
     truncated = bool(raw_limit_reached)
     for connection_id, directions in streams.items():
@@ -5021,6 +5036,9 @@ def _build_http_capture_evidence(
         for pair in exchange.get("request_response_pairs") or []:
             pair["sequence"] = len(pairs) + 1
             pairs.append(pair)
+        for tunnel in exchange.get("connect_tunnels") or []:
+            tunnel["sequence"] = len(tunnels) + 1
+            tunnels.append(tunnel)
         exchange_errors = list(exchange.get("errors") or [])
         errors.extend(exchange_errors)
         gap_count += int(exchange.get("gap_count") or 0)
@@ -5037,6 +5055,10 @@ def _build_http_capture_evidence(
                     "request_response_pair_count": len(
                         exchange.get("request_response_pairs") or []
                     ),
+                    "connect_tunnel_count": len(
+                        exchange.get("connect_tunnels") or []
+                    ),
+                    "connect_tunnels": list(exchange.get("connect_tunnels") or []),
                     "client_stream_bytes": len(directions["client_to_server"]),
                     "server_stream_bytes": len(directions["server_to_client"]),
                     "peer": record.get("peer"),
@@ -5085,6 +5107,7 @@ def _build_http_capture_evidence(
         "real_socket_evidence": real_socket_evidence,
         "messages": messages,
         "request_response_pairs": pairs,
+        "connect_tunnels": tunnels,
         "sessions": sessions,
         "framing": {
             "protocol": "HTTP/1.1",
@@ -5126,6 +5149,7 @@ def _parse_http1_exchange(
     truncated = False
     damaged = False
     request_offset = 0
+    request_tunnel_bytes = b""
     while request_offset < len(request_stream):
         if len(requests) >= int(limits.get("max_messages") or 0):
             errors.append("HTTP request stream exceeds max_messages")
@@ -5152,11 +5176,16 @@ def _parse_http1_exchange(
         request["connection_id"] = connection_id
         request["id"] = f"{connection_id}-request-{len(requests) + 1}"
         requests.append(request)
+        if str(request.get("method") or "").upper() == "CONNECT":
+            request_tunnel_bytes = request_stream[request_offset:]
+            request_offset = len(request_stream)
+            break
 
     response_offset = 0
     request_index = 0
     pending_interim: list[dict[str, Any]] = []
     pairs: list[dict[str, Any]] = []
+    connect_tunnels: list[dict[str, Any]] = []
     while response_offset < len(response_stream):
         if len(requests) + len(responses) >= int(limits.get("max_messages") or 0):
             errors.append("HTTP response stream exceeds max_messages")
@@ -5195,6 +5224,33 @@ def _parse_http1_exchange(
             continue
         request = requests[request_index]
         transaction_limitations = _http_transaction_limitations(request, response)
+        is_connect = str(request.get("method") or "").upper() == "CONNECT"
+        connect_established = is_connect and 200 <= status_code < 300
+        response_tunnel_bytes = b""
+        if connect_established:
+            response_tunnel_bytes = response_stream[response_offset:]
+            response_offset = len(response_stream)
+            connect_tunnels.append(
+                {
+                    "id": f"{connection_id}-connect-tunnel-{len(connect_tunnels) + 1}",
+                    "connection_id": connection_id,
+                    "authority": request.get("request_target"),
+                    "status_code": status_code,
+                    "established": True,
+                    "opaque_after_handshake": True,
+                    "client_to_server": _opaque_tunnel_evidence(
+                        request_tunnel_bytes
+                    ),
+                    "server_to_client": _opaque_tunnel_evidence(
+                        response_tunnel_bytes
+                    ),
+                    "bidirectional_payload_observed": bool(request_tunnel_bytes)
+                    and bool(response_tunnel_bytes),
+                }
+            )
+        elif is_connect and request_tunnel_bytes:
+            errors.append("HTTP CONNECT request carried tunnel bytes before a successful response")
+            damaged = True
         pairs.append(
             _prune(
                 {
@@ -5222,6 +5278,8 @@ def _parse_http1_exchange(
         )
         request_index += 1
         pending_interim = []
+        if connect_established:
+            break
 
     if pending_interim:
         errors.append("HTTP informational response has no final response")
@@ -5246,10 +5304,21 @@ def _parse_http1_exchange(
         "response_count": len(responses),
         "messages": requests + responses,
         "request_response_pairs": pairs,
+        "connect_tunnels": connect_tunnels,
         "gap_count": gap_count,
         "truncated": truncated,
         "damaged": damaged,
         "errors": _deduplicate(errors),
+    }
+
+
+def _opaque_tunnel_evidence(data: bytes) -> dict[str, Any]:
+    """Describe post-CONNECT bytes without interpreting the tunneled protocol."""
+
+    return {
+        "length": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "payload_base64": base64.b64encode(data).decode("ascii"),
     }
 
 
@@ -7139,6 +7208,19 @@ def _artifact_destination(root: Path, relative_path: str) -> Path:
     except ValueError as exc:
         raise ValueError("protocol runtime artifact escaped the collection root") from exc
     return destination
+
+
+def _extended_filesystem_path(path: Path) -> Path:
+    """Return a Windows extended-length path for deep artifact workspaces."""
+
+    if os.name != "nt":
+        return path
+    raw = str(path)
+    if raw.startswith("\\\\?\\"):
+        return path
+    if raw.startswith("\\\\"):
+        return Path("\\\\?\\UNC\\" + raw[2:])
+    return Path("\\\\?\\" + raw)
 
 
 def _safe_segment(value: Any) -> str:

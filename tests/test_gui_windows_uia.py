@@ -7,12 +7,14 @@ import sys
 import threading
 import time
 import unittest
+from pathlib import Path
 
 from reverse_analyzer.gui.windows_uia import (
     WINDOWS_UIA_BACKEND,
     WindowsUIAAdapter,
     probe_windows_uia,
 )
+from tests._graphics_acceptance import acceptance_context, write_bundle
 
 
 LIVE_SMOKE_ENV = "REVERSE_ANALYZER_RUN_WINDOWS_UIA_LIVE"
@@ -391,6 +393,10 @@ window.mainloop()
             daemon=True,
         )
         reader.start()
+        target: dict[str, object] = {}
+        handle_result: dict[str, object] = {}
+        pid_result: dict[str, object] = {}
+        cleanup = {"status": "pending", "terminated": False, "exit_code": None}
         try:
             try:
                 startup_line = startup_lines.get(timeout=5)
@@ -416,6 +422,11 @@ window.mainloop()
             except subprocess.TimeoutExpired:
                 fixture.kill()
                 fixture.wait(timeout=2)
+            cleanup = {
+                "status": "stopped",
+                "terminated": fixture.poll() is not None,
+                "exit_code": fixture.returncode,
+            }
             reader.join(timeout=1)
             fixture.stdout.close()
             assert fixture.stderr is not None
@@ -426,6 +437,57 @@ window.mainloop()
             self.assertGreaterEqual(result["window_count"], 1)
             self.assertGreater(result["node_count"], 0)
             self.assertEqual(result["provider"]["api"], "UIAutomationClient")
+
+        context = acceptance_context("p7-windows-uia-live")
+        if context is not None:
+            pid = int(target["process_id"])
+            target_identity = {
+                "kind": "live-child-process",
+                "pid": pid,
+                "path": str(Path(sys.executable).resolve()),
+                "display_name": "Reverse Analyzer UIA Smoke",
+                "window_handle": int(target["window_handle"]),
+            }
+            audit = {
+                "schema_version": 1,
+                "status": "ok",
+                "capability": "windows_uia_runtime",
+                "session_id": context.session_id,
+                "target_identity": target_identity,
+                "provider": {
+                    "name": WINDOWS_UIA_BACKEND,
+                    "api": "UIAutomationClient",
+                    "transport": "comtypes",
+                },
+                "operations": [
+                    {"kind": "window_handle_traversal", "result": handle_result},
+                    {"kind": "process_id_traversal", "result": pid_result},
+                ],
+                "cleanup": cleanup,
+                "provenance": {
+                    "evidence_class": "live_host_proof",
+                    "fixture_id": context.fixture_id,
+                },
+            }
+            write_bundle(
+                context,
+                {
+                    "gui-uia/target-identity.json": target_identity,
+                    "gui-uia/runtime-tree-audit.json": audit,
+                    "gui-uia/fixture-cleanup.json": cleanup,
+                    "gui-uia/execution-proof.json": {
+                        "schema_version": 1,
+                        "status": "ok",
+                        "provider": "windows-uia-comtypes",
+                        "evidence_class": "live_host_proof",
+                        "executed_tests": 1,
+                        "skipped_tests": 0,
+                        "live_operations": 2,
+                        "target_pid": pid,
+                        "session_id": context.session_id,
+                    },
+                },
+            )
 
 
 if __name__ == "__main__":

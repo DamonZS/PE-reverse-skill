@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import queue
 import socket
 import ssl
+import sys
 import tempfile
 import threading
 import unittest
@@ -167,7 +169,13 @@ class ProtocolRuntimeTlsTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tempdir.cleanup()
 
-    def _capture_tls(self, server: TlsEchoFixture) -> tuple[Path, Any]:
+    def _capture_tls(
+        self,
+        server: TlsEchoFixture,
+        *,
+        session_id: str = "tls-capture-session",
+        artifact_root: Path | None = None,
+    ) -> tuple[Path, Any]:
         request = CapabilityRequest(
             capability="protocol_runtime",
             action="loopback_tcp_proxy_capture",
@@ -193,7 +201,7 @@ class ProtocolRuntimeTlsTests(unittest.TestCase):
                     "client_key_password": "must-not-be-recorded",
                 },
             },
-            session_id="tls-capture-session",
+            session_id=session_id,
         )
         plan = self.provider.plan(request)
         validation = self.provider.validate(plan)
@@ -239,8 +247,9 @@ class ProtocolRuntimeTlsTests(unittest.TestCase):
             visibility["decryption"]["private_or_session_keys_recorded"]
         )
 
-        bundle = self.provider.collect_artifacts(result, str(self.root / "capture"))
-        artifact_path = self.root / "capture" / bundle.artifacts[0].path
+        collection_root = artifact_root or (self.root / "capture")
+        bundle = self.provider.collect_artifacts(result, str(collection_root))
+        artifact_path = collection_root / bundle.artifacts[0].path
         artifact_text = artifact_path.read_text("utf-8")
         self.assertNotIn(str(self.ca_file), artifact_text)
         self.assertNotIn("must-not-be-recorded", artifact_text)
@@ -249,6 +258,111 @@ class ProtocolRuntimeTlsTests(unittest.TestCase):
         self.assertTrue(tls_parameters["ca_file_configured"])
         self.assertNotIn("ca_file", tls_parameters)
         return artifact_path, result
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_PROTOCOL_RUNTIME_LIVE") == "1",
+        "set RUN_PROTOCOL_RUNTIME_LIVE=1 to retain bounded live protocol evidence",
+    )
+    def test_acceptance_runner_retains_live_protocol_artifacts(self) -> None:
+        configured = str(
+            os.environ.get("REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR") or ""
+        ).strip()
+        if not configured:
+            self.skipTest("REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR is required")
+
+        root = Path(configured).expanduser().resolve()
+        session_id = str(
+            os.environ.get("REVERSE_ANALYZER_ACCEPTANCE_SESSION_ID")
+            or "p6-protocol-runtime-loopback"
+        )
+        server = TlsEchoFixture(self.cert_file, self.key_file)
+        try:
+            artifact_path, capture_result = self._capture_tls(
+                server,
+                session_id="capture",
+                artifact_root=root,
+            )
+            replay_request = self._session_replay_request(
+                artifact_path,
+                port=server.port,
+                session_id="replay",
+            )
+            replay_plan = self.provider.plan(replay_request)
+            replay_validation = self.provider.validate(replay_plan)
+            self.assertTrue(replay_validation.ok, replay_validation.errors)
+            replay_result = self.provider.execute(replay_plan)
+            self.assertEqual(replay_result.status, "ok", replay_result.report_section)
+            self.provider.collect_artifacts(replay_result, str(root))
+
+            capture_rollback = self.provider.rollback(capture_result)
+            replay_rollback = self.provider.rollback(replay_result)
+            self.assertTrue(capture_rollback.ok)
+            self.assertTrue(replay_rollback.ok)
+
+            evidence = root / "protocol-runtime"
+            evidence.mkdir(parents=True, exist_ok=True)
+            executable = Path(sys.executable).resolve()
+            target_identity = {
+                "kind": "controlled_loopback_tls_fixture",
+                "path": str(executable),
+                "sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
+                "host": "127.0.0.1",
+                "transport": "tcp+tls",
+                "application_protocol": "opaque_echo",
+                "acceptance_session_id": session_id,
+            }
+            (evidence / "target-identity.json").write_text(
+                json.dumps(target_identity, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            (evidence / "rollback.json").write_text(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "verified": bool(capture_rollback.ok and replay_rollback.ok),
+                        "target_mutated": False,
+                        "capture": capture_rollback.to_dict(),
+                        "replay": replay_rollback.to_dict(),
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (evidence / "execution-proof.json").write_text(
+                json.dumps(
+                    {
+                        "status": "ok",
+                        "provider": replay_result.provider,
+                        "evidence_class": "live_host_proof",
+                        "executed_tests": 1,
+                        "skipped_tests": 0,
+                        "live_operations": 2,
+                        "actions": [capture_result.action, replay_result.action],
+                        "real_socket_evidence": bool(
+                            capture_result.after_snapshot.get("real_socket_evidence")
+                            and replay_result.after_snapshot.get("real_socket_evidence")
+                        ),
+                        "tls_verify": True,
+                        "certificate_pin_matched": bool(
+                            replay_result.after_snapshot["connections"][0][
+                                "tls_identity_binding"
+                            ]["certificate_pin_matched"]
+                        ),
+                        "source_order_preserved": bool(
+                            replay_result.after_snapshot.get("source_order_preserved")
+                        ),
+                        "synthetic": False,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+        finally:
+            server.close()
 
     def _session_replay_request(
         self,

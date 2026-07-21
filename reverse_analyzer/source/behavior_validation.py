@@ -1468,7 +1468,7 @@ def _terminate_process(process: subprocess.Popen[bytes]) -> None:
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     shell=False,
-                    timeout=5,
+                    timeout=1,
                     check=False,
                 )
             if process.poll() is None:

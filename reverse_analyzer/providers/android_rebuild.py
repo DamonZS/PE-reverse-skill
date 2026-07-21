@@ -2692,10 +2692,13 @@ def _signing_configuration(
     ks_pass = _first_value(params, ("ks_pass", "keystore_password"))
     key_pass = _first_value(params, ("key_pass", "key_password"))
     extra_value = params.get("apksigner_args") or []
+    argument_errors = _apksigner_argument_errors(extra_value)
     if isinstance(extra_value, str):
         extra_args = [extra_value]
-    else:
+    elif isinstance(extra_value, (list, tuple)):
         extra_args = [str(item) for item in extra_value]
+    else:
+        extra_args = []
     mode = "keystore" if keystore else ("key_cert" if key_path or cert_path else "arguments")
     public = _prune(
         {
@@ -2707,6 +2710,7 @@ def _signing_configuration(
             "ks_pass_configured": ks_pass is not None,
             "key_pass_configured": key_pass is not None,
             "extra_arg_count": len(extra_args),
+            "argument_errors": argument_errors,
         }
     )
     private = {
@@ -2721,6 +2725,7 @@ def _signing_configuration_errors(value: Any) -> list[str]:
     signing = _json_mapping(value)
     mode = signing.get("mode")
     errors: list[str] = []
+    errors.extend(str(item) for item in signing.get("argument_errors") or [])
     if mode == "keystore":
         path = Path(str(signing.get("keystore") or "")).expanduser()
         if not path.is_file():
@@ -2732,6 +2737,47 @@ def _signing_configuration_errors(value: Any) -> list[str]:
             errors.append("apksigner key and certificate files are both required")
     elif int(signing.get("extra_arg_count") or 0) <= 0:
         errors.append("apktool_rebuild requires apksigner credentials or arguments")
+    errors.extend(_apksigner_argument_errors(signing.get("extra_args")))
+    return errors
+
+
+def _apksigner_argument_errors(value: Any) -> list[str]:
+    """Validate caller-supplied signer flags before composing the command.
+
+    The provider owns the action, input and output arguments.  Allowing an
+    extra ``--out``/positional APK would make audit records differ from the
+    artifact that was validated, so those controls are rejected up front.
+    Password flags remain supported for compatibility and are redacted in
+    recorded commands.
+    """
+    if value in (None, ""):
+        return []
+    if isinstance(value, str):
+        raw = [value]
+    elif isinstance(value, (list, tuple)):
+        raw = list(value)
+    else:
+        return ["apksigner extra arguments must be an array of option flags"]
+    errors: list[str] = []
+    managed = {
+        "sign",
+        "verify",
+        "--out",
+        "--ks",
+        "--key",
+        "--cert",
+        "--ks-key-alias",
+    }
+    for index, item in enumerate(raw):
+        token = str(item)
+        if any(char in token for char in ("\x00", "\r", "\n")):
+            errors.append(f"apksigner argument {index} contains control characters")
+            continue
+        option = token.split("=", 1)[0].casefold()
+        if option in managed:
+            errors.append(f"apksigner argument {token!r} is managed by the provider")
+        elif not token.startswith("-"):
+            errors.append("apksigner extra arguments must be option flags")
     return errors
 
 

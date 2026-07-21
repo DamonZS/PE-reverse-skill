@@ -87,6 +87,14 @@ contract. These promotions are limited to the bounded controlled-target scopes
 named by those fixtures; they do not establish arbitrary-process,
 cross-architecture, cross-version, or Frida parity.
 
+The inventory also registers `p1-native-hardware-breakpoint`. Its opt-in
+64-bit Windows child-process smoke now retains debug-register trace, cleanup,
+and detach evidence under `native-hook-hardware/`; it remains pending formal
+promotion until a retained acceptance record is produced. The structured
+memory live smoke likewise covers pointer-chain and module+RVA resolution in
+the existing `p1-memory-runtime-live` fixture while broader target matrices
+remain gated.
+
 ## Phase boundaries
 
 ### P0

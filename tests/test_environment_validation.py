@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from reverse_analyzer.cli import main
 from reverse_analyzer.environment_validation import validate_external_environment
@@ -120,6 +121,14 @@ class EnvironmentValidationTests(unittest.TestCase):
             "REVERSE_ANALYZER_GRAPHICS_FIXTURE_PID",
             fixtures["p4-presentmon-live"]["missing_gates"],
         )
+        self.assertEqual(
+            fixtures["p6-protocol-runtime-loopback"]["status"],
+            "dependency_gated",
+        )
+        self.assertIn(
+            "RUN_PROTOCOL_RUNTIME_LIVE",
+            fixtures["p6-protocol-runtime-loopback"]["missing_gates"],
+        )
         self.assertEqual(report["summary"]["acceptance_fixture_total"], len(fixtures))
 
     def test_fixture_contract_has_command_artifacts_and_acceptance_boundary(self) -> None:
@@ -132,12 +141,90 @@ class EnvironmentValidationTests(unittest.TestCase):
 
         for fixture in report["acceptance_fixtures"]:
             with self.subTest(fixture=fixture["id"]):
-                self.assertIn(fixture["phase"], {"P0", "P1", "P2", "P3", "P4"})
+                self.assertIn(
+                    fixture["phase"], {"P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7"}
+                )
                 self.assertTrue(fixture["capability"])
                 self.assertTrue(fixture["command"])
                 self.assertTrue(fixture["expected_artifacts"])
                 self.assertFalse(fixture["live_verified"])
                 self.assertIn("does not become live_verified", fixture["acceptance_boundary"])
+
+    def test_p5_android_fixtures_require_tools_and_explicit_inputs(self) -> None:
+        gated = validate_external_environment(
+            overrides={"jadx": False, "apktool": False, "apksigner": False},
+            execute_probes=False,
+            environ={},
+            system="Windows",
+        )
+        fixtures = {item["id"]: item for item in gated["acceptance_fixtures"]}
+
+        jadx = fixtures["p5-android-jadx-live"]
+        self.assertEqual(jadx["status"], "dependency_gated")
+        self.assertEqual(jadx["workflows"], ["android_java_decompilation"])
+        self.assertIn("ANDROID_JADX_LIVE_APK", jadx["missing_gates"])
+        self.assertEqual(jadx["required_executed_tests"], 1)
+
+        rebuild = fixtures["p5-android-rebuild-sign-live"]
+        self.assertEqual(rebuild["status"], "dependency_gated")
+        self.assertEqual(rebuild["workflows"], ["android_rebuild_sign"])
+        self.assertIn("ANDROID_REBUILD_LIVE_KEYSTORE", rebuild["missing_gates"])
+        self.assertTrue(rebuild["mutating"])
+        self.assertEqual(rebuild["rollback_artifacts"], ["android-rebuild/rollback.json"])
+
+    def test_p7_windows_uia_fixture_is_opt_in_and_uses_one_live_test(self) -> None:
+        gated = validate_external_environment(
+            overrides={"comtypes": True},
+            execute_probes=False,
+            environ={},
+            system="Windows",
+        )
+        fixtures = {item["id"]: item for item in gated["acceptance_fixtures"]}
+        fixture = fixtures["p7-windows-uia-live"]
+        self.assertEqual(fixture["status"], "dependency_gated")
+        self.assertEqual(fixture["workflows"], ["windows_uia"])
+        self.assertIn("REVERSE_ANALYZER_RUN_WINDOWS_UIA_LIVE", fixture["missing_gates"])
+        self.assertEqual(fixture["required_executed_tests"], 1)
+        self.assertEqual(
+            fixture["argv"][-1],
+            "tests.test_gui_windows_uia.WindowsUIAAdapterTests.test_optional_live_windows_uia_smoke",
+        )
+
+        with mock.patch(
+            "reverse_analyzer.environment_validation._probe_module",
+            return_value={"status": "ok", "version": "fixture"},
+        ):
+            ready = validate_external_environment(
+                overrides={"comtypes": True},
+                execute_probes=True,
+                environ={"REVERSE_ANALYZER_RUN_WINDOWS_UIA_LIVE": "1"},
+                system="Windows",
+            )
+        fixtures = {item["id"]: item for item in ready["acceptance_fixtures"]}
+        self.assertEqual(fixtures["p7-windows-uia-live"]["status"], "ready_to_run")
+
+    def test_p7_vlm_fixture_requires_endpoint_model_secret_and_real_image(self) -> None:
+        report = validate_external_environment(
+            execute_probes=False,
+            environ={"REVERSE_ANALYZER_RUN_VLM_LIVE": "1"},
+            system="Windows",
+        )
+        fixtures = {item["id"]: item for item in report["acceptance_fixtures"]}
+        fixture = fixtures["p7-vlm-openai-live"]
+
+        self.assertEqual(fixture["status"], "dependency_gated")
+        self.assertIn("REVERSE_ANALYZER_VLM_BASE_URL", fixture["missing_gates"])
+        self.assertIn("REVERSE_ANALYZER_VLM_API_KEY", fixture["missing_gates"])
+        self.assertIn("REVERSE_ANALYZER_VLM_IMAGE", fixture["missing_gates"])
+        self.assertEqual(fixture["required_executed_tests"], 1)
+
+        ready = validate_external_environment(
+            execute_probes=False,
+            environ={name: "fixture" for name in fixture["gate_env"]},
+            system="Windows",
+        )
+        ready_fixtures = {item["id"]: item for item in ready["acceptance_fixtures"]}
+        self.assertEqual(ready_fixtures["p7-vlm-openai-live"]["status"], "ready_to_run")
 
 
 if __name__ == "__main__":

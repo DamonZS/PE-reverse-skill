@@ -683,6 +683,64 @@ class AndroidRebuildProviderTests(unittest.TestCase):
         self.assertIn("--ks-pass=<redacted>", verify_text)
         self.assertIn("--key-pass=<redacted>", verify_text)
 
+    def test_apksigner_managed_arguments_are_rejected_before_execution(self) -> None:
+        runner = FakeAndroidRunner()
+        provider = AndroidRebuildProvider(runner=runner)
+        output = self.root / "managed-args.apk"
+        plan = provider.plan(
+            self.request(
+                "rebuild",
+                params={
+                    "strategy": "apktool_rebuild",
+                    "out_path": str(output),
+                    "apksigner_args": ["--out", str(self.root / "other.apk")],
+                },
+                session_id="managed-args",
+            )
+        )
+
+        validation = provider.validate(plan)
+        self.assertFalse(validation.ok)
+        self.assertTrue(any("managed by the provider" in error for error in validation.errors))
+        result = provider.execute(plan)
+        self.assertEqual(result.status, "failed")
+        self.assertFalse(output.exists())
+        self.assertEqual(runner.calls, [])
+
+    def test_apksigner_control_characters_are_rejected(self) -> None:
+        provider = AndroidRebuildProvider(runner=FakeAndroidRunner())
+        plan = provider.plan(
+            self.request(
+                "rebuild",
+                params={
+                    "strategy": "apktool_rebuild",
+                    "out_path": str(self.root / "control.apk"),
+                    "apksigner_args": ["--lineage\ncorrupt"],
+                },
+                session_id="control-args",
+            )
+        )
+        validation = provider.validate(plan)
+        self.assertFalse(validation.ok)
+        self.assertTrue(any("control characters" in error for error in validation.errors))
+
+    def test_apksigner_arguments_require_an_array_or_single_flag(self) -> None:
+        provider = AndroidRebuildProvider(runner=FakeAndroidRunner())
+        plan = provider.plan(
+            self.request(
+                "rebuild",
+                params={
+                    "strategy": "apktool_rebuild",
+                    "out_path": str(self.root / "invalid-args.apk"),
+                    "apksigner_args": {"unexpected": "mapping"},
+                },
+                session_id="invalid-args",
+            )
+        )
+        validation = provider.validate(plan)
+        self.assertFalse(validation.ok)
+        self.assertTrue(any("must be an array" in error for error in validation.errors))
+
     def test_successful_output_with_audit_write_failure_is_partial_and_rollbackable(self) -> None:
         output = self.root / "partial-rebuilt.apk"
         provider = AndroidRebuildProvider(

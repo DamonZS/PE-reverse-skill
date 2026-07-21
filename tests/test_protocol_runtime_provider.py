@@ -3,7 +3,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import queue
+import shutil
 import socket
 import tempfile
 import threading
@@ -18,6 +20,7 @@ from reverse_analyzer.providers import build_default_registry
 from reverse_analyzer.providers.protocol_runtime import (
     ProtocolRuntimeMockProvider,
     ProtocolRuntimeProvider,
+    _extended_filesystem_path,
 )
 
 
@@ -143,6 +146,22 @@ class ProtocolRuntimeProviderTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
+
+    @unittest.skipUnless(os.name == "nt", "Windows extended paths only")
+    def test_collect_artifacts_supports_deep_windows_workspace(self) -> None:
+        _, _, _, result = self._materialize_capture()
+        deep_root = self.root / ("a" * 80) / ("b" * 80)
+        try:
+            bundle = self.provider.collect_artifacts(result, str(deep_root))
+
+            artifact = deep_root / bundle.artifacts[0].path
+            self.assertGreater(len(str(artifact)), 260)
+            extended_artifact = _extended_filesystem_path(artifact)
+            self.assertTrue(extended_artifact.is_file())
+            payload = json.loads(extended_artifact.read_text(encoding="utf-8"))
+            self.assertEqual(payload["status"], "ok")
+        finally:
+            shutil.rmtree(_extended_filesystem_path(deep_root.parent))
 
     def _capture_request(
         self,

@@ -1,3 +1,4 @@
+import ctypes
 import json
 import os
 import struct
@@ -316,14 +317,27 @@ class WindowsStructuredMemorySmokeTests(unittest.TestCase):
             return
         memory = Path(configured).expanduser().resolve() / "memory"
         memory.mkdir(parents=True, exist_ok=True)
-        (memory / "session.json").write_text(
+        session_path = memory / "session.json"
+        previous_session: dict[str, Any] = {}
+        if session_path.is_file():
+            try:
+                loaded = json.loads(session_path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    previous_session = loaded
+            except (OSError, ValueError):
+                previous_session = {}
+        merged_operations = list(dict.fromkeys(
+            [*list(previous_session.get("operations") or []), *operations]
+        ))
+        (session_path).write_text(
             json.dumps(
                 {
                     "status": "ok",
                     "provider": "windows_ctypes",
                     "evidence_class": "live_host_proof",
-                    "operations": operations,
-                    "rollback_count": rollback_count,
+                    "operations": merged_operations,
+                    "rollback_count": int(previous_session.get("rollback_count") or 0)
+                    + rollback_count,
                 },
                 indent=2,
             )
@@ -366,15 +380,25 @@ class WindowsStructuredMemorySmokeTests(unittest.TestCase):
             + "\n",
             encoding="utf-8",
         )
-        (memory / "execution-proof.json").write_text(
+        proof_path = memory / "execution-proof.json"
+        previous_proof: dict[str, Any] = {}
+        if proof_path.is_file():
+            try:
+                loaded = json.loads(proof_path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    previous_proof = loaded
+            except (OSError, ValueError):
+                previous_proof = {}
+        (proof_path).write_text(
             json.dumps(
                 {
                     "status": "ok",
                     "provider": "windows_ctypes",
                     "evidence_class": "live_host_proof",
-                    "executed_tests": 2,
+                    "executed_tests": int(previous_proof.get("executed_tests") or 0) + 1,
                     "skipped_tests": 0,
-                    "live_operations": len(operations),
+                    "live_operations": int(previous_proof.get("live_operations") or 0)
+                    + len(operations),
                 },
                 indent=2,
             )
@@ -614,6 +638,85 @@ kernel32.VirtualFree(ctypes.c_void_p(free_page), 0, 0x8000)
             child_pid=child.pid,
             operations=["schema_read", "schema_write", "scan", "protect", "alloc", "free", "read"],
             rollback_count=4,
+        )
+
+    def test_benign_child_pointer_chain_and_module_rva(self) -> None:
+        script = """
+import ctypes, json, os, pathlib, sys
+target = ctypes.c_uint32(73)
+second = ctypes.c_void_p(ctypes.addressof(target))
+first = ctypes.c_void_p(ctypes.addressof(second))
+kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
+kernel32.GetModuleHandleW.restype = ctypes.c_void_p
+print(json.dumps({
+    'chain': ctypes.addressof(first),
+    'target': ctypes.addressof(target),
+    'module': pathlib.Path(sys.executable).name,
+    'module_base': int(kernel32.GetModuleHandleW(None)),
+}), flush=True)
+sys.stdin.readline()
+"""
+        child = subprocess.Popen(
+            [sys.executable, "-u", "-c", script],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            self.assertIsNotNone(child.stdout)
+            addresses = json.loads(child.stdout.readline())
+            provider = MemoryRuntimeProvider(platform_name="win32")
+            target = TargetIdentity(kind="process", pid=child.pid, display_name="helper")
+
+            def request(action: str, params: Mapping[str, Any]) -> CapabilityRequest:
+                return CapabilityRequest(
+                    capability="memory_runtime",
+                    action=action,
+                    target=target,
+                    params=dict(params),
+                    session_id=f"live-{action}",
+                )
+
+            chain = provider.execute(
+                provider.plan(
+                    request(
+                        "pointer_chain",
+                        {
+                            "address": addresses["chain"],
+                            "offsets": [0, 0],
+                            "pointer_size": ctypes.sizeof(ctypes.c_void_p),
+                            "endian": "little",
+                        },
+                    )
+                )
+            )
+            self.assertEqual(chain.status, "ok", chain.report_section)
+            self.assertEqual(
+                chain.report_section["operation"]["final_address"],
+                addresses["target"],
+            )
+
+            module = provider.execute(
+                provider.plan(
+                    request(
+                        "module_rva",
+                        {"module": addresses["module"], "rva": 0},
+                    )
+                )
+            )
+            self.assertEqual(module.status, "ok", module.report_section)
+            self.assertEqual(module.report_section["operation"]["address"], addresses["module_base"])
+        finally:
+            if child.stdin:
+                child.stdin.write("stop\n")
+                child.stdin.flush()
+            child.communicate(timeout=10)
+        self._retain_acceptance_artifacts(
+            child_pid=child.pid,
+            operations=["pointer_chain", "module_rva"],
+            rollback_count=0,
         )
 
 
