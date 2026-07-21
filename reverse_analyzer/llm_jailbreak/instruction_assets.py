@@ -12,6 +12,7 @@ from typing import Any, Dict, Tuple
 
 _MERGE_SEPARATOR = "\n\n"
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+_PACKAGED_ASSET_ROOT = Path(__file__).resolve().parent / "builtin_assets"
 
 
 @dataclass(frozen=True)
@@ -317,6 +318,13 @@ def _read_asset(
     )
 
 
+def _builtin_asset_path(relative_path: Path) -> Path:
+    repository_path = _REPOSITORY_ROOT / relative_path
+    if repository_path.is_file():
+        return repository_path
+    return _PACKAGED_ASSET_ROOT / relative_path
+
+
 def _validate_builtin_profile_sources(
     profile: str,
     definition: _BuiltinProfile,
@@ -325,7 +333,7 @@ def _validate_builtin_profile_sources(
     not_files = []
     source_bytes = 0
     for asset in definition.assets:
-        path = _REPOSITORY_ROOT / asset.path
+        path = _builtin_asset_path(asset.path)
         if not path.exists():
             missing.append(asset.path.as_posix())
             continue
@@ -362,7 +370,7 @@ def _load_builtin_profile(profile: str) -> Tuple[InstructionAsset, ...]:
         source = asset_source.path.as_posix()
         try:
             asset = _read_asset(
-                _REPOSITORY_ROOT / asset_source.path,
+                _builtin_asset_path(asset_source.path),
                 name=asset_source.name,
                 source=source,
                 provenance={

@@ -1,0 +1,58 @@
+name: reverse-jailbreak retained live acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: OpenAI-compatible API base URL
+        required: true
+        type: string
+      model:
+        description: Model identifier
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reverse-jailbreak-live-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  retained-live-e2e:
+    environment: llm-jailbreak-live
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RUN_LLM_JAILBREAK_LIVE: "1"
+      LLM_JAILBREAK_E2E_BASE_URL: ${{ inputs.base_url }}
+      LLM_JAILBREAK_E2E_MODEL: ${{ inputs.model }}
+      LLM_JAILBREAK_E2E_API_KEY_ENV: MODEL_API_KEY
+      LLM_JAILBREAK_E2E_OUT: ${{ github.workspace }}/retained-evidence
+      MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package
+        run: python -m pip install .
+      - name: Run retained live acceptance
+        run: python -m unittest tests.e2e.test_llm_jailbreak_live
+      - name: Verify promotion record
+        run: >-
+          python -c "import json,pathlib; p=pathlib.Path('retained-evidence/promotion.json');
+          d=json.loads(p.read_text(encoding='utf-8'));
+          assert d.get('status') == 'passed';
+          assert d.get('checks') and all(c.get('status') == 'passed' for c in d['checks'])"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reverse-jailbreak-live-${{ github.run_id }}
+          path: retained-evidence
+          if-no-files-found: error
+          retention-days: 30

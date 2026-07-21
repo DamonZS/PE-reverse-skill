@@ -8,6 +8,7 @@ from .campaign import (
     run_campaign,
 )
 from .acceptance import PromotionResult, promote_output
+from .benchmark import BenchmarkConfig, BenchmarkPricing, run_benchmark
 from .crescendo import CrescendoPlanner, CrescendoStage, CrescendoTurn
 from .evolution import EvolutionaryPromptOptimizer, PromptGenome
 from .doctor import DoctorError, DoctorResult, run_doctor
@@ -64,6 +65,8 @@ __all__ = [
     "Attempt",
     "ATTACK_MODES",
     "BUILTIN_STRATEGIES",
+    "BenchmarkConfig",
+    "BenchmarkPricing",
     "Campaign",
     "CampaignResult",
     "CampaignRunner",
@@ -119,4 +122,5 @@ __all__ = [
     "promote_output",
     "run_doctor",
     "run_campaign",
+    "run_benchmark",
 ]

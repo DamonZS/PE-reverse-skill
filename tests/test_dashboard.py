@@ -348,7 +348,7 @@ class DashboardTests(unittest.TestCase):
             self.assertIn("Discovery", html)
             self.assertIn("Probe verification", html)
             self.assertIn("dependency-gated", html)
-            self.assertIn("P0-P4 acceptance fixtures", html)
+            self.assertIn("Acceptance fixtures", html)
             self.assertIn("p1-memory-runtime-live", html)
             self.assertEqual(
                 environment["summary"]["acceptance_fixture_dependency_gated"],

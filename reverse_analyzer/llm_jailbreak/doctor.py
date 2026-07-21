@@ -208,11 +208,17 @@ def run_doctor(
         {
             "name": "rate_limit_signals",
             "status": "ok",
+            "verification": "response-header-observation",
             "observed": observed,
         }
     )
     checks.append(
-        {"name": "timeout", "status": "ok", "configured_seconds": timeout_seconds}
+        {
+            "name": "timeout",
+            "status": "ok",
+            "verification": "request-deadline-applied",
+            "configured_seconds": timeout_seconds,
+        }
     )
     return DoctorResult(
         status="ok",

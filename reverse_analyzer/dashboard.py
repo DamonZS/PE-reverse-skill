@@ -30,6 +30,8 @@ _MAX_ENVIRONMENT_REPORT_BYTES = 2 * 1024 * 1024
 _MAX_ENVIRONMENT_REPORT_CANDIDATES = 128
 _MAX_ACCEPTANCE_RECORD_BYTES = 2 * 1024 * 1024
 _MAX_ACCEPTANCE_RECORDS = 500
+_MAX_CAMPAIGN_RESULT_BYTES = 16 * 1024 * 1024
+_MAX_CAMPAIGN_RESULTS = 200
 _ENVIRONMENT_CHECK_STATUSES = {"discovered", "verified", "failed", "unavailable"}
 _ENVIRONMENT_WORKFLOW_STATUSES = {
     "verified",
@@ -115,6 +117,7 @@ def build_dashboard(
     binary_patches = _load_binary_patches(root, diagnostics)
     evidence_manifests = _load_evidence_manifests(root, diagnostics)
     reports = _load_reports(root, diagnostics)
+    campaign_analytics = _build_campaign_analytics(root, reports, diagnostics)
 
     experiments.sort(key=_record_timestamp, reverse=True)
     sessions.sort(key=_record_timestamp, reverse=True)
@@ -180,6 +183,7 @@ def build_dashboard(
         "session_analytics": session_analytics,
         "session_compare": session_analytics["compare"],
         "session_trend": session_analytics["trend"],
+        "campaign_analytics": campaign_analytics,
         "risk_highlights": risk_highlights,
         "artifact_navigation": artifact_navigation,
         "source_reconstruction": source_reconstruction,
@@ -195,6 +199,324 @@ def build_dashboard(
     _write_json(destination / "data.json", data)
     (destination / "index.html").write_text(_html_document(data), encoding="utf-8")
     return data
+
+
+def _build_campaign_analytics(
+    workspace: Path,
+    reports: Iterable[dict[str, Any]],
+    diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    """Build bounded campaign trees, traces, trends, and comparison rows."""
+
+    campaigns: dict[str, dict[str, Any]] = {}
+    candidates: list[Path] = []
+    try:
+        for path in workspace.rglob("result.json"):
+            if not path.is_file():
+                continue
+            has_campaign_artifacts = (
+                (path.parent / "campaign.json").is_file()
+                and (path.parent / "attempts.json").is_file()
+            )
+            in_provider_output = (
+                path.parent.name.casefold() == "engine"
+                and "llm_jailbreak" in {part.casefold() for part in path.parts}
+            )
+            if has_campaign_artifacts or in_provider_output:
+                candidates.append(path)
+    except OSError:
+        candidates = []
+    candidates.sort(key=_safe_modified_ns, reverse=True)
+
+    state = diagnostics.setdefault(
+        "campaign_analytics",
+        {
+            "candidates_seen": len(candidates),
+            "candidates_loaded": 0,
+            "candidate_limit_reached": len(candidates) > _MAX_CAMPAIGN_RESULTS,
+            "oversize_results": 0,
+            "invalid_results": 0,
+        },
+    )
+    for result_path in candidates[:_MAX_CAMPAIGN_RESULTS]:
+        try:
+            if result_path.stat().st_size > _MAX_CAMPAIGN_RESULT_BYTES:
+                state["oversize_results"] += 1
+                continue
+        except OSError:
+            continue
+        result = _load_json(result_path, diagnostics)
+        if not isinstance(result, dict) or not str(result.get("campaign_id") or "").strip():
+            state["invalid_results"] += 1
+            continue
+        attempts_payload = _load_json(result_path.parent / "attempts.json", diagnostics)
+        campaign_payload = _load_json(result_path.parent / "campaign.json", diagnostics)
+        attempts = result.get("attempts")
+        if not isinstance(attempts, list) and isinstance(attempts_payload, dict):
+            attempts = attempts_payload.get("attempts")
+        normalized = _campaign_analytics_record(
+            result,
+            campaign_payload if isinstance(campaign_payload, dict) else {},
+            attempts if isinstance(attempts, list) else [],
+            source_path=_relative_workspace_path(result_path, workspace),
+        )
+        campaigns[normalized["campaign_id"]] = normalized
+        state["candidates_loaded"] += 1
+
+    # Report summaries keep campaign comparison useful when detailed engine
+    # artifacts were not retained in this workspace.
+    for entry in reports:
+        payload = entry.get("payload")
+        section = payload.get("llm_jailbreak_analysis") if isinstance(payload, dict) else None
+        if not isinstance(section, dict):
+            continue
+        campaign_id = str(section.get("campaign_id") or "").strip()
+        if not campaign_id or campaign_id in campaigns:
+            continue
+        campaigns[campaign_id] = _campaign_report_record(section, entry)
+
+    rows = sorted(
+        campaigns.values(),
+        key=lambda item: (str(item.get("completed_at") or item.get("started_at") or ""), item["campaign_id"]),
+        reverse=True,
+    )
+    total_attempts = sum(int(item.get("attempt_count") or 0) for item in rows)
+    total_tokens = sum(int(item.get("total_tokens") or 0) for item in rows)
+    total_cost = sum(float(item.get("total_cost_usd") or 0.0) for item in rows)
+    successful = sum(1 for item in rows if item.get("success") is True)
+    return {
+        "campaign_count": len(rows),
+        "successful_campaigns": successful,
+        "breakthrough_rate": round(successful / len(rows), 6) if rows else 0.0,
+        "attempt_count": total_attempts,
+        "total_tokens": total_tokens,
+        "total_cost_usd": round(total_cost, 8),
+        "campaigns": rows,
+        "comparison": [_campaign_comparison_row(item) for item in rows],
+    }
+
+
+def _campaign_analytics_record(
+    result: dict[str, Any],
+    campaign: dict[str, Any],
+    attempts: list[Any],
+    *,
+    source_path: str,
+) -> dict[str, Any]:
+    nodes: list[dict[str, Any]] = []
+    trace: list[dict[str, Any]] = []
+    verdicts: list[dict[str, Any]] = []
+    trend: list[dict[str, Any]] = []
+    cumulative_tokens = 0
+    cumulative_cost = 0.0
+    cumulative_latency = 0.0
+    previous_mode = ""
+    previous_strategy = ""
+    for index, raw in enumerate(attempts):
+        if not isinstance(raw, dict):
+            continue
+        metadata = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}
+        response = raw.get("response") if isinstance(raw.get("response"), dict) else {}
+        score_payload = raw.get("score") if isinstance(raw.get("score"), dict) else {}
+        usage = response.get("usage") if isinstance(response.get("usage"), dict) else {}
+        attack_mode = str(metadata.get("attack_mode") or "builtin")
+        strategy = str(raw.get("strategy") or "unknown")
+        candidate_id = str(
+            metadata.get("node_id")
+            or metadata.get("candidate_id")
+            or metadata.get("genome_id")
+            or raw.get("mutation_id")
+            or raw.get("attempt_id")
+            or f"attempt-{index + 1}"
+        )
+        parent_ids = _campaign_parent_ids(metadata)
+        tokens = _campaign_usage_tokens(usage)
+        cost = _campaign_attempt_cost(raw, response, usage, metadata)
+        latency_ms = max(0.0, 1000.0 * _finite_number(response.get("latency_seconds")))
+        score = _finite_number(score_payload.get("score"))
+        success = bool(raw.get("success") or metadata.get("final_success"))
+        node = {
+            "attempt_id": str(raw.get("attempt_id") or f"attempt-{index + 1}"),
+            "candidate_id": candidate_id,
+            "parent_ids": parent_ids,
+            "round_index": int(_finite_number(raw.get("round_index"), index + 1)),
+            "depth": int(_finite_number(metadata.get("depth"), len(parent_ids))),
+            "attack_mode": attack_mode,
+            "strategy": strategy,
+            "score": round(score, 6),
+            "success": success,
+            "latency_ms": round(latency_ms, 3),
+            "tokens": tokens,
+            "cost_usd": round(cost, 8),
+            "error": str(raw.get("error") or ""),
+            "started_at": str(raw.get("started_at") or ""),
+            "completed_at": str(raw.get("completed_at") or ""),
+        }
+        nodes.append(node)
+        switched = bool(index and (attack_mode != previous_mode or strategy != previous_strategy))
+        trace.append(
+            {
+                "attempt_id": node["attempt_id"],
+                "round_index": node["round_index"],
+                "attack_mode": attack_mode,
+                "strategy": strategy,
+                "switched": switched,
+                "from_attack_mode": previous_mode if switched else None,
+                "from_strategy": previous_strategy if switched else None,
+                "optimizer_recommendation": metadata.get("optimizer_recommendation", {}),
+            }
+        )
+        verdict = metadata.get("semantic_judge_verdict")
+        if not isinstance(verdict, dict):
+            verdict = metadata.get("semantic_judge")
+        if isinstance(verdict, dict):
+            verdicts.append(
+                {
+                    "attempt_id": node["attempt_id"],
+                    "judge_name": str(verdict.get("judge_name") or "semantic_judge"),
+                    "score": round(_finite_number(verdict.get("score")), 6),
+                    "success": bool(verdict.get("success")),
+                    "refused": bool(verdict.get("refused")),
+                    "confidence": round(_finite_number(verdict.get("confidence")), 6),
+                    "rationale": str(verdict.get("rationale") or ""),
+                }
+            )
+        cumulative_tokens += tokens
+        cumulative_cost += cost
+        cumulative_latency += latency_ms
+        trend.append(
+            {
+                "round_index": node["round_index"],
+                "score": node["score"],
+                "tokens": tokens,
+                "cumulative_tokens": cumulative_tokens,
+                "cost_usd": node["cost_usd"],
+                "cumulative_cost_usd": round(cumulative_cost, 8),
+                "latency_ms": node["latency_ms"],
+                "cumulative_latency_ms": round(cumulative_latency, 3),
+            }
+        )
+        previous_mode, previous_strategy = attack_mode, strategy
+
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    target = campaign.get("target") if isinstance(campaign.get("target"), dict) else {}
+    latency_ms = cumulative_latency or 1000.0 * _finite_number(summary.get("latency_seconds"))
+    total_tokens = cumulative_tokens or _campaign_usage_tokens(
+        summary.get("usage") if isinstance(summary.get("usage"), dict) else {}
+    )
+    return {
+        "campaign_id": str(result.get("campaign_id")),
+        "name": str(campaign.get("name") or result.get("campaign_id")),
+        "model": str(target.get("model") or "unknown"),
+        "status": str(result.get("status") or "unknown"),
+        "success": bool(result.get("success")),
+        "started_at": str(result.get("started_at") or ""),
+        "completed_at": str(result.get("completed_at") or ""),
+        "source_path": source_path,
+        "detailed": True,
+        "resumed": bool(summary.get("resumed")),
+        "attempt_count": len(nodes),
+        "successful_attempts": sum(1 for node in nodes if node["success"]),
+        "best_score": max((node["score"] for node in nodes), default=_finite_number(summary.get("best_score"))),
+        "latency_ms": round(latency_ms, 3),
+        "total_tokens": total_tokens,
+        "total_cost_usd": round(cumulative_cost, 8),
+        "judge_mode": str(campaign.get("semantic_judge") or "disabled"),
+        "attempt_tree": nodes,
+        "strategy_trace": trace,
+        "judge_verdicts": verdicts,
+        "trend": trend,
+    }
+
+
+def _campaign_report_record(section: dict[str, Any], entry: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "campaign_id": str(section.get("campaign_id")),
+        "name": str(section.get("campaign_id")),
+        "model": str(section.get("model") or "unknown"),
+        "status": str(section.get("status") or "unknown"),
+        "success": bool(section.get("success")),
+        "started_at": "",
+        "completed_at": str(entry.get("timestamp") or ""),
+        "source_path": str(entry.get("source_path") or ""),
+        "detailed": False,
+        "resumed": bool((section.get("checkpoint") or {}).get("resumed")) if isinstance(section.get("checkpoint"), dict) else False,
+        "attempt_count": int(_finite_number(section.get("attempt_count"))),
+        "successful_attempts": 1 if section.get("success") else 0,
+        "best_score": round(_finite_number(section.get("score")), 6),
+        "latency_ms": round(_finite_number(section.get("latency_ms")), 3),
+        "total_tokens": int(_finite_number(section.get("total_tokens"))),
+        "total_cost_usd": round(_finite_number(section.get("total_cost_usd")), 8),
+        "judge_mode": str(section.get("semantic_judge") or "disabled"),
+        "attempt_tree": [],
+        "strategy_trace": [],
+        "judge_verdicts": [],
+        "trend": [],
+    }
+
+
+def _campaign_comparison_row(campaign: dict[str, Any]) -> dict[str, Any]:
+    attempts = int(campaign.get("attempt_count") or 0)
+    return {
+        key: campaign.get(key)
+        for key in (
+            "campaign_id", "name", "model", "status", "success", "attempt_count",
+            "successful_attempts", "best_score", "latency_ms", "total_tokens",
+            "total_cost_usd", "judge_mode", "resumed", "source_path",
+        )
+    } | {
+        "average_latency_ms": round(float(campaign.get("latency_ms") or 0.0) / attempts, 3) if attempts else 0.0,
+        "average_tokens": round(float(campaign.get("total_tokens") or 0.0) / attempts, 3) if attempts else 0.0,
+    }
+
+
+def _campaign_parent_ids(metadata: dict[str, Any]) -> list[str]:
+    parents = metadata.get("parents")
+    if isinstance(parents, list):
+        return [str(item) for item in parents if str(item)]
+    parent = metadata.get("parent_id")
+    return [str(parent)] if parent not in (None, "") else []
+
+
+def _campaign_usage_tokens(usage: dict[str, Any]) -> int:
+    for key in ("total_tokens", "total_token_count"):
+        if key in usage:
+            return max(0, int(_finite_number(usage.get(key))))
+    input_tokens = max(0, int(_finite_number(usage.get("prompt_tokens", usage.get("input_tokens")))))
+    output_tokens = max(0, int(_finite_number(usage.get("completion_tokens", usage.get("output_tokens")))))
+    return input_tokens + output_tokens
+
+
+def _campaign_attempt_cost(*values: dict[str, Any]) -> float:
+    for value in values:
+        for key in ("cost_usd", "total_cost_usd", "estimated_cost_usd", "cost"):
+            if key in value:
+                return max(0.0, _finite_number(value.get(key)))
+    return 0.0
+
+
+def _finite_number(value: Any, default: float = 0.0) -> float:
+    if isinstance(value, bool):
+        return default
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if math.isfinite(number) else default
+
+
+def _safe_modified_ns(path: Path) -> int:
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return 0
+
+
+def _relative_workspace_path(path: Path, workspace: Path) -> str:
+    try:
+        return path.resolve().relative_to(workspace.resolve()).as_posix()
+    except (OSError, ValueError):
+        return path.name
 
 
 def serve_dashboard(
@@ -1868,7 +2190,7 @@ def _html_document(data: dict[str, Any]) -> str:
     table {{ width:100%; border-collapse:collapse; }} th,td {{ padding:10px 7px; border-top:1px solid #1d302e; text-align:left; vertical-align:top; }} th {{ color:var(--muted); font-size:11px; text-transform:uppercase; }}
     .badge {{ display:inline-block; padding:2px 7px; border:1px solid var(--line); border-radius:2px; color:var(--amber); }} .recommendation {{ border-left:3px solid var(--accent); padding-left:12px; margin:14px 0; }}
     .empty {{ color:var(--muted); padding:20px 0; text-align:center; }} .meta {{ color:var(--muted); font-size:12px; }} ul {{ margin:0; padding-left:18px; }}
-    .source-panel {{ margin-top:16px; }} .source-summary {{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; color:var(--muted); }} .source-project {{ border-top:1px solid #1d302e; padding:14px 0; }} .source-project:first-child {{ border-top:0; padding-top:0; }} .source-head {{ display:flex; justify-content:space-between; gap:12px; align-items:baseline; }} .source-head strong {{ color:var(--accent); }} .source-metrics {{ display:flex; flex-wrap:wrap; gap:10px; margin:8px 0; color:var(--muted); font-size:12px; }} .table-scroll {{ overflow-x:auto; }} .section-label {{ margin:14px 0 5px; color:#c9d8d4; font-size:12px; }} .evidence-boundary {{ border-left:2px solid var(--amber); padding:7px 10px; margin:9px 0; color:var(--muted); font-size:12px; }} details {{ margin-top:9px; }} summary {{ cursor:pointer; color:#c9d8d4; }} .source-files,.analysis-grid,.artifact-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px; margin-top:10px; }} .source-file,.analysis-card,.artifact-group,.audit-record {{ border:1px solid #1d302e; background:#0a1413; padding:11px; border-radius:3px; }} .analysis-card h3,.artifact-group h3 {{ margin:0 0 8px; font-size:13px; color:var(--accent); }} .analysis-card.is-low {{ border-color:var(--amber); }} .risk-list {{ display:grid; gap:8px; }} .risk-item {{ border-left:3px solid var(--amber); padding:8px 10px; background:#171813; }} .risk-item.high,.risk-item.critical {{ border-left-color:var(--red); background:#1b1111; }} .audit-grid {{ display:grid; gap:8px; }} .audit-record pre {{ max-height:130px; }} .delta-positive {{ color:var(--accent); }} .delta-negative {{ color:var(--red); }} a {{ color:#78b9ff; overflow-wrap:anywhere; }} .artifact-missing {{ color:var(--muted); }} pre {{ white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto; margin:8px 0 0; padding:8px; border-left:2px solid #29403d; color:#c9d8d4; }}
+    .source-panel {{ margin-top:16px; }} .source-summary {{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; color:var(--muted); }} .source-project {{ border-top:1px solid #1d302e; padding:14px 0; }} .source-project:first-child {{ border-top:0; padding-top:0; }} .source-head {{ display:flex; justify-content:space-between; gap:12px; align-items:baseline; }} .source-head strong {{ color:var(--accent); }} .source-metrics {{ display:flex; flex-wrap:wrap; gap:10px; margin:8px 0; color:var(--muted); font-size:12px; }} .table-scroll {{ overflow-x:auto; }} .section-label {{ margin:14px 0 5px; color:#c9d8d4; font-size:12px; }} .evidence-boundary {{ border-left:2px solid var(--amber); padding:7px 10px; margin:9px 0; color:var(--muted); font-size:12px; }} details {{ margin-top:9px; }} summary {{ cursor:pointer; color:#c9d8d4; }} .source-files,.analysis-grid,.artifact-grid,.campaign-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px; margin-top:10px; }} .source-file,.analysis-card,.artifact-group,.audit-record,.campaign-card {{ border:1px solid #1d302e; background:#0a1413; padding:11px; border-radius:3px; }} .analysis-card h3,.artifact-group h3,.campaign-card h3 {{ margin:0 0 8px; font-size:13px; color:var(--accent); }} .analysis-card.is-low {{ border-color:var(--amber); }} .attempt-tree {{ display:grid; gap:6px; margin-top:8px; }} .attempt-node {{ border-left:3px solid var(--line); padding:7px 9px; background:#0d1817; }} .attempt-node.success {{ border-left-color:var(--accent); }} .attempt-node.failed {{ border-left-color:var(--red); }} .trend-bar {{ display:flex; align-items:end; gap:3px; min-height:72px; padding-top:8px; }} .trend-bar span {{ flex:1; min-width:5px; background:var(--accent); opacity:.78; }} .risk-list {{ display:grid; gap:8px; }} .risk-item {{ border-left:3px solid var(--amber); padding:8px 10px; background:#171813; }} .risk-item.high,.risk-item.critical {{ border-left-color:var(--red); background:#1b1111; }} .audit-grid {{ display:grid; gap:8px; }} .audit-record pre {{ max-height:130px; }} .delta-positive {{ color:var(--accent); }} .delta-negative {{ color:var(--red); }} a {{ color:#78b9ff; overflow-wrap:anywhere; }} .artifact-missing {{ color:var(--muted); }} pre {{ white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto; margin:8px 0 0; padding:8px; border-left:2px solid #29403d; color:#c9d8d4; }}
     @media (max-width:780px) {{ .kpis {{ grid-template-columns:repeat(2,1fr); }} .grid {{ grid-template-columns:1fr; }} .toolbar {{ flex-direction:column; }} table {{ font-size:12px; }} }}
   </style>
 </head>
@@ -1881,6 +2203,7 @@ def _html_document(data: dict[str, Any]) -> str:
       <aside><div class="panel"><h2>Recommended Profiles</h2><div id="recommendations"></div></div><div class="panel"><h2>Recent Sessions</h2><div id="sessions"></div></div><div class="panel"><h2>Ingestion Diagnostics</h2><div id="diagnostics"></div></div></aside>
     </section>
     <section class="panel"><h2>Platform Core</h2><div id="platform-core"></div></section>
+    <section class="panel"><h2>Model Campaign Analytics</h2><div id="campaign-analytics"></div></section>
     <section class="panel"><h2>Environment Validation</h2><div id="environment-validation"></div></section>
     <section class="panel"><h2>Analysis Domains</h2><div id="analysis-views"></div></section>
     <section class="panel"><h2>Capability Audit</h2><div id="capability-audit"></div></section>
@@ -1908,6 +2231,7 @@ def _html_document(data: dict[str, Any]) -> str:
       const patches = data.binary_patches || {{count: 0, dry_run_count: 0, applied_count: 0, recent: []}};
       const evidence = data.evidence_manifests || {{count: 0, valid_count: 0, failed_count: 0, recent: []}};
       const platformCore = data.platform_core || {{status: "unavailable", cards: [], capabilities: {{}}, artifacts: {{}}}};
+      const campaignAnalytics = data.campaign_analytics || {{campaign_count:0, campaigns:[], comparison:[]}};
       const analysisViews = data.analysis_views || {{}};
       const capabilityAudit = data.capability_audit || {{record_count: 0, records: [], traces: [], summary: {{}}}};
       const riskHighlights = data.risk_highlights || {{count: 0, items: []}};
@@ -1970,6 +2294,36 @@ def _html_document(data: dict[str, Any]) -> str:
         }}
       }}
 
+      const campaignBox=el('campaign-analytics');
+      const campaigns=Array.isArray(campaignAnalytics.campaigns) ? campaignAnalytics.campaigns : [];
+      const campaignKpis=document.createElement('div'); campaignKpis.className='kpis';
+      [['Campaigns',campaignAnalytics.campaign_count || 0],['Breakthrough rate',((Number(campaignAnalytics.breakthrough_rate || 0)*100).toFixed(1))+'%'],['Attempts',campaignAnalytics.attempt_count || 0],['Tokens',campaignAnalytics.total_tokens || 0],['Cost USD',Number(campaignAnalytics.total_cost_usd || 0).toFixed(4)]].forEach(([label,value]) => {{ const card=document.createElement('div'); card.className='kpi'; const small=document.createElement('span'); small.textContent=label; const bold=document.createElement('b'); bold.textContent=text(value); card.append(small,bold); campaignKpis.append(card); }});
+      campaignBox.append(campaignKpis);
+      if (!campaigns.length) {{ showEmpty(campaignBox, 'No model campaign artifacts found.'); }} else {{
+        const comparison=Array.isArray(campaignAnalytics.comparison) ? campaignAnalytics.comparison : [];
+        if (comparison.length) {{
+          const label=document.createElement('div'); label.className='section-label'; label.textContent='Campaign comparison'; campaignBox.append(label);
+          const wrap=document.createElement('div'); wrap.className='table-scroll'; const table=document.createElement('table');
+          const head=document.createElement('tr'); ['Campaign','Model','Status','Attempts','Best score','Tokens','Cost USD','Latency ms','Judge','Resume'].forEach(value => {{ const th=document.createElement('th'); th.textContent=value; head.append(th); }}); const thead=document.createElement('thead'); thead.append(head); const body=document.createElement('tbody');
+          comparison.forEach(item => {{ const tr=document.createElement('tr'); [item.name || item.campaign_id,item.model,item.status,item.attempt_count,item.best_score,item.total_tokens,Number(item.total_cost_usd || 0).toFixed(4),Number(item.latency_ms || 0).toFixed(1),item.judge_mode,item.resumed ? 'yes' : 'no'].forEach(value => {{ const td=document.createElement('td'); td.textContent=text(value); tr.append(td); }}); body.append(tr); }}); table.append(thead,body); wrap.append(table); campaignBox.append(wrap);
+        }}
+        campaigns.forEach(campaign => {{
+          const card=document.createElement('article'); card.className='campaign-card';
+          const title=document.createElement('h3'); title.textContent=text(campaign.name || campaign.campaign_id); card.append(title);
+          const meta=document.createElement('div'); meta.className='meta'; meta.textContent=['id='+text(campaign.campaign_id),'model='+text(campaign.model),'status='+text(campaign.status),'judge='+text(campaign.judge_mode),'source='+text(campaign.source_path)].join(' | '); card.append(meta);
+          const trend=Array.isArray(campaign.trend) ? campaign.trend : [];
+          if (trend.length) {{ const trendLabel=document.createElement('div'); trendLabel.className='section-label'; trendLabel.textContent='Token / cost / latency trend'; card.append(trendLabel); const bars=document.createElement('div'); bars.className='campaign-grid'; trend.forEach(point => {{ const item=document.createElement('div'); item.className='trend-bar'; item.textContent='round '+text(point.round_index)+' | tokens '+text(point.cumulative_tokens)+' | $'+Number(point.cumulative_cost_usd || 0).toFixed(4)+' | '+Number(point.cumulative_latency_ms || 0).toFixed(1)+' ms'; bars.append(item); }}); card.append(bars); }}
+          const tree=Array.isArray(campaign.attempt_tree) ? campaign.attempt_tree : [];
+          const treeLabel=document.createElement('div'); treeLabel.className='section-label'; treeLabel.textContent='Attempt tree'; card.append(treeLabel);
+          if (!tree.length) showEmpty(card, 'No detailed attempt nodes retained.'); else {{ const treeBox=document.createElement('div'); treeBox.className='attempt-tree'; tree.forEach(node => {{ const item=document.createElement('div'); item.className='attempt-node '+(node.success ? 'success' : 'failed'); item.style.marginLeft=(Math.max(0,Number(node.depth || 0))*18)+'px'; item.textContent=[text(node.candidate_id),text(node.attack_mode),text(node.strategy),'score='+text(node.score),'success='+(node.success ? 'yes' : 'no'),'tokens='+text(node.tokens),'latency='+text(node.latency_ms)+' ms'].join(' | '); treeBox.append(item); }}); card.append(treeBox); }}
+          const switches=(Array.isArray(campaign.strategy_trace) ? campaign.strategy_trace : []).filter(item => item.switched);
+          if (switches.length) {{ const label=document.createElement('div'); label.className='section-label'; label.textContent='Strategy switches'; card.append(label); const list=document.createElement('ul'); switches.forEach(item => {{ const line=document.createElement('li'); line.textContent='round '+text(item.round_index)+': '+text(item.from_attack_mode)+'/'+text(item.from_strategy)+' -> '+text(item.attack_mode)+'/'+text(item.strategy); list.append(line); }}); card.append(list); }}
+          const verdicts=Array.isArray(campaign.judge_verdicts) ? campaign.judge_verdicts : [];
+          if (verdicts.length) {{ const label=document.createElement('div'); label.className='section-label'; label.textContent='Semantic judge verdicts'; card.append(label); const list=document.createElement('ul'); verdicts.forEach(verdict => {{ const line=document.createElement('li'); line.textContent=[text(verdict.judge_name),'score='+text(verdict.score),'success='+(verdict.success ? 'yes' : 'no'),'refused='+(verdict.refused ? 'yes' : 'no'),'confidence='+text(verdict.confidence),text(verdict.rationale)].join(' | '); list.append(line); }}); card.append(list); }}
+          campaignBox.append(card);
+        }});
+      }}
+
       const environmentBox=el('environment-validation');
       if (!environmentValidation.available) {{
         showEmpty(environmentBox, text(environmentValidation.reason || 'No valid environment-validation.json report found.'));
@@ -1996,9 +2350,9 @@ def _html_document(data: dict[str, Any]) -> str:
         }}
 
         const fixtures=Array.isArray(environmentValidation.acceptance_fixtures) ? environmentValidation.acceptance_fixtures : [];
-        const fixturesLabel=document.createElement('div'); fixturesLabel.className='section-label'; fixturesLabel.textContent='P0-P4 acceptance fixtures'; environmentBox.append(fixturesLabel);
+        const fixturesLabel=document.createElement('div'); fixturesLabel.className='section-label'; fixturesLabel.textContent='Acceptance fixtures'; environmentBox.append(fixturesLabel);
         const fixtureSummary=document.createElement('div'); fixtureSummary.className='source-summary'; [['Repository-ready',environmentSummary.acceptance_fixture_repository_ready],['Ready-to-run',environmentSummary.acceptance_fixture_ready_to_run],['Dependency-gated',environmentSummary.acceptance_fixture_dependency_gated],['Unsupported host',environmentSummary.acceptance_fixture_unsupported_host],['Live verified',fixtures.filter(item => item.live_verified === true).length]].forEach(([label,value]) => {{ const item=document.createElement('span'); item.textContent=label + ': ' + text(value || 0); fixtureSummary.append(item); }}); environmentBox.append(fixtureSummary);
-        if (!fixtures.length) {{ showEmpty(environmentBox, 'No P0-P4 acceptance fixtures recorded.'); }} else {{
+        if (!fixtures.length) {{ showEmpty(environmentBox, 'No acceptance fixtures recorded.'); }} else {{
           const wrap=document.createElement('div'); wrap.className='table-scroll';
           const table=document.createElement('table'), head=document.createElement('tr'); ['Phase','Capability / fixture','Status','Evidence level','Missing gates','Acceptance command'].forEach(label => {{ const th=document.createElement('th'); th.textContent=label; head.append(th); }}); const thead=document.createElement('thead'); thead.append(head); const body=document.createElement('tbody');
           fixtures.forEach(item => {{ const tr=document.createElement('tr'); const missing=Array.isArray(item.missing_gates) ? item.missing_gates.join(', ') : ''; const identity=[item.capability,item.id].filter(Boolean).join(' / '); const status=item.live_verified === true ? 'live-verified' : statusLabel(item.status); const values=[item.phase,identity,status,item.evidence_level,missing,item.command]; values.forEach((value,index) => {{ const td=document.createElement('td'); if(index === 2) {{ const badge=document.createElement('span'); badge.className='badge'; badge.textContent=text(value); td.append(badge); }} else td.textContent=text(value); tr.append(td); }}); body.append(tr); }}); table.append(thead,body); wrap.append(table); environmentBox.append(wrap);

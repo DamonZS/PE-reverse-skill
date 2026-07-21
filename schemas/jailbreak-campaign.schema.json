@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reverse-analyzer.local/schemas/jailbreak-campaign.schema.json",
+  "title": "Reverse Jailbreak Campaign",
+  "type": "object",
+  "required": ["objective"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {"type": "string", "pattern": "^(?:[A-Za-z0-9_.-]{1,96})?$"},
+    "name": {"type": "string", "minLength": 1},
+    "objective": {"type": "string", "minLength": 1},
+    "system_prompt": {"type": "string"},
+    "max_rounds": {"type": "integer", "minimum": 1},
+    "seed": {"type": "integer"},
+    "stop_on_success": {"type": "boolean"},
+    "max_context_turns": {"type": "integer", "minimum": 0},
+    "judge_model": {"type": "string"},
+    "instruction_profile": {"type": "string"},
+    "instruction_files": {"type": "array", "items": {"type": "string"}},
+    "messages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["role", "content"],
+        "additionalProperties": false,
+        "properties": {
+          "role": {"enum": ["system", "developer", "user", "assistant", "tool"]},
+          "content": {"type": "string"},
+          "name": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "metadata": {"type": "object"},
+    "strategies": {"type": "array", "items": {"type": "string"}},
+    "attack_modes": {"type": "array", "items": {"enum": ["builtin", "pair", "tap", "crescendo", "evolution"]}},
+    "semantic_judge": {"enum": ["disabled", "heuristic", "model"]},
+    "target": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "base_url": {"type": "string", "format": "uri"},
+        "model": {"type": "string", "minLength": 1},
+        "api_key_env": {"type": "string"},
+        "timeout_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "max_retries": {"type": "integer", "minimum": 0},
+        "retry_backoff_seconds": {"type": "number", "minimum": 0},
+        "requests_per_minute": {"type": "number", "minimum": 0},
+        "temperature": {"type": "number", "minimum": 0, "maximum": 2},
+        "max_tokens": {"type": ["integer", "null"], "minimum": 1},
+        "extra_body": {"type": "object"}
+      }
+    },
+    "scoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "canaries": {"type": "array", "items": {"type": "string"}},
+        "success_regex": {"type": "array", "items": {"type": "string"}},
+        "refusal_signals": {"type": "array", "items": {"type": "string"}},
+        "threshold": {"type": "number", "minimum": 0, "maximum": 1},
+        "case_sensitive": {"type": "boolean"},
+        "require_no_refusal": {"type": "boolean"},
+        "min_response_chars": {"type": "integer", "minimum": 0}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["semantic_judge"],
+        "properties": {"semantic_judge": {"const": "model"}}
+      },
+      "then": {
+        "required": ["judge_model"],
+        "properties": {"judge_model": {"minLength": 1}}
+      }
+    }
+  ]
+}

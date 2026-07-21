@@ -190,6 +190,10 @@ class InstructionProfileTests(unittest.TestCase):
                 instruction_assets,
                 "_REPOSITORY_ROOT",
                 Path(directory),
+            ), mock.patch.object(
+                instruction_assets,
+                "_PACKAGED_ASSET_ROOT",
+                Path(directory) / "missing-package-assets",
             ):
                 with self.assertRaises(FileNotFoundError) as raised:
                     load_instruction_bundle("reverse-skills-llm-security")

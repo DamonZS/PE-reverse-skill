@@ -1,0 +1,52 @@
+name: reverse-jailbreak release
+
+on:
+  push:
+    paths:
+      - "reverse_analyzer/llm_jailbreak/**"
+      - "reverse_analyzer/_version.py"
+      - "config/jailbreak-campaign.example.json"
+      - "schemas/jailbreak-campaign.schema.json"
+      - "scripts/build_reverse_jailbreak.ps1"
+      - "scripts/smoke_reverse_jailbreak_release.py"
+      - "pyproject.toml"
+      - ".github/workflows/reverse-jailbreak-release.yml"
+  pull_request:
+    paths:
+      - "reverse_analyzer/llm_jailbreak/**"
+      - "reverse_analyzer/_version.py"
+      - "config/jailbreak-campaign.example.json"
+      - "schemas/jailbreak-campaign.schema.json"
+      - "scripts/build_reverse_jailbreak.ps1"
+      - "scripts/smoke_reverse_jailbreak_release.py"
+      - "pyproject.toml"
+      - ".github/workflows/reverse-jailbreak-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install test requirements
+        run: python -m pip install -r requirements.txt
+      - name: Run release tests
+        run: python -m unittest tests.test_llm_jailbreak_release
+      - name: Build and verify portable package
+        shell: pwsh
+        run: ./scripts/build_reverse_jailbreak.ps1 -Output artifact/reverse-jailbreak -Clean
+      - name: Smoke installed console entry point
+        run: python artifact/reverse-jailbreak/smoke_release.py artifact/reverse-jailbreak
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reverse-jailbreak-${{ github.sha }}
+          path: artifact/reverse-jailbreak
+          if-no-files-found: error

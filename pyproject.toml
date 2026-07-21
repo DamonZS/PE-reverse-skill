@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reverse-analyzer"
+dynamic = ["version"]
+description = "Evidence-backed reverse analysis and model campaign tooling"
+requires-python = ">=3.10"
+dependencies = ["pefile>=2023.2.7", "capstone>=5.0", "requests>=2.28"]
+
+[project.scripts]
+reverse-jailbreak = "reverse_analyzer.llm_jailbreak.cli:main"
+reverse-analyzer = "reverse_analyzer.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["reverse_analyzer*"]
+
+[tool.setuptools.package-data]
+"reverse_analyzer.llm_jailbreak" = ["builtin_assets/**/*.md"]
+
+[tool.setuptools.dynamic]
+version = {attr = "reverse_analyzer._version.__version__"}

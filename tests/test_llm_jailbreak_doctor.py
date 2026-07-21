@@ -87,6 +87,14 @@ class DoctorTests(unittest.TestCase):
             ["models", "chat_non_stream", "chat_stream", "rate_limit_signals", "timeout"],
         )
         self.assertEqual([timeout for _, timeout in opener.requests], [7.5, 7.5, 7.5])
+        checks = {item["name"]: item for item in result.checks}
+        self.assertEqual(
+            checks["rate_limit_signals"]["verification"],
+            "response-header-observation",
+        )
+        self.assertEqual(
+            checks["timeout"]["verification"], "request-deadline-applied"
+        )
         self.assertTrue(all(request.get_header("Authorization") == f"Bearer {secret}" for request, _ in opener.requests))
         self.assertNotIn(secret, json.dumps(result.to_dict()))
 

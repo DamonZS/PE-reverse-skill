@@ -6,6 +6,7 @@ __pycache__/
 .codex-tmp*/
 .codegraph/daemon.pid
 build/
+dist/
 *.egg-info/
 .workbuddy/
 tmp/
