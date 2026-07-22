@@ -3010,6 +3010,9 @@ def _run_checked(
 ) -> dict[str, Any]:
     result = _invoke_runner(runner, command, cwd=cwd, timeout=timeout)
     normalized = _command_result(result)
+    secrets = _command_secret_values(command)
+    normalized["stdout"] = _redact_command_text(normalized.get("stdout"), secrets)
+    normalized["stderr"] = _redact_command_text(normalized.get("stderr"), secrets)
     record = {
         "step": step,
         "command": _redact_command(command),
@@ -3041,16 +3044,25 @@ def _run_recorded(
             step=step,
         )
     except Exception as exc:
+        redacted_error = _redact_command_text(
+            str(exc) or exc.__class__.__name__,
+            _command_secret_values(command),
+        )
         failed_record = getattr(exc, "command_record", None)
         if not failed_record:
             failed_record = {
                 "step": step,
                 "command": _redact_command(command),
                 "ok": False,
-                "error": str(exc) or exc.__class__.__name__,
+                "error": redacted_error,
             }
-            setattr(exc, "command_record", failed_record)
         records.append(failed_record)
+        if redacted_error != str(exc):
+            redacted_exception = RuntimeError(redacted_error)
+            setattr(redacted_exception, "command_record", failed_record)
+            setattr(redacted_exception, "command_records", list(records))
+            raise redacted_exception from exc
+        setattr(exc, "command_record", failed_record)
         setattr(exc, "command_records", list(records))
         raise
     records.append(record)
@@ -3140,6 +3152,39 @@ def _redact_command(command: Sequence[str]) -> list[str]:
         redacted.append(text)
         hide_next = text.casefold() in _PASSWORD_OPTIONS
     return redacted
+
+
+def _command_secret_values(command: Sequence[str]) -> list[str]:
+    secrets: list[str] = []
+    capture_next = False
+    for item in command:
+        text = str(item)
+        if capture_next:
+            secrets.extend(_password_value_variants(text))
+            capture_next = False
+            continue
+        option, separator, value = text.partition("=")
+        if separator and option.casefold() in _PASSWORD_OPTIONS:
+            secrets.extend(_password_value_variants(value))
+            continue
+        capture_next = text.casefold() in _PASSWORD_OPTIONS
+    return sorted(set(secrets), key=len, reverse=True)
+
+
+def _password_value_variants(value: str) -> list[str]:
+    variants = [value] if value else []
+    prefix, separator, payload = value.partition(":")
+    if separator and prefix.casefold() in {"pass", "env", "file"} and payload:
+        variants.append(payload)
+    return variants
+
+
+def _redact_command_text(value: Any, secrets: Sequence[str]) -> str:
+    text = str(value or "")
+    for secret in secrets:
+        if secret:
+            text = text.replace(secret, "<redacted>")
+    return text
 
 
 def _plan_path(plan: CapabilityPlan, name: str, fallback: Any = None) -> Path:

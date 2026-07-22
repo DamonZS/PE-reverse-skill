@@ -235,6 +235,26 @@ def _contains_synthetic_provenance(value: Any) -> bool:
     return False
 
 
+def _contains_persisted_vlm_sensitive_material(value: Any) -> bool:
+    """Detect credential and host-path fields that VLM evidence must omit."""
+
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            lowered = str(key).strip().lower().replace("-", "_")
+            if lowered in {
+                "api_key", "authorization", "base_url", "endpoint_url",
+                "access_token", "credential", "cookie", "image_path", "input_path",
+                "password", "private_key", "refresh_token", "secret", "token",
+            }:
+                return True
+            if _contains_persisted_vlm_sensitive_material(item):
+                return True
+        return False
+    if isinstance(value, list):
+        return any(_contains_persisted_vlm_sensitive_material(item) for item in value)
+    return isinstance(value, str) and value.strip().lower().startswith("bearer ")
+
+
 def _artifact_provenance_valid(paths: Sequence[Path]) -> tuple[bool, list[str]]:
     rejected: list[str] = []
     for path in paths:
@@ -386,15 +406,15 @@ def _graphics_combined_contract_errors(run_dir: Path) -> list[str]:
     for key, relative in names.items():
         path = run_dir / relative
         if not path.is_file():
-            errors.append(f"VLM contract artifact is missing: {relative}")
+            errors.append(f"graphics contract artifact is missing: {relative}")
             continue
         try:
             value = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError):
-            errors.append(f"VLM contract artifact is invalid JSON: {relative}")
+            errors.append(f"graphics contract artifact is invalid JSON: {relative}")
             continue
         if not isinstance(value, Mapping):
-            errors.append(f"VLM contract artifact must be a JSON object: {relative}")
+            errors.append(f"graphics contract artifact must be a JSON object: {relative}")
             continue
         payloads[key] = dict(value)
 
@@ -438,7 +458,7 @@ def _graphics_combined_contract_errors(run_dir: Path) -> list[str]:
     projection = payloads["projection"]
     if str(projection.get("status") or "").lower() not in _SUCCESS_VALUES:
         errors.append("graphics projection is not successful")
-    if projection.get("matrix_frame_id") not in (None, frame_id):
+    if projection.get("matrix_frame_id") != frame_id:
         errors.append("graphics projection frame ID does not match matrix capture")
     if not isinstance(projection.get("visible_point_count"), int) or projection.get("visible_point_count", 0) <= 0:
         errors.append("graphics projection has no visible point")
@@ -447,18 +467,132 @@ def _graphics_combined_contract_errors(run_dir: Path) -> list[str]:
     if str(overlay.get("status") or "").lower() not in _SUCCESS_VALUES:
         errors.append("graphics overlay audit is not successful")
     overlay_provenance = overlay.get("provenance")
-    if isinstance(overlay_provenance, Mapping) and overlay_provenance.get("matrix_frame_id") not in (None, frame_id):
+    if not isinstance(overlay_provenance, Mapping) or overlay_provenance.get("matrix_frame_id") != frame_id:
         errors.append("graphics overlay frame ID does not match matrix capture")
 
     cleanup = payloads["cleanup"]
     for key in ("verified", "rollback_verified", "cleanup_verified"):
         if cleanup.get(key) is not True:
             errors.append(f"graphics cleanup proof {key} is not true")
+    overlay_cleanup = cleanup.get("overlay") if isinstance(cleanup.get("overlay"), Mapping) else {}
+    overlay_rollback = cleanup.get("overlay_rollback") if isinstance(cleanup.get("overlay_rollback"), Mapping) else {}
+    graphics_rollback = cleanup.get("graphics_rollback") if isinstance(cleanup.get("graphics_rollback"), Mapping) else {}
+    if (
+        overlay_cleanup.get("resources_released") is not True
+        or overlay_rollback.get("resources_released") is not True
+        or overlay_rollback.get("completed") is not True
+        or graphics_rollback.get("stop_verified") is not True
+        or graphics_rollback.get("process_cleanup_confirmed") is not True
+        or graphics_rollback.get("session_active_after") is not False
+    ):
+        errors.append("graphics cleanup does not prove overlay release and bridge stop")
     proof = payloads["proof"]
     if str(proof.get("status") or "").lower() not in _SUCCESS_VALUES:
         errors.append("graphics execution proof is not successful")
     if proof.get("skipped_tests") != 0 or proof.get("executed_tests", 0) < 1:
         errors.append("graphics execution proof must have one executed and zero skipped tests")
+    if (
+        proof.get("evidence_class") != "live_host_proof"
+        or proof.get("target_pid") != pid
+        or proof.get("target_hwnd") != hwnd
+        or proof.get("matrix_frame_id") != frame_id
+        or proof.get("cleanup_verified") is not True
+    ):
+        errors.append("graphics execution proof does not bind the target, frame, and cleanup")
+    return errors
+
+
+def _uia_contract_errors(run_dir: Path) -> list[str]:
+    """Bind a retained UIA tree, target process, cleanup and execution proof."""
+
+    names = {
+        "target": "gui-uia/target-identity.json",
+        "audit": "gui-uia/runtime-tree-audit.json",
+        "cleanup": "gui-uia/fixture-cleanup.json",
+        "proof": "gui-uia/execution-proof.json",
+    }
+    payloads: dict[str, dict[str, Any]] = {}
+    errors: list[str] = []
+    for key, relative in names.items():
+        path = run_dir / relative
+        if not path.is_file():
+            errors.append(f"UIA contract artifact is missing: {relative}")
+            continue
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            errors.append(f"UIA contract artifact is invalid JSON: {relative}")
+            continue
+        if not isinstance(value, Mapping):
+            errors.append(f"UIA contract artifact must be a JSON object: {relative}")
+            continue
+        payloads[key] = dict(value)
+    if errors:
+        return errors
+
+    target = payloads["target"]
+    pid = target.get("pid")
+    hwnd = target.get("window_handle")
+    if type(pid) is not int or pid <= 0 or type(hwnd) is not int or hwnd <= 0:
+        errors.append("UIA target identity must contain a positive PID and window handle")
+    target_path = str(target.get("path") or "").strip()
+    if target_path and (Path(target_path).is_absolute() or ":" in target_path.split("/", 1)[0]):
+        errors.append("UIA target identity must not retain an absolute host path")
+
+    audit = payloads["audit"]
+    provider = audit.get("provider") if isinstance(audit.get("provider"), Mapping) else {}
+    operations = audit.get("operations") if isinstance(audit.get("operations"), list) else []
+    session_id = str(audit.get("session_id") or "").strip()
+    if (
+        audit.get("status") != "ok"
+        or audit.get("capability") != "windows_uia_runtime"
+        or audit.get("target_identity") != target
+        or provider.get("name") != "windows-uia-comtypes"
+        or provider.get("api") != "UIAutomationClient"
+        or provider.get("transport") != "comtypes"
+        or not session_id
+        or len(operations) != 2
+    ):
+        errors.append("UIA runtime audit does not bind the target, provider, and session")
+
+    expected = (
+        ("window_handle_traversal", "window_handle", hwnd),
+        ("process_id_traversal", "process_id", pid),
+    )
+    for index, (kind, target_key, target_value) in enumerate(expected):
+        operation = operations[index] if index < len(operations) and isinstance(operations[index], Mapping) else {}
+        result = operation.get("result") if isinstance(operation.get("result"), Mapping) else {}
+        result_target = result.get("target") if isinstance(result.get("target"), Mapping) else {}
+        result_provider = result.get("provider") if isinstance(result.get("provider"), Mapping) else {}
+        if (
+            operation.get("kind") != kind
+            or str(result.get("status") or "").lower() not in _SUCCESS_VALUES
+            or result_target.get(target_key) != target_value
+            or type(result.get("window_count")) is not int
+            or result.get("window_count", 0) < 1
+            or type(result.get("node_count")) is not int
+            or result.get("node_count", 0) < 1
+            or result_provider.get("api") != "UIAutomationClient"
+        ):
+            errors.append(f"UIA operation is not target-bound live evidence: {kind}")
+
+    cleanup = payloads["cleanup"]
+    if cleanup.get("status") != "stopped" or cleanup.get("terminated") is not True:
+        errors.append("UIA fixture process cleanup is not verified")
+    proof = payloads["proof"]
+    if (
+        proof.get("status") != "ok"
+        or proof.get("provider") != "windows-uia-comtypes"
+        or proof.get("evidence_class") != "live_host_proof"
+        or proof.get("executed_tests") != 1
+        or proof.get("skipped_tests") != 0
+        or proof.get("live_operations") != 2
+        or proof.get("target_pid") != pid
+        or proof.get("target_hwnd") != hwnd
+        or proof.get("session_id") != session_id
+        or proof.get("cleanup_verified") is not True
+    ):
+        errors.append("UIA execution proof does not bind the target, session, and cleanup")
     return errors
 
 
@@ -657,6 +791,8 @@ def _vlm_contract_errors(run_dir: Path) -> list[str]:
             errors.append(f"VLM artifact is missing: {relative}")
     if len(payloads) != len(names):
         return errors
+    if any(_contains_persisted_vlm_sensitive_material(item) for item in payloads.values()):
+        errors.append("VLM artifacts contain credential, endpoint URL, or host path material")
 
     target = payloads["target"]
 
@@ -670,7 +806,7 @@ def _vlm_contract_errors(run_dir: Path) -> list[str]:
     image_digest = digest(target.get("image_sha256"), "image_sha256")
     identity_digest = digest(target.get("sha256"), "target sha256")
     canary_digest = digest(target.get("canary_sha256"), "canary_sha256")
-    digest(target.get("endpoint_sha256"), "endpoint_sha256")
+    endpoint_digest = digest(target.get("endpoint_sha256"), "endpoint_sha256")
     if image_digest and identity_digest and image_digest != identity_digest:
         errors.append("VLM target sha256 does not match image_sha256")
     target_model = str(target.get("model") or "").strip()
@@ -695,6 +831,8 @@ def _vlm_contract_errors(run_dir: Path) -> list[str]:
         errors.append("VLM output is missing provider provenance")
     elif target_model and str(provenance.get("model") or "").strip() != target_model:
         errors.append("VLM output model does not match target identity")
+    if invocation.get("output") != output:
+        errors.append("VLM invocation output does not match the retained output artifact")
 
     transport = payloads["transport"]
     if str(transport.get("status") or "").lower() not in _SUCCESS_VALUES:
@@ -710,6 +848,11 @@ def _vlm_contract_errors(run_dir: Path) -> list[str]:
     input_digest = str(transport.get("input_sha256") or "").strip().lower()
     if image_digest and input_digest != image_digest:
         errors.append("VLM transport input digest does not match target image digest")
+    if endpoint_digest and str(transport.get("endpoint_sha256") or "").strip().lower() != endpoint_digest:
+        errors.append("VLM transport endpoint digest does not match target identity")
+    output_request_id = provenance.get("request_id") if isinstance(provenance, Mapping) else None
+    if output_request_id is not None and transport.get("response_request_id") != output_request_id:
+        errors.append("VLM transport request ID does not match output provenance")
 
     canary = payloads["canary"]
     if canary.get("verified") is not True:
@@ -726,6 +869,15 @@ def _vlm_contract_errors(run_dir: Path) -> list[str]:
         errors.append("VLM execution proof must have one executed and zero skipped tests")
     if proof.get("canary_verified") is not True:
         errors.append("VLM execution proof must confirm canary verification")
+    if (
+        proof.get("provider") != provenance.get("provider")
+        or proof.get("model") != target_model
+        or proof.get("input_sha256") != image_digest
+        or proof.get("endpoint_sha256") != endpoint_digest
+        or proof.get("canary_sha256") != canary_digest
+        or proof.get("response_request_id") != output_request_id
+    ):
+        errors.append("VLM execution proof does not bind the endpoint, input, model, and response")
     return errors
 
 
@@ -887,6 +1039,8 @@ def run_acceptance_fixture(
         if fixture_id == "p4-imgui-d3d11-live"
         else _vlm_contract_errors(run_dir)
         if fixture_id == "p7-vlm-openai-live"
+        else _uia_contract_errors(run_dir)
+        if fixture_id == "p7-windows-uia-live"
         else []
     )
     target_valid = _fixture_target_identity_valid(
@@ -1095,6 +1249,8 @@ def verify_acceptance_record(record_file: str | Path) -> dict[str, Any]:
                 errors.extend(_imgui_contract_errors(run_dir))
             if fixture_id == "p7-vlm-openai-live":
                 errors.extend(_vlm_contract_errors(run_dir))
+            if fixture_id == "p7-windows-uia-live":
+                errors.extend(_uia_contract_errors(run_dir))
         constraints = record.get("verification_constraints")
         if not isinstance(constraints, Mapping) or not constraints or not all(value is True for value in constraints.values()):
             errors.append("live_verified claim lacks complete verification constraints")
@@ -1185,6 +1341,8 @@ def verify_acceptance_record(record_file: str | Path) -> dict[str, Any]:
                         if fixture_id == "p4-imgui-d3d11-live"
                         else _vlm_contract_errors(run_dir)
                         if fixture_id == "p7-vlm-openai-live"
+                        else _uia_contract_errors(run_dir)
+                        if fixture_id == "p7-windows-uia-live"
                         else []
                     )
                 ),

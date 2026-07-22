@@ -174,12 +174,23 @@ class AcceptanceRecordTests(unittest.TestCase):
                         "status": "ok",
                         "provider": "windows_gdi_overlay",
                         "frame_count": 1,
+                        "provenance": {"matrix_frame_id": "frame-3"},
                     },
                     "cleanup.json": {
                         "status": "completed",
                         "verified": True,
                         "rollback_verified": True,
                         "cleanup_verified": True,
+                        "overlay": {"resources_released": True},
+                        "overlay_rollback": {
+                            "completed": True,
+                            "resources_released": True,
+                        },
+                        "graphics_rollback": {
+                            "stop_verified": True,
+                            "process_cleanup_confirmed": True,
+                            "session_active_after": False,
+                        },
                     },
                     "execution-proof.json": {
                         "status": "ok",
@@ -188,6 +199,10 @@ class AcceptanceRecordTests(unittest.TestCase):
                         "executed_tests": 1,
                         "skipped_tests": 0,
                         "live_operations": 4,
+                        "target_pid": 4321,
+                        "target_hwnd": 9001,
+                        "matrix_frame_id": "frame-3",
+                        "cleanup_verified": True,
                     },
                 }
                 for name, payload in artifacts.items():
@@ -268,6 +283,62 @@ class AcceptanceRecordTests(unittest.TestCase):
             errors = _vlm_contract_errors(run_dir)
             self.assertTrue(any("invalid JSON" in error for error in errors))
             self.assertTrue(any("artifact is missing" in error for error in errors))
+
+    def test_vlm_contract_rejects_persisted_endpoint_or_host_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary)
+            artifact_dir = run_dir / "gui-vlm"
+            artifact_dir.mkdir()
+            artifacts = {
+                "target-identity.json": {
+                    "kind": "remote-openai-compatible-vlm",
+                    "endpoint_sha256": "a" * 64,
+                    "model": "vision",
+                    "sha256": "b" * 64,
+                    "image_sha256": "b" * 64,
+                    "canary_sha256": "c" * 64,
+                    "endpoint_url": "https://sensitive.example/v1",
+                },
+                "invocation.json": {
+                    "status": "ok",
+                    "output": {
+                        "status": "ok",
+                        "text_regions": [{"text": "canary"}],
+                        "provenance": {"provider": "openai-compatible-vlm", "model": "vision"},
+                    },
+                },
+                "output.json": {
+                    "status": "ok",
+                    "text_regions": [{"text": "canary"}],
+                    "provenance": {"provider": "openai-compatible-vlm", "model": "vision"},
+                },
+                "transport-audit.json": {
+                    "status": "ok",
+                    "transport": "openai-compatible-http",
+                    "input_sha256": "b" * 64,
+                    "secret_source": "environment",
+                    "authorization_persisted": False,
+                    "canary_verified": True,
+                },
+                "canary-verification.json": {
+                    "verified": True,
+                    "canary_sha256": "c" * 64,
+                    "matched_items": 1,
+                },
+                "execution-proof.json": {
+                    "status": "ok",
+                    "executed_tests": 1,
+                    "skipped_tests": 0,
+                    "canary_verified": True,
+                },
+            }
+            for name, payload in artifacts.items():
+                (artifact_dir / name).write_text(json.dumps(payload), encoding="utf-8")
+
+            from reverse_analyzer.acceptance import _vlm_contract_errors
+
+            errors = _vlm_contract_errors(run_dir)
+            self.assertTrue(any("host path material" in item for item in errors))
 
     def test_imgui_fixture_rejects_rehashed_cross_artifact_tampering(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -439,7 +510,20 @@ class AcceptanceRecordTests(unittest.TestCase):
                         "image_sha256": "b" * 64,
                         "canary_sha256": "c" * 64,
                     },
-                    "invocation.json": {"status": "ok", "duration_ms": 12},
+                    "invocation.json": {
+                        "status": "ok",
+                        "duration_ms": 12,
+                        "output": {
+                            "status": "ok",
+                            "text_regions": [{"text": "Save"}],
+                            "widgets": [{"type": "button", "text": "Save"}],
+                            "provenance": {
+                                "provider": "openai-compatible-live",
+                                "model": "fixture-vision",
+                                "request_id": "fixture-request-1",
+                            },
+                        },
+                    },
                     "output.json": {
                         "status": "ok",
                         "text_regions": [{"text": "Save"}],
@@ -454,6 +538,8 @@ class AcceptanceRecordTests(unittest.TestCase):
                         "status": "ok",
                         "transport": "openai-compatible-http",
                         "input_sha256": "b" * 64,
+                        "endpoint_sha256": "a" * 64,
+                        "response_request_id": "fixture-request-1",
                         "secret_source": "environment",
                         "authorization_persisted": False,
                         "canary_verified": True,
@@ -466,12 +552,17 @@ class AcceptanceRecordTests(unittest.TestCase):
                     },
                     "execution-proof.json": {
                         "status": "ok",
-                        "provider": "openai-compatible-vlm",
+                        "provider": "openai-compatible-live",
                         "evidence_class": "live_target_proof",
                         "executed_tests": 1,
                         "skipped_tests": 0,
                         "live_operations": 1,
                         "canary_verified": True,
+                        "model": "fixture-vision",
+                        "input_sha256": "b" * 64,
+                        "endpoint_sha256": "a" * 64,
+                        "canary_sha256": "c" * 64,
+                        "response_request_id": "fixture-request-1",
                     },
                 }
                 for name, payload in artifacts.items():
@@ -539,11 +630,41 @@ class AcceptanceRecordTests(unittest.TestCase):
                     },
                     "runtime-tree-audit.json": {
                         "status": "ok",
-                        "provider": {"name": "windows_uia", "api": "UIAutomationClient"},
+                        "capability": "windows_uia_runtime",
+                        "target_identity": {
+                            "kind": "live-child-process",
+                            "pid": 4321,
+                            "path": "python.exe",
+                            "window_handle": 9001,
+                        },
+                        "provider": {
+                            "name": "windows-uia-comtypes",
+                            "api": "UIAutomationClient",
+                            "transport": "comtypes",
+                        },
                         "session_id": run_dir.name,
-                        "window_count": 1,
-                        "node_count": 2,
-                        "evidence_class": "live_host_proof",
+                        "operations": [
+                            {
+                                "kind": "window_handle_traversal",
+                                "result": {
+                                    "status": "ok",
+                                    "target": {"process_id": 4321, "window_handle": 9001},
+                                    "provider": {"api": "UIAutomationClient"},
+                                    "window_count": 1,
+                                    "node_count": 2,
+                                },
+                            },
+                            {
+                                "kind": "process_id_traversal",
+                                "result": {
+                                    "status": "ok",
+                                    "target": {"process_id": 4321, "window_handle": None},
+                                    "provider": {"api": "UIAutomationClient"},
+                                    "window_count": 1,
+                                    "node_count": 2,
+                                },
+                            },
+                        ],
                     },
                     "fixture-cleanup.json": {
                         "status": "stopped",
@@ -556,6 +677,10 @@ class AcceptanceRecordTests(unittest.TestCase):
                         "executed_tests": 1,
                         "skipped_tests": 0,
                         "live_operations": 2,
+                        "target_pid": 4321,
+                        "target_hwnd": 9001,
+                        "session_id": run_dir.name,
+                        "cleanup_verified": True,
                     },
                 }
                 for name, payload in artifacts.items():
@@ -578,6 +703,22 @@ class AcceptanceRecordTests(unittest.TestCase):
             verification = verify_acceptance_record(record["record_path"])
             self.assertEqual(verification["status"], "ok")
             self.assertTrue(verification["live_verified"])
+
+            # Rehashing an audit for a different window must not preserve a
+            # valid live claim because the operation is bound to the target.
+            audit_path = Path(record["run_directory"]) / "gui-uia/runtime-tree-audit.json"
+            audit = json.loads(audit_path.read_text(encoding="utf-8"))
+            audit["operations"][0]["result"]["target"]["window_handle"] = 9002
+            audit_path.write_text(json.dumps(audit), encoding="utf-8")
+            for entry in record["observed_artifacts"]:
+                if entry["path"] == "gui-uia/runtime-tree-audit.json":
+                    encoded = audit_path.read_bytes()
+                    entry["size"] = len(encoded)
+                    entry["sha256"] = hashlib.sha256(encoded).hexdigest()
+            Path(record["record_path"]).write_text(json.dumps(record), encoding="utf-8")
+            tampered = verify_acceptance_record(record["record_path"])
+            self.assertEqual(tampered["status"], "failed")
+            self.assertTrue(any("window_handle_traversal" in item for item in tampered["errors"]))
 
     def test_registered_live_fixture_can_produce_hash_backed_proof(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

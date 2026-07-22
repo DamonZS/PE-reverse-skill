@@ -35,7 +35,11 @@ matrix capture, projection output, production GDI overlay audit, graphics stop,
 overlay resource cleanup, and structured non-skipped execution proof. Independent
 verification also recomputes the cross-artifact contract: PID/HWND must agree,
 Present and matrix frame IDs must match, projection/overlay provenance must bind
-to that frame, and cleanup/execution proofs must be successful. Recomputing an
+to that frame, and the execution proof must repeat the PID, HWND, frame ID, and
+successful cleanup state. Missing binding fields fail verification rather than
+acting as wildcards. Cleanup must independently attest overlay resource release,
+idempotent overlay rollback, bridge subprocess exit, and a stopped graphics
+session. Recomputing an
 artifact hash after changing one of these relationships does not make the record
 valid.
 
@@ -60,6 +64,20 @@ shutdown/unload lifecycle, native observation proofs, bridge executable digest,
 hook restoration, cleanup, and execution proof to one session. Editing an
 artifact and updating its recorded hash does not satisfy these cross-artifact
 bindings.
+
+## Windows UIA and VLM fixtures
+
+`p7-windows-uia-live` binds the retained process PID and window handle to both
+the HWND traversal and PID traversal, the `UIAutomationClient`/comtypes provider,
+one acceptance session, non-empty live trees, fixture-process termination, and
+the execution proof. A tree from another window or session is rejected even if
+its artifact hash is recomputed.
+
+`p7-vlm-openai-live` retains only content-addressed endpoint, image, and canary
+identities. Verification rejects credential/header fields, endpoint URLs, and
+host image paths in any VLM artifact, then binds the input digest, model,
+provider response/request ID, endpoint digest, canary result, and execution
+proof.
 
 No retained combined graphics or ImGui record is checked in. Until a real run
 is retained and reviewed, Graphics Present and ImGui remain dependency-gated,

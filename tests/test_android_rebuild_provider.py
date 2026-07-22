@@ -100,6 +100,48 @@ class BrokenVersionRunner(FakeAndroidRunner):
         return super().run(command, cwd=cwd, timeout=timeout)
 
 
+class EchoingSecretRunner(FakeAndroidRunner):
+    def __init__(self, *, fail_sign: bool = False) -> None:
+        super().__init__()
+        self.fail_sign = fail_sign
+
+    def run(
+        self,
+        command: Sequence[str],
+        *,
+        cwd: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        result = super().run(command, cwd=cwd, timeout=timeout)
+        args = [str(item) for item in command]
+        if "apksigner" in Path(args[0]).name.lower() and args[1] == "sign":
+            secret_values = [
+                item.split(":", 1)[-1]
+                for index, item in enumerate(args)
+                if index and args[index - 1] in {"--ks-pass", "--key-pass"}
+            ]
+            echoed = " ".join(secret_values)
+            if self.fail_sign:
+                return {"returncode": 2, "stdout": "", "stderr": f"sign failed: {echoed}"}
+            return {"returncode": 0, "stdout": f"sign accepted {echoed}", "stderr": ""}
+        return result
+
+
+class RaisingSecretRunner(FakeAndroidRunner):
+    def run(
+        self,
+        command: Sequence[str],
+        *,
+        cwd: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        args = [str(item) for item in command]
+        if "apksigner" in Path(args[0]).name.lower() and args[1] == "sign":
+            password = args[args.index("--ks-pass") + 1]
+            raise RuntimeError(f"wrapper rejected {password}")
+        return super().run(command, cwd=cwd, timeout=timeout)
+
+
 class NoneResultRunner:
     def which(self, command: str) -> str:
         return command
@@ -746,6 +788,88 @@ class AndroidRebuildProviderTests(unittest.TestCase):
             self.assertNotIn("key-secret", value)
         self.assertIn("--ks-pass=<redacted>", verify_text)
         self.assertIn("--key-pass=<redacted>", verify_text)
+
+    def test_apksigner_echoed_passwords_are_redacted_from_success_artifacts(self) -> None:
+        runner = EchoingSecretRunner()
+        provider = AndroidRebuildProvider(runner=runner)
+        output = self.root / "echo-redacted.apk"
+        plan = provider.plan(
+            self.request(
+                "rebuild",
+                params={
+                    "strategy": "apktool_rebuild",
+                    "out_path": str(output),
+                    "keystore": str(self.root / "fixture.keystore"),
+                    "ks_pass": "keystore-secret",
+                    "key_pass": "key-secret",
+                },
+                session_id="echo-redaction",
+            )
+        )
+        (self.root / "fixture.keystore").write_bytes(b"fixture")
+
+        result = provider.execute(plan)
+
+        self.assertEqual(result.status, "ok", result.to_dict())
+        serialized = json.dumps(result.to_dict())
+        audit_text = Path(plan.parameters["audit_path"]).read_text("utf-8")
+        verify_text = Path(plan.parameters["verify_path"]).read_text("utf-8")
+        for value in (serialized, audit_text, verify_text):
+            self.assertNotIn("keystore-secret", value)
+            self.assertNotIn("key-secret", value)
+        self.assertIn("sign accepted <redacted> <redacted>", audit_text)
+
+    def test_apksigner_echoed_passwords_are_redacted_from_failure_details(self) -> None:
+        runner = EchoingSecretRunner(fail_sign=True)
+        provider = AndroidRebuildProvider(runner=runner)
+        output = self.root / "echo-failed.apk"
+        keystore = self.root / "failed.keystore"
+        keystore.write_bytes(b"fixture")
+        plan = provider.plan(
+            self.request(
+                "rebuild",
+                params={
+                    "strategy": "apktool_rebuild",
+                    "out_path": str(output),
+                    "keystore": str(keystore),
+                    "ks_pass": "failure-secret",
+                },
+                session_id="failure-redaction",
+            )
+        )
+
+        result = provider.execute(plan)
+
+        self.assertEqual(result.status, "failed")
+        serialized = json.dumps(result.to_dict())
+        self.assertNotIn("failure-secret", serialized)
+        self.assertIn("sign failed: <redacted>", serialized)
+
+    def test_apksigner_passwords_are_redacted_from_runner_exceptions(self) -> None:
+        runner = RaisingSecretRunner()
+        provider = AndroidRebuildProvider(runner=runner)
+        output = self.root / "exception-failed.apk"
+        keystore = self.root / "exception.keystore"
+        keystore.write_bytes(b"fixture")
+        plan = provider.plan(
+            self.request(
+                "rebuild",
+                params={
+                    "strategy": "apktool_rebuild",
+                    "out_path": str(output),
+                    "keystore": str(keystore),
+                    "ks_pass": "exception-secret",
+                },
+                session_id="exception-redaction",
+            )
+        )
+
+        result = provider.execute(plan)
+
+        self.assertEqual(result.status, "failed")
+        serialized = json.dumps(result.to_dict())
+        self.assertNotIn("exception-secret", serialized)
+        self.assertIn("wrapper rejected <redacted>", serialized)
 
     def test_apksigner_managed_arguments_are_rejected_before_execution(self) -> None:
         runner = FakeAndroidRunner()

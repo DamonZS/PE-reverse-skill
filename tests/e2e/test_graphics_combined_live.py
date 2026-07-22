@@ -282,6 +282,10 @@ class GraphicsCombinedLiveTests(unittest.TestCase):
             "projected_point_count": len(projection["points"]),
             "visible_point_count": len(visible),
             "overlay_frame_count": overlay_audit.get("frame_count"),
+            "target_pid": pid,
+            "target_hwnd": hwnd,
+            "matrix_frame_id": capture["frame_id"],
+            "cleanup_verified": True,
         }
         artifacts = {
             "graphics-combined/target-identity.json": target.to_dict(),

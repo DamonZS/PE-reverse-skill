@@ -444,7 +444,7 @@ window.mainloop()
             target_identity = {
                 "kind": "live-child-process",
                 "pid": pid,
-                "path": str(Path(sys.executable).resolve()),
+                "path": Path(sys.executable).name,
                 "display_name": "Reverse Analyzer UIA Smoke",
                 "window_handle": int(target["window_handle"]),
             }
@@ -484,7 +484,9 @@ window.mainloop()
                         "skipped_tests": 0,
                         "live_operations": 2,
                         "target_pid": pid,
+                        "target_hwnd": int(target["window_handle"]),
                         "session_id": context.session_id,
+                        "cleanup_verified": cleanup["terminated"],
                     },
                 },
             )

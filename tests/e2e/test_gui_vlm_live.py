@@ -97,6 +97,7 @@ class LiveOpenAIVLMTests(unittest.TestCase):
                 "status": invocation.status,
                 "transport": "openai-compatible-http",
                 "input_sha256": image_digest,
+                "endpoint_sha256": endpoint_identity,
                 "response_request_id": output.get("provenance", {}).get("request_id"),
                 "secret_source": "environment",
                 "authorization_persisted": False,
@@ -117,6 +118,11 @@ class LiveOpenAIVLMTests(unittest.TestCase):
                 "live_operations": 1,
                 "visual_items": live_items,
                 "canary_verified": True,
+                "model": model,
+                "input_sha256": image_digest,
+                "endpoint_sha256": endpoint_identity,
+                "canary_sha256": canary_digest,
+                "response_request_id": output.get("provenance", {}).get("request_id"),
             },
         }
         for name, payload in artifacts.items():

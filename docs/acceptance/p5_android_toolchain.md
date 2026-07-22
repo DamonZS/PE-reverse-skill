@@ -53,6 +53,11 @@ copy of the verified APK with its SHA-256, confirms the source APK is unchanged,
 and removes the operational output through provider rollback. Password values
 must not appear in the retained JSON artifacts.
 
+The provider redacts password-bearing argv values and matching values echoed by
+tool stdout, stderr, or runner exceptions before command records and failure
+details enter audit artifacts. This repository-level regression guarantee does
+not replace the real apktool/apksigner promotion requirement.
+
 Provider validation resolves both executables and runs bounded, read-only
 version probes (`apktool --version` and `apksigner version`) before any rebuild
 output is written. A path that merely exists but cannot start is reported as an
