@@ -17,7 +17,7 @@ reverse-analyzer = "reverse_analyzer.cli:main"
 include = ["reverse_analyzer*"]
 
 [tool.setuptools.package-data]
-"reverse_analyzer.llm_jailbreak" = ["builtin_assets/**/*.md"]
+"reverse_analyzer.llm_jailbreak" = ["builtin_assets/**/*.md", "templates/*.json"]
 
 [tool.setuptools.dynamic]
 version = {attr = "reverse_analyzer._version.__version__"}

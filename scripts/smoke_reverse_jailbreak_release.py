@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -10,8 +11,83 @@ import threading
 import venv
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
-from typing import Iterator, Mapping
+from pathlib import Path, PurePosixPath
+from typing import Any, Iterator, Mapping
+
+
+_MANIFEST_NAME = "release-manifest.json"
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _load_verified_manifest(release: Path) -> Mapping[str, Any]:
+    """Verify portable release bytes before installing its wheel."""
+
+    manifest_path = release / _MANIFEST_NAME
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"invalid release manifest: {exc}") from exc
+    if not isinstance(manifest, dict):
+        raise RuntimeError("release manifest root must be an object")
+    if manifest.get("schema_version") != 1:
+        raise RuntimeError("unsupported release manifest schema_version")
+    if manifest.get("product") != "reverse-jailbreak":
+        raise RuntimeError("unexpected release manifest product")
+    entries = manifest.get("files")
+    if not isinstance(entries, list):
+        raise RuntimeError("release manifest files must be an array")
+
+    observed: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise RuntimeError("release manifest file entry must be an object")
+        relative = entry.get("path")
+        if not isinstance(relative, str) or not relative or "\\" in relative:
+            raise RuntimeError("release manifest contains an invalid path")
+        manifest_path_value = PurePosixPath(relative)
+        if manifest_path_value.is_absolute() or any(
+            part in ("", ".", "..") for part in manifest_path_value.parts
+        ):
+            raise RuntimeError(f"release manifest path escapes release directory: {relative}")
+        if relative in observed:
+            raise RuntimeError(f"duplicate release manifest path: {relative}")
+        observed.add(relative)
+
+        candidate = release.joinpath(*manifest_path_value.parts)
+        if candidate.is_symlink() or not candidate.is_file():
+            raise RuntimeError(f"missing or invalid release file: {relative}")
+        try:
+            expected_size = int(entry.get("size"))
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError(f"invalid release file size: {relative}") from exc
+        if candidate.stat().st_size != expected_size:
+            raise RuntimeError(f"size mismatch: {relative}")
+        expected_sha256 = str(entry.get("sha256") or "").casefold()
+        if _sha256(candidate) != expected_sha256:
+            raise RuntimeError(f"sha256 mismatch: {relative}")
+
+    actual: set[str] = set()
+    for path in release.rglob("*"):
+        if path.is_symlink():
+            raise RuntimeError(
+                f"release must not contain symlink: {path.relative_to(release).as_posix()}"
+            )
+        if path.is_file() and path.name != _MANIFEST_NAME:
+            actual.add(path.relative_to(release).as_posix())
+    if actual != observed:
+        unexpected = sorted(actual - observed)
+        missing = sorted(observed - actual)
+        details = [*(f"untracked release file: {path}" for path in unexpected)]
+        details.extend(f"missing release file: {path}" for path in missing)
+        raise RuntimeError("; ".join(details))
+    return manifest
 
 
 def _run(command: list[str], *, env: Mapping[str, str] | None = None) -> str:
@@ -112,13 +188,11 @@ def main() -> int:
     parser.add_argument("release", type=Path)
     args = parser.parse_args()
     release = args.release.expanduser().resolve()
+    manifest = _load_verified_manifest(release)
     wheels = sorted(release.glob("*.whl"))
     if len(wheels) != 1:
         parser.error("release directory must contain exactly one wheel")
 
-    manifest = json.loads(
-        (release / "release-manifest.json").read_text(encoding="utf-8")
-    )
     expected_version = str(manifest.get("product_version") or "")
     if not expected_version:
         raise RuntimeError("release manifest has no product_version")
@@ -159,11 +233,19 @@ def main() -> int:
         )
         if not strategies_payload.get("strategies"):
             raise RuntimeError("installed CLI returned no strategies")
+        initialized = Path(directory) / "initialized"
+        init_payload = json.loads(
+            _run([str(executable), "init", str(initialized), "--json"])
+        )
+        if len(init_payload.get("files", [])) != 2:
+            raise RuntimeError(
+                "installed init command did not write both packaged assets"
+            )
         _run(
             [
                 str(executable),
                 "validate",
-                str(release / "jailbreak-campaign.example.json"),
+                str(initialized / "jailbreak-campaign.example.json"),
                 "--json",
             ]
         )

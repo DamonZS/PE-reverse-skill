@@ -1,6 +1,8 @@
 name: reverse-jailbreak retained live acceptance
 
 on:
+  schedule:
+    - cron: "17 3 1 * *"
   workflow_dispatch:
     inputs:
       base_url:
@@ -21,13 +23,16 @@ concurrency:
 
 jobs:
   retained-live-e2e:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      vars.LLM_JAILBREAK_PERIODIC_ENABLED == '1'
     environment: llm-jailbreak-live
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       RUN_LLM_JAILBREAK_LIVE: "1"
-      LLM_JAILBREAK_E2E_BASE_URL: ${{ inputs.base_url }}
-      LLM_JAILBREAK_E2E_MODEL: ${{ inputs.model }}
+      LLM_JAILBREAK_E2E_BASE_URL: ${{ inputs.base_url || vars.LLM_JAILBREAK_E2E_BASE_URL }}
+      LLM_JAILBREAK_E2E_MODEL: ${{ inputs.model || vars.LLM_JAILBREAK_E2E_MODEL }}
       LLM_JAILBREAK_E2E_API_KEY_ENV: MODEL_API_KEY
       LLM_JAILBREAK_E2E_OUT: ${{ github.workspace }}/retained-evidence
       MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
@@ -39,6 +44,12 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Validate retained live configuration
+        shell: bash
+        run: |
+          test -n "$LLM_JAILBREAK_E2E_BASE_URL"
+          test -n "$LLM_JAILBREAK_E2E_MODEL"
+          test -n "$MODEL_API_KEY"
       - name: Install package
         run: python -m pip install .
       - name: Run retained live acceptance

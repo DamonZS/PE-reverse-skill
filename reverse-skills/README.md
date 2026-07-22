@@ -196,6 +196,4 @@ git clone https://github.com/DamonZS/Codex-Pe-reverse-analyzer.git
 
 <p align="right">(<a href="#致谢">返回顶部</a>)</p>
 
-## 联系方式
-- **邮箱**：`ww7517437@gmail.com`
-- **X (Twitter)**：[@apivixtls](https://x.com/apivixtls)
+##

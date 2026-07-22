@@ -52,6 +52,7 @@ from .pair import PAIRCandidate, PAIRPlanner
 from .scorer import ResponseScorer
 from .strategies import BUILTIN_STRATEGIES, StrategyContext, get_strategy, render_strategy
 from .tap import TAPNode, TAPSearch
+from .templates import TEMPLATE_FILES, initialize_workspace
 from .transport import (
     ChatTransport,
     OpenAICompatibleTransport,
@@ -106,6 +107,7 @@ __all__ = [
     "SemanticJudge",
     "TAPNode",
     "TAPSearch",
+    "TEMPLATE_FILES",
     "TargetConfig",
     "TransportConfigurationError",
     "TransportError",
@@ -114,6 +116,7 @@ __all__ = [
     "configure_campaign",
     "execute_campaign",
     "get_strategy",
+    "initialize_workspace",
     "list_instruction_profiles",
     "load_campaign",
     "load_instruction_bundle",

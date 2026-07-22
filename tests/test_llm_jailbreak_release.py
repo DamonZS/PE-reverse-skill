@@ -19,6 +19,7 @@ from reverse_analyzer.llm_jailbreak.release import (
     write_release_manifest,
 )
 from reverse_analyzer.llm_jailbreak.models import Campaign, CampaignValidationError
+from scripts.smoke_reverse_jailbreak_release import _load_verified_manifest
 
 
 class ReleaseCliTests(unittest.TestCase):
@@ -61,6 +62,15 @@ class ReleaseCliTests(unittest.TestCase):
         self.assertIn("[switch]$NoBuildIsolation", script)
         self.assertIn('"--no-build-isolation"', script)
 
+    def test_build_script_pins_wheel_timestamp_for_reproducibility(self):
+        script = (Path(__file__).parents[1] / "scripts/build_reverse_jailbreak.ps1").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("[long]$SourceDateEpoch", script)
+        self.assertIn("$env:SOURCE_DATE_EPOCH", script)
+        self.assertIn("git log -1 --format=%ct", script)
+        self.assertIn("315532800", script)
+
     def test_release_workflow_rebuilds_when_release_metadata_changes(self):
         workflow = (Path(__file__).parents[1] / ".github/workflows/reverse-jailbreak-release.yml").read_text(
             encoding="utf-8"
@@ -68,6 +78,13 @@ class ReleaseCliTests(unittest.TestCase):
         self.assertIn('"docs/releases/**"', workflow)
         self.assertIn('"CHANGELOG.md"', workflow)
         self.assertIn('"docs/reverse_jailbreak_release.md"', workflow)
+        self.assertIn('"reverse_analyzer/**"', workflow)
+        self.assertIn('"requirements.txt"', workflow)
+        self.assertIn('python: "3.10"', workflow)
+        self.assertIn('python: "3.13"', workflow)
+        self.assertIn("os: ubuntu-latest", workflow)
+        self.assertIn("if: matrix.publish", workflow)
+        self.assertEqual(workflow.count("publish: true"), 1)
 
     def test_release_workflows_separate_package_and_manual_live_acceptance(self):
         root = Path(__file__).parents[1]
@@ -217,6 +234,18 @@ class ReleaseCliTests(unittest.TestCase):
             self.assertFalse(result["ok"])
             self.assertTrue(any("sha256 mismatch" in error for error in result["errors"]))
             self.assertTrue(any("untracked release file" in error for error in result["errors"]))
+
+    def test_portable_smoke_verifies_release_before_installation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_release_fixture(root)
+            manifest = write_release_manifest(root)
+            self.assertEqual(_load_verified_manifest(root), manifest)
+
+            wheel = root / f"reverse_analyzer-{__version__}-py3-none-any.whl"
+            wheel.write_text("tampered wheel", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "(size|sha256) mismatch"):
+                _load_verified_manifest(root)
 
     def test_release_manifest_rejects_embedded_credential_material(self):
         with tempfile.TemporaryDirectory() as directory:

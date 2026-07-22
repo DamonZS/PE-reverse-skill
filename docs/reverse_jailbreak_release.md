@@ -16,6 +16,7 @@ For an offline or air-gapped builder with `setuptools` already installed, add
 Install the wheel, then use the standalone entry point:
 
 ```powershell
+reverse-jailbreak init .\campaign-workspace
 reverse-jailbreak profiles
 reverse-jailbreak strategies
 reverse-jailbreak validate config/jailbreak-campaign.example.json
@@ -28,6 +29,11 @@ reverse-jailbreak release-verify dist/reverse-jailbreak
 python dist/reverse-jailbreak/smoke_release.py dist/reverse-jailbreak
 ```
 
+`init` materializes the packaged starter campaign and JSON Schema, so a wheel
+installation can create a working configuration without a source checkout. It
+stops before overwriting existing files unless `--force` is explicit and emits
+per-file size and SHA-256 metadata with `--json`.
+
 The API key is referenced by environment variable only. The campaign schema is
 `schemas/jailbreak-campaign.schema.json`; no credential field is accepted by
 the campaign loader. All five built-in instruction profiles are included as
@@ -37,17 +43,27 @@ size and SHA-256 of the wheel, schema, starter configuration, changelog, release
 notes, release guide, and smoke runner. `release-verify` rejects version drift,
 multiple wheels, missing, modified, path-escaping, duplicate, and untracked
 files, as well as obvious API credential or Authorization bearer values in
-release contents. The smoke runner creates a temporary virtual environment, installs the
+release contents. Before installation, the standalone smoke runner independently
+checks every manifest path, size, and SHA-256 and rejects missing, extra, or
+symlinked files. It then creates a temporary virtual environment, installs the
 wheel with its declared dependencies, and exercises every installed command:
-`doctor`, `profiles`, `strategies`, `validate`, `run`, `resume`, `report`,
+`init`, `doctor`, `profiles`, `strategies`, `validate`, `run`, `resume`, `report`,
 `promote`, `benchmark`, and `release-verify`. Endpoint checks and campaign runs
 use a temporary loopback-only OpenAI-compatible fixture and a disposable
 environment-variable credential, so package smoke does not require an external
-endpoint or retained secret. Use `-Clean` for deterministic repeated builds.
+endpoint or retained secret. Use `-Clean` for repeated builds. The build script
+sets `SOURCE_DATE_EPOCH` from `-SourceDateEpoch`, an existing environment value,
+or the current Git commit timestamp (with a 1980 ZIP-compatible fallback), so
+unchanged source produces a byte-identical wheel and release manifest.
 
 The normal release CI builds, verifies, installs, and smokes the package without
-calling an external model endpoint. The retained live acceptance workflow is
-manual-only and uses the protected `llm-jailbreak-live` GitHub environment.
+calling an external model endpoint. It is triggered by changes anywhere in the
+packaged `reverse_analyzer` tree as well as release dependencies and metadata.
+The compatibility matrix covers the declared Python 3.10 floor on Windows, the
+canonical Windows/Python 3.12 artifact build, and Python 3.13 on Ubuntu. Every
+matrix entry builds and installs the wheel; only the canonical entry uploads a
+release artifact. The retained live acceptance workflow is manual-only and uses
+the protected `llm-jailbreak-live` GitHub environment.
 
 ## Reproducible algorithm benchmark
 

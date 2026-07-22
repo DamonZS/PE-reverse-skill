@@ -22,6 +22,7 @@ from .models import (
     SUPPORTED_STRATEGIES,
 )
 from .release import verify_release_manifest
+from .templates import initialize_workspace
 from .transport import OpenAICompatibleTransport, TransportError
 
 
@@ -32,6 +33,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
+
+    init = commands.add_parser(
+        "init", help="write a starter campaign and JSON Schema from packaged assets"
+    )
+    init.add_argument("directory", type=Path, nargs="?", default=Path("."))
+    init.add_argument("--force", action="store_true")
+    init.add_argument("--json", action="store_true", dest="json_output")
 
     run = commands.add_parser("run", help="execute a jailbreak campaign")
     run.add_argument("campaign", type=Path, help="campaign JSON file")
@@ -196,6 +204,17 @@ def _run_command(args: argparse.Namespace) -> int:
     return 3 if args.require_success and not result.success else 0
 
 
+def _init_command(args: argparse.Namespace) -> int:
+    payload = initialize_workspace(args.directory, force=args.force)
+    if args.json_output:
+        print(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False))
+    else:
+        print(
+            f"initialized={payload['directory']} files={len(payload['files'])}"
+        )
+    return 0
+
+
 def _resume_command(args: argparse.Namespace) -> int:
     args.resume = True
     args.require_success = False
@@ -337,6 +356,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.command == "init":
+            return _init_command(args)
         if args.command == "run":
             return _run_command(args)
         if args.command == "resume":
