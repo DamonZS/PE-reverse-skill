@@ -5,6 +5,23 @@ standalone smoke does not change capability status. Promotion requires the
 fixture command to retain a hash-backed record that passes `environment accept
 verify`.
 
+## Reproducible CI entry point
+
+The repository includes a manual workflow at
+`.github/workflows/android-p5-live.yml`. It targets a self-hosted runner with
+labels `self-hosted`, `linux`, and `android-p5`; the runner must have `adb`,
+Python, and the selected external toolchain installed. The workflow performs
+the same registered `environment accept run` and independent `verify` steps as
+the local commands above, then uploads the complete acceptance workspace. It
+does not run on push or schedule and it never promotes a capability row.
+
+Configure the `android-p5-live` environment with these non-secret variables:
+`ANDROID_P5_APK_PATH`, `ANDROID_P5_KEYSTORE_PATH`, `ANDROID_P5_KEY_ALIAS`,
+`ANDROID_P5_PACKAGE`, and (for native patch) `ANDROID_P5_NATIVE_PATCH_SPEC`.
+Store `ANDROID_P5_KS_PASS` and `ANDROID_P5_KEY_PASS` as environment secrets.
+Paths refer to files already present on the self-hosted runner; no fixture APK,
+keystore, patch spec, or device identity is checked into the repository.
+
 ## Jadx
 
 Configure a real APK fixture and either put `jadx` on `PATH` or set

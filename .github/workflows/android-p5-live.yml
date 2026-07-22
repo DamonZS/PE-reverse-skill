@@ -1,0 +1,123 @@
+name: Android P5 retained acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      fixture:
+        description: Registered P5 fixture to execute
+        required: true
+        type: choice
+        options:
+          - p5-android-jadx-live
+          - p5-android-rebuild-sign-live
+          - p5-android-frida-live
+          - p5-android-native-patch-live
+      apk_path:
+        description: Absolute path to the APK on the self-hosted runner (when required)
+        required: false
+        type: string
+      package_name:
+        description: Android package name (Frida/native patch fixtures)
+        required: false
+        type: string
+      device_selector:
+        description: Frida selector or ADB serial; defaults to usb
+        required: false
+        default: usb
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-p5-live-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    # The label must identify a runner with the Android SDK, adb, and the
+    # selected external toolchain. This workflow is never run implicitly.
+    runs-on: [self-hosted, linux, android-p5]
+    timeout-minutes: 30
+    environment: android-p5-live
+    env:
+      PYTHONUNBUFFERED: "1"
+      REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR: ${{ github.workspace }}/p5-acceptance
+      ANDROID_JADX_LIVE_APK: ${{ inputs.apk_path || vars.ANDROID_P5_APK_PATH }}
+      ANDROID_REBUILD_LIVE_APK: ${{ inputs.apk_path || vars.ANDROID_P5_APK_PATH }}
+      ANDROID_NATIVE_PATCH_LIVE_APK: ${{ inputs.apk_path || vars.ANDROID_P5_APK_PATH }}
+      ANDROID_NATIVE_PATCH_LIVE_SPEC: ${{ vars.ANDROID_P5_NATIVE_PATCH_SPEC }}
+      ANDROID_FRIDA_LIVE_PACKAGE: ${{ inputs.package_name || vars.ANDROID_P5_PACKAGE }}
+      ANDROID_NATIVE_PATCH_LIVE_PACKAGE: ${{ inputs.package_name || vars.ANDROID_P5_PACKAGE }}
+      ANDROID_FRIDA_LIVE_DEVICE: ${{ inputs.device_selector }}
+      ANDROID_NATIVE_PATCH_LIVE_DEVICE: ${{ inputs.device_selector }}
+      ANDROID_REBUILD_LIVE_KEYSTORE: ${{ vars.ANDROID_P5_KEYSTORE_PATH }}
+      ANDROID_NATIVE_PATCH_LIVE_KEYSTORE: ${{ vars.ANDROID_P5_KEYSTORE_PATH }}
+      ANDROID_REBUILD_LIVE_KEY_ALIAS: ${{ vars.ANDROID_P5_KEY_ALIAS }}
+      ANDROID_NATIVE_PATCH_LIVE_KEY_ALIAS: ${{ vars.ANDROID_P5_KEY_ALIAS }}
+      ANDROID_REBUILD_LIVE_KS_PASS: ${{ secrets.ANDROID_P5_KS_PASS }}
+      ANDROID_REBUILD_LIVE_KEY_PASS: ${{ secrets.ANDROID_P5_KEY_PASS }}
+      ANDROID_NATIVE_PATCH_LIVE_KS_PASS: ${{ secrets.ANDROID_P5_KS_PASS }}
+      ANDROID_NATIVE_PATCH_LIVE_KEY_PASS: ${{ secrets.ANDROID_P5_KEY_PASS }}
+      RUN_ANDROID_JADX_LIVE: "1"
+      RUN_ANDROID_REBUILD_LIVE: "1"
+      RUN_ANDROID_FRIDA_LIVE: "1"
+      RUN_ANDROID_NATIVE_PATCH_LIVE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check runner prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 --version
+          adb version
+          adb devices
+          test -n "${ANDROID_FRIDA_LIVE_PACKAGE:-}" || test "${{ inputs.fixture }}" = "p5-android-jadx-live"
+          mkdir -p "${REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR}"
+      - name: Install package and test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade pip
+          python3 -m pip install .
+      - name: Run selected fixture
+        shell: bash
+        env:
+          P5_FIXTURE: ${{ inputs.fixture }}
+        run: |
+          set -euo pipefail
+          case "$P5_FIXTURE" in
+            p5-android-jadx-live)
+              python3 -m reverse_analyzer environment accept run \
+                --fixture "$P5_FIXTURE" --workspace "$REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR" \
+                --execute --timeout 900 ;;
+            p5-android-rebuild-sign-live)
+              python3 -m reverse_analyzer environment accept run \
+                --fixture "$P5_FIXTURE" --workspace "$REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR" \
+                --execute --timeout 900 ;;
+            p5-android-frida-live|p5-android-native-patch-live)
+              python3 -m reverse_analyzer environment accept run \
+                --fixture "$P5_FIXTURE" --workspace "$REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR" \
+                --execute --timeout 1200 ;;
+            *) echo "unknown fixture" >&2; exit 2 ;;
+          esac
+      - name: Independently verify retained record
+        shell: bash
+        env:
+          P5_FIXTURE: ${{ inputs.fixture }}
+        run: |
+          set -euo pipefail
+          record=$(find "$REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR/acceptance/records" \
+            -maxdepth 1 -type f -name "${P5_FIXTURE}--*.json" -print -quit)
+          test -n "$record"
+          python3 -m reverse_analyzer environment accept verify --record "$record"
+      - name: Upload retained evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-p5-${{ inputs.fixture }}-${{ github.run_id }}
+          path: p5-acceptance
+          if-no-files-found: error
+          retention-days: 30
