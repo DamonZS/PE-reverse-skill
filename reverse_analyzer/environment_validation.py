@@ -586,6 +586,9 @@ _P0_P4_ACCEPTANCE_FIXTURES: tuple[dict[str, Any], ...] = (
         "required_executed_tests": 1,
         "target_identity_artifact": "protocol-runtime/target-identity.json",
         "rollback_artifacts": ["protocol-runtime/rollback.json"],
+        # The loopback session is non-mutating, but socket closure and
+        # provider rollback are still required evidence for promotion.
+        "cleanup_artifacts": ["protocol-runtime/rollback.json"],
     },
     {
         "id": "p7-vlm-openai-live",

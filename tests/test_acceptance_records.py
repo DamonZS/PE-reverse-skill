@@ -351,6 +351,28 @@ class AcceptanceRecordTests(unittest.TestCase):
             self.assertEqual(verification["status"], "ok")
             self.assertTrue(verification["live_verified"])
 
+            # Recomputing a retained environment report must reject a record
+            # whose hashes and persisted constraints are edited together.
+            report_path = Path(record["run_directory"]) / "environment-validation.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            for fixture in report.get("acceptance_fixtures", []):
+                if fixture.get("id") == "p1-memory-runtime-live":
+                    fixture["status"] = "dependency_gated"
+            report_path.write_text(json.dumps(report), encoding="utf-8")
+            for entry in record["observed_artifacts"]:
+                if entry["path"].endswith("environment-validation.json"):
+                    encoded = report_path.read_bytes()
+                    entry["size"] = len(encoded)
+                    entry["sha256"] = hashlib.sha256(encoded).hexdigest()
+            Path(record["record_path"]).write_text(
+                json.dumps(record), encoding="utf-8"
+            )
+            tampered = verify_acceptance_record(record["record_path"])
+            self.assertEqual(tampered["status"], "failed")
+            self.assertTrue(
+                any("verification_constraints" in error for error in tampered["errors"])
+            )
+
     def test_synthetic_provenance_cannot_be_live_verified(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             def runner(command, **kwargs):  # type: ignore[no-untyped-def]

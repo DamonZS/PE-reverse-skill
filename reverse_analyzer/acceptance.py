@@ -248,6 +248,21 @@ def _proof_ok(paths: Sequence[Path], *, required: bool) -> dict[str, Any]:
     return {"status": "missing_or_unverified", "verified": False, "artifacts": inspected}
 
 
+def _environment_fixture_state(run_dir: Path, fixture_id: str) -> dict[str, Any] | None:
+    """Read the retained environment report for one registered fixture."""
+    report_path = run_dir / "environment-validation.json"
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, Mapping):
+        return None
+    for item in payload.get("acceptance_fixtures") or []:
+        if isinstance(item, Mapping) and str(item.get("id") or "") == fixture_id:
+            return dict(item)
+    return None
+
+
 def _graphics_combined_contract_errors(run_dir: Path) -> list[str]:
     """Validate the cross-artifact identity chain for the P7 graphics fixture.
 
@@ -685,6 +700,67 @@ def verify_acceptance_record(record_file: str | Path) -> dict[str, Any]:
             )
             if missing_proof or not proof_valid:
                 errors.extend(proof_errors or [f"missing execution proof: {missing_proof}"])
+            # Recompute every persisted constraint from the registered fixture
+            # and retained evidence. Hashes and a user-editable boolean map
+            # alone must not be sufficient to promote a live record.
+            observed_identity, missing_identity = _load_target_identity(run_dir, fixture)
+            recorded_identity = record.get("target_identity")
+            try:
+                registered_command = _registered_argv(fixture)
+            except AcceptanceError:
+                registered_command = []
+            expected_files, missing_expected = _matching_files(
+                run_dir, fixture.get("expected_artifacts") or []
+            )
+            rollback_files, _ = _matching_files(run_dir, fixture.get("rollback_artifacts") or [])
+            cleanup_files, _ = _matching_files(run_dir, fixture.get("cleanup_artifacts") or [])
+            environment_state = _environment_fixture_state(run_dir, fixture_id)
+            recorded_environment = record.get("environment_gates")
+            environment_status = (
+                str(environment_state.get("status") or "")
+                if environment_state is not None
+                else ""
+            )
+            recomputed_constraints = {
+                "registered_fixture": True,
+                "structured_argv": record.get("command") == registered_command,
+                "host_and_dependencies_ready": environment_status in {"ready_to_run", "repository_ready"}
+                and isinstance(recorded_environment, Mapping)
+                and recorded_environment.get("status") == environment_status
+                and recorded_environment.get("configured") == list(
+                    environment_state.get("configured_gates") or []
+                )
+                and recorded_environment.get("missing") == list(
+                    environment_state.get("missing_gates") or []
+                ),
+                "execution_passed": record.get("outcome") == "passed" and record.get("exit_code") == 0,
+                "live_evidence_level": str(fixture.get("evidence_level")) in _LIVE_EVIDENCE_LEVELS,
+                "execution_proof_valid": proof_valid,
+                "target_identity_present": _target_identity_valid(observed_identity),
+                "target_identity_matches_artifact": (
+                    not bool(missing_identity)
+                    and _target_identities_match(
+                        recorded_identity if isinstance(recorded_identity, Mapping) else None,
+                        observed_identity,
+                    )
+                ),
+                "expected_artifacts_complete": not missing_expected,
+                "provenance_non_synthetic": _artifact_provenance_valid(expected_files)[0],
+                "rollback_verified": _proof_ok(
+                    rollback_files, required=bool(fixture.get("mutating"))
+                )["verified"],
+                "cleanup_verified": _proof_ok(
+                    cleanup_files,
+                    required=bool(fixture.get("mutating") or fixture.get("cleanup_artifacts")),
+                )["verified"],
+                "fixture_contract_valid": not bool(
+                    _graphics_combined_contract_errors(run_dir)
+                    if fixture_id == "p7-graphics-combined-live"
+                    else []
+                ),
+            }
+            if dict(constraints or {}) != recomputed_constraints:
+                errors.append("verification_constraints do not match recomputed acceptance state")
     return {
         "status": "ok" if not errors else "failed",
         "record": str(path),

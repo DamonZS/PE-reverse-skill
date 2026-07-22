@@ -126,6 +126,17 @@ class AndroidP5AcceptanceContractTests(unittest.TestCase):
             self.assertTrue(record["live_verified"], record)
             self.assertEqual(verify_acceptance_record(record["record_path"])["status"], "ok")
 
+            # A live claim must contain exactly the constraints recomputed
+            # from the registered fixture; extra user-supplied true values do
+            # not substitute for the acceptance predicate.
+            record_path = Path(record["record_path"])
+            persisted = json.loads(record_path.read_text(encoding="utf-8"))
+            persisted["verification_constraints"]["forged_constraint"] = True
+            record_path.write_text(json.dumps(persisted), encoding="utf-8")
+            verification = verify_acceptance_record(record_path)
+            self.assertEqual(verification["status"], "failed")
+            self.assertIn("recomputed acceptance state", " ".join(verification["errors"]))
+
     def test_native_patch_fixture_requires_signed_deployment_launch_and_rollback(self) -> None:
         def runner(command, **kwargs):  # type: ignore[no-untyped-def]
             root = Path(kwargs["env"]["REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR"]) / "android-native-patch"
