@@ -1,0 +1,130 @@
+name: P7 live acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      fixture:
+        description: P7 fixture to execute
+        required: true
+        type: choice
+        options:
+          - p7-vlm-openai-live
+          - p7-windows-uia-live
+          - p7-graphics-combined-live
+
+permissions:
+  contents: read
+
+jobs:
+  vlm:
+    if: inputs.fixture == 'p7-vlm-openai-live'
+    runs-on: ubuntu-latest
+    environment: p7-vlm-live
+    timeout-minutes: 15
+    env:
+      REVERSE_ANALYZER_RUN_VLM_LIVE: "1"
+      REVERSE_ANALYZER_VLM_BASE_URL: ${{ vars.P7_VLM_BASE_URL }}
+      REVERSE_ANALYZER_VLM_MODEL: ${{ vars.P7_VLM_MODEL }}
+      REVERSE_ANALYZER_VLM_IMAGE: ${{ vars.P7_VLM_IMAGE }}
+      REVERSE_ANALYZER_VLM_CANARY: ${{ vars.P7_VLM_CANARY }}
+      REVERSE_ANALYZER_VLM_API_KEY: ${{ secrets.P7_VLM_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install .
+      - name: Run VLM acceptance
+        run: >-
+          python -m reverse_analyzer environment accept run
+          --fixture p7-vlm-openai-live
+          --workspace "$GITHUB_WORKSPACE/p7-vlm-evidence"
+          --execute --timeout 180
+      - name: Verify retained record
+        run: >-
+          python -m reverse_analyzer environment accept verify
+          --record p7-vlm-evidence/acceptance/records/p7-vlm-openai-live--*.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p7-vlm-${{ github.run_id }}
+          path: p7-vlm-evidence
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-uia:
+    if: inputs.fixture == 'p7-windows-uia-live'
+    runs-on: [self-hosted, windows, p7-uia]
+    timeout-minutes: 15
+    env:
+      REVERSE_ANALYZER_RUN_WINDOWS_UIA_LIVE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install .
+      - name: Run UIA acceptance
+        shell: pwsh
+        run: >-
+          python -m reverse_analyzer environment accept run
+          --fixture p7-windows-uia-live
+          --workspace "$env:GITHUB_WORKSPACE\p7-uia-evidence"
+          --execute --timeout 180
+      - name: Verify retained record
+        shell: pwsh
+        run: >-
+          python -m reverse_analyzer environment accept verify
+          --record (Get-ChildItem p7-uia-evidence\acceptance\records\*.json | Select-Object -First 1).FullName
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p7-uia-${{ github.run_id }}
+          path: p7-uia-evidence
+          if-no-files-found: error
+          retention-days: 30
+
+  graphics:
+    if: inputs.fixture == 'p7-graphics-combined-live'
+    runs-on: [self-hosted, windows, p7-graphics]
+    environment: p7-graphics-live
+    timeout-minutes: 20
+    env:
+      RUN_GRAPHICS_COMBINED_LIVE: "1"
+      REVERSE_ANALYZER_GRAPHICS_BRIDGE: ${{ vars.P7_GRAPHICS_BRIDGE }}
+      REVERSE_ANALYZER_GRAPHICS_FIXTURE_PID: ${{ vars.P7_GRAPHICS_FIXTURE_PID }}
+      REVERSE_ANALYZER_GRAPHICS_FIXTURE_HWND: ${{ vars.P7_GRAPHICS_FIXTURE_HWND }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install .
+      - name: Run graphics acceptance
+        shell: pwsh
+        run: >-
+          python -m reverse_analyzer environment accept run
+          --fixture p7-graphics-combined-live
+          --workspace "$env:GITHUB_WORKSPACE\p7-graphics-evidence"
+          --execute --timeout 300
+      - name: Verify retained record
+        shell: pwsh
+        run: >-
+          python -m reverse_analyzer environment accept verify
+          --record (Get-ChildItem p7-graphics-evidence\acceptance\records\*.json | Select-Object -First 1).FullName
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: p7-graphics-${{ github.run_id }}
+          path: p7-graphics-evidence
+          if-no-files-found: error
+          retention-days: 30

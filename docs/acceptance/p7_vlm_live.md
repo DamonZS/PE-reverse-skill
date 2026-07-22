@@ -39,3 +39,10 @@ the transport `input_sha256` to the retained image digest; requires an
 and checks output provenance, visual evidence, canary matching, and a
 non-skipped execution proof. Recomputing an artifact hash after changing one
 of these relationships does not make the record valid.
+
+The repository also provides a manual `P7 live acceptance` workflow. Configure
+the `p7-vlm-live` environment variables `P7_VLM_BASE_URL`, `P7_VLM_MODEL`,
+`P7_VLM_IMAGE`, and `P7_VLM_CANARY`, store the key as `P7_VLM_API_KEY`, and
+dispatch `.github/workflows/p7-live.yml` with fixture `p7-vlm-openai-live`.
+The workflow uploads the run directory after independent record verification;
+it does not modify the capability matrix.
