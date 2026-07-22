@@ -262,6 +262,29 @@ class ReleaseCliTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "exactly one wheel"):
                 write_release_manifest(root)
 
+    def test_release_manifest_rejects_symlinks_during_build_and_verify(self):
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as target:
+            root = Path(directory)
+            self._write_release_fixture(root)
+            outside = Path(target) / "outside.txt"
+            outside.write_text("outside release", encoding="utf-8")
+            link = root / "unexpected-link.txt"
+            try:
+                link.symlink_to(outside)
+            except (OSError, NotImplementedError) as exc:
+                self.skipTest(f"symlink creation unavailable: {exc}")
+
+            with self.assertRaisesRegex(ValueError, "must not contain symlink"):
+                write_release_manifest(root)
+
+            # A hand-written manifest must not make a symlink acceptable either.
+            link.unlink()
+            write_release_manifest(root)
+            link.symlink_to(outside)
+            result = verify_release_manifest(root)
+            self.assertFalse(result["ok"])
+            self.assertTrue(any("must not contain symlink" in error for error in result["errors"]))
+
 
 if __name__ == "__main__":
     unittest.main()

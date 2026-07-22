@@ -248,6 +248,82 @@ def _proof_ok(paths: Sequence[Path], *, required: bool) -> dict[str, Any]:
     return {"status": "missing_or_unverified", "verified": False, "artifacts": inspected}
 
 
+def _fixture_proof_ok(
+    paths: Sequence[Path],
+    *,
+    required: bool,
+    fixture_id: str,
+    role: str,
+) -> dict[str, Any]:
+    """Validate semantic rollback/cleanup evidence for a registered fixture.
+
+    A generic ``status: ok`` is useful for repository tooling, but it is not
+    sufficient evidence for a live promotion.  The Android fixtures must
+    prove restoration/detach, while the protocol fixture must prove both
+    capture and replay sessions were closed.
+    """
+
+    result = _proof_ok(paths, required=required)
+    if not result.get("verified") or not required:
+        return result
+    payload: Mapping[str, Any] | None = None
+    for path in paths:
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        if isinstance(loaded, Mapping):
+            payload = loaded
+            break
+    if payload is None:
+        return {
+            **result,
+            "status": "missing_or_unverified",
+            "verified": False,
+            "error": "proof artifact is not a JSON object",
+        }
+
+    semantic_ok = True
+    reason = ""
+    if fixture_id == "p6-protocol-runtime-loopback" and role == "cleanup":
+        # The fixture runs two independent provider sessions.  Requiring both
+        # nested rollback results prevents one closed socket from standing in
+        # for the complete capture -> replay lifecycle.
+        if payload.get("verified") is not True:
+            semantic_ok = False
+            reason = "protocol rollback proof is not verified"
+        else:
+            for name in ("capture", "replay"):
+                child = payload.get(name)
+                if not isinstance(child, Mapping) or child.get("ok") is not True:
+                    semantic_ok = False
+                    reason = f"protocol rollback proof lacks successful {name} session"
+                    break
+    elif fixture_id in {
+        "p5-android-rebuild-sign-live",
+        "p5-android-native-patch-live",
+    } and role == "rollback":
+        if payload.get("restored") is not True or payload.get("verified") is not True:
+            semantic_ok = False
+            reason = "Android rollback proof must verify restoration"
+        if fixture_id == "p5-android-native-patch-live" and payload.get(
+            "device_cleanup_verified"
+        ) is not True:
+            semantic_ok = False
+            reason = "native APK rollback proof must verify device cleanup"
+    elif fixture_id == "p5-android-frida-live" and role == "cleanup":
+        if not (
+            (payload.get("cleanup_verified") is True or payload.get("verified") is True)
+            and payload.get("detached") is True
+            and payload.get("unloaded") is True
+        ):
+            semantic_ok = False
+            reason = "Frida cleanup proof must verify unload and detach"
+    if not semantic_ok:
+        return {**result, "status": "missing_or_unverified", "verified": False, "error": reason}
+    return result
+
+
 def _environment_fixture_state(run_dir: Path, fixture_id: str) -> dict[str, Any] | None:
     """Read the retained environment report for one registered fixture."""
     report_path = run_dir / "environment-validation.json"
@@ -493,9 +569,19 @@ def run_acceptance_fixture(
     rollback_files, _ = _matching_files(run_dir, fixture.get("rollback_artifacts") or [])
     cleanup_files, _ = _matching_files(run_dir, fixture.get("cleanup_artifacts") or [])
     mutating = bool(fixture.get("mutating"))
-    rollback_result = _proof_ok(rollback_files, required=mutating)
+    rollback_result = _fixture_proof_ok(
+        rollback_files,
+        required=mutating,
+        fixture_id=fixture_id,
+        role="rollback",
+    )
     cleanup_required = mutating or bool(fixture.get("cleanup_artifacts"))
-    cleanup_result = _proof_ok(cleanup_files, required=cleanup_required)
+    cleanup_result = _fixture_proof_ok(
+        cleanup_files,
+        required=cleanup_required,
+        fixture_id=fixture_id,
+        role="cleanup",
+    )
     provenance_valid, rejected_provenance = _artifact_provenance_valid(expected_files)
     fixture_contract_errors = (
         _graphics_combined_contract_errors(run_dir)
@@ -672,11 +758,18 @@ def verify_acceptance_record(record_file: str | Path) -> dict[str, Any]:
                 errors.extend(f"synthetic provenance in artifact: {item}" for item in rejected)
             rollback_files, _ = _matching_files(run_dir, fixture.get("rollback_artifacts") or [])
             cleanup_files, _ = _matching_files(run_dir, fixture.get("cleanup_artifacts") or [])
-            if not _proof_ok(rollback_files, required=bool(fixture.get("mutating")))["verified"]:
+            if not _fixture_proof_ok(
+                rollback_files,
+                required=bool(fixture.get("mutating")),
+                fixture_id=fixture_id,
+                role="rollback",
+            )["verified"]:
                 errors.append("rollback proof is missing or unverified")
-            if not _proof_ok(
+            if not _fixture_proof_ok(
                 cleanup_files,
                 required=bool(fixture.get("mutating") or fixture.get("cleanup_artifacts")),
+                fixture_id=fixture_id,
+                role="cleanup",
             )["verified"]:
                 errors.append("cleanup proof is missing or unverified")
             if record.get("outcome") != "passed" or record.get("exit_code") != 0:
@@ -746,12 +839,17 @@ def verify_acceptance_record(record_file: str | Path) -> dict[str, Any]:
                 ),
                 "expected_artifacts_complete": not missing_expected,
                 "provenance_non_synthetic": _artifact_provenance_valid(expected_files)[0],
-                "rollback_verified": _proof_ok(
-                    rollback_files, required=bool(fixture.get("mutating"))
+                "rollback_verified": _fixture_proof_ok(
+                    rollback_files,
+                    required=bool(fixture.get("mutating")),
+                    fixture_id=fixture_id,
+                    role="rollback",
                 )["verified"],
-                "cleanup_verified": _proof_ok(
+                "cleanup_verified": _fixture_proof_ok(
                     cleanup_files,
                     required=bool(fixture.get("mutating") or fixture.get("cleanup_artifacts")),
+                    fixture_id=fixture_id,
+                    role="cleanup",
                 )["verified"],
                 "fixture_contract_valid": not bool(
                     _graphics_combined_contract_errors(run_dir)

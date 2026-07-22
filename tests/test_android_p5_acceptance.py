@@ -333,7 +333,12 @@ class AndroidP5AcceptanceContractTests(unittest.TestCase):
             )
             self.assertTrue(record["live_verified"], record)
             rollback = Path(record["run_directory"]) / "android-rebuild" / "rollback.json"
-            rollback.write_text(json.dumps({"status": "failed", "verified": False}), encoding="utf-8")
+            # A generic successful status and self-asserted verification do
+            # not prove that the original APK was restored.
+            rollback.write_text(
+                json.dumps({"status": "ok", "verified": True, "restored": False}),
+                encoding="utf-8",
+            )
             for entry in record["observed_artifacts"]:
                 if entry["path"] == "android-rebuild/rollback.json":
                     entry["size"] = rollback.stat().st_size
@@ -343,6 +348,47 @@ class AndroidP5AcceptanceContractTests(unittest.TestCase):
             verification = verify_acceptance_record(record["record_path"])
             self.assertEqual(verification["status"], "failed")
             self.assertIn("rollback proof is missing or unverified", verification["errors"])
+
+    def test_native_patch_fixture_rejects_missing_device_cleanup_proof(self) -> None:
+        def runner(command, **kwargs):  # type: ignore[no-untyped-def]
+            root = Path(kwargs["env"]["REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR"]) / "android-native-patch"
+            for name in ("native-patch-plan.json", "native-patch-verify.json"):
+                _write_json(root / "provider" / name, {"status": "ok", "verified": True})
+            (root / "retained").mkdir(parents=True)
+            (root / "retained" / "patched-signed.apk").write_bytes(b"signed-patched-fixture")
+            _write_json(root / "provider" / "rollback.json", {"status": "ok", "verified": True})
+            _write_json(root / "target-identity.json", {"kind": "apk_fixture", "package_name": "com.fixture.app", "sample_sha256": "a" * 64})
+            _write_json(root / "deployment.json", {"status": "ok", "install_verified": True, "launch_verified": True})
+            _write_json(
+                root / "rollback.json",
+                {"status": "ok", "verified": True, "restored": True, "device_cleanup_verified": False},
+            )
+            _write_json(root / "execution-proof.json", {
+                "status": "ok", "provider": "local_android_native_patch+adb", "evidence_class": "live_target_proof",
+                "executed_tests": 1, "skipped_tests": 0, "live_operations": 8,
+            })
+            return subprocess.CompletedProcess(command, 0, stdout="native patch ok", stderr="")
+
+        with tempfile.TemporaryDirectory() as temporary, mock.patch(
+            "reverse_analyzer.acceptance.validate_external_environment",
+            return_value=_ready_report("p5-android-native-patch-live"),
+        ):
+            record = run_acceptance_fixture(
+                "p5-android-native-patch-live",
+                temporary,
+                execute=True,
+                environ={
+                    "ANDROID_NATIVE_PATCH_LIVE_APK": "fixture.apk",
+                    "ANDROID_NATIVE_PATCH_LIVE_SPEC": "fixture.json",
+                    "ANDROID_NATIVE_PATCH_LIVE_PACKAGE": "com.fixture.app",
+                    "ANDROID_NATIVE_PATCH_LIVE_KEYSTORE": "fixture.keystore",
+                    "ANDROID_NATIVE_PATCH_LIVE_KS_PASS": "secret",
+                },
+                runner=runner,
+            )
+
+            self.assertFalse(record["live_verified"])
+            self.assertFalse(record["rollback_result"]["verified"])
 
 
 if __name__ == "__main__":

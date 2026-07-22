@@ -19,6 +19,11 @@ from reverse_analyzer.environment_validation import validate_external_environmen
 from tests.e2e.test_gui_vlm_live import _normalized_canary, _visual_text
 
 
+def _write_json(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+
+
 def _write_live_memory_artifacts(
     run_dir: Path,
     *,
@@ -65,6 +70,61 @@ def _write_live_memory_artifacts(
 
 
 class AcceptanceRecordTests(unittest.TestCase):
+    def test_protocol_fixture_requires_both_session_rollback_proofs(self) -> None:
+        """A P6 record cannot promote with a generic cleanup status only."""
+
+        def runner(command, **kwargs):  # type: ignore[no-untyped-def]
+            run_dir = Path(kwargs["env"]["REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR"])
+            _write_json(run_dir / "protocol_runtime" / "session" / "result.json", {"status": "ok", "provider": "protocol"})
+            _write_json(
+                run_dir / "protocol-runtime" / "target-identity.json",
+                {"kind": "controlled_loopback_tls_fixture", "path": "fixture-python"},
+            )
+            _write_json(
+                run_dir / "protocol-runtime" / "rollback.json",
+                {"status": "ok", "verified": True},
+            )
+            _write_json(
+                run_dir / "protocol-runtime" / "execution-proof.json",
+                {
+                    "status": "ok",
+                    "provider": "protocol",
+                    "evidence_class": "live_host_proof",
+                    "executed_tests": 1,
+                    "skipped_tests": 0,
+                    "live_operations": 2,
+                },
+            )
+            return subprocess.CompletedProcess(command, 0, stdout="protocol ok", stderr="")
+
+        ready = {
+            "schema_version": 2,
+            "acceptance_fixtures": [
+                {
+                    "id": "p6-protocol-runtime-loopback",
+                    "status": "ready_to_run",
+                    "configured_gates": ["fixture"],
+                    "missing_gates": [],
+                    "workflow_states": {"fixture": "verified"},
+                }
+            ],
+            "workflows": {},
+            "summary": {},
+        }
+        with tempfile.TemporaryDirectory() as temporary, mock.patch(
+            "reverse_analyzer.acceptance.validate_external_environment",
+            return_value=ready,
+        ):
+            record = run_acceptance_fixture(
+                "p6-protocol-runtime-loopback",
+                temporary,
+                execute=True,
+                runner=runner,
+            )
+
+        self.assertFalse(record["live_verified"])
+        self.assertFalse(record["cleanup_result"]["verified"])
+
     def test_vlm_canary_matching_normalizes_case_and_whitespace(self) -> None:
         output = {
             "text_regions": [{"text": "Status: VLM   Canary 42"}],

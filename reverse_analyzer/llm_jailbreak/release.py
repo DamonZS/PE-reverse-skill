@@ -36,9 +36,20 @@ def _release_files(root: Path) -> tuple[Path, ...]:
             (
                 path
                 for path in root.rglob("*")
-                if path.is_file() and path.name != MANIFEST_NAME
+                if path.is_file() and not path.is_symlink() and path.name != MANIFEST_NAME
             ),
             key=lambda item: item.relative_to(root).as_posix(),
+        )
+    )
+
+
+def _symlink_paths(root: Path) -> tuple[str, ...]:
+    """Return symlinks in a release without following their targets."""
+    return tuple(
+        sorted(
+            path.relative_to(root).as_posix()
+            for path in root.rglob("*")
+            if path.is_symlink()
         )
     )
 
@@ -70,6 +81,8 @@ def write_release_manifest(directory: str | Path) -> Mapping[str, Any]:
     files = _release_files(root)
     relative_paths = {path.relative_to(root).as_posix() for path in files}
     errors = _required_errors(relative_paths)
+    symlinks = _symlink_paths(root)
+    errors.extend(f"release must not contain symlink: {path}" for path in symlinks)
     if errors:
         raise ValueError("; ".join(errors))
     payload = {
@@ -96,6 +109,8 @@ def verify_release_manifest(directory: str | Path) -> Mapping[str, Any]:
     root = Path(directory).expanduser().resolve()
     manifest_path = root / MANIFEST_NAME
     errors: list[str] = []
+    symlinks = _symlink_paths(root) if root.is_dir() else ()
+    errors.extend(f"release must not contain symlink: {path}" for path in symlinks)
     try:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
