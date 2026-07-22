@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -19,6 +20,10 @@ REQUIRED_FILES = (
     "jailbreak-campaign.example.json",
     "reverse_jailbreak_release.md",
     "smoke_release.py",
+)
+_SECRET_PATTERNS = (
+    re.compile(rb"\bsk-[A-Za-z0-9]{20,}\b"),
+    re.compile(rb"\bBearer\s+[A-Za-z0-9._~+/=-]{20,}\b", re.IGNORECASE),
 )
 
 
@@ -74,6 +79,31 @@ def _required_errors(relative_paths: set[str]) -> list[str]:
     return errors
 
 
+def _secret_errors(files: Sequence[Path], root: Path) -> list[str]:
+    """Reject obvious credential material from portable release files."""
+
+    errors: list[str] = []
+    for path in files:
+        try:
+            matched = False
+            tail = b""
+            with path.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    window = tail + chunk
+                    if any(pattern.search(window) for pattern in _SECRET_PATTERNS):
+                        matched = True
+                        break
+                    tail = window[-256:]
+        except OSError:
+            continue
+        if matched:
+            errors.append(
+                "release contains credential-like material: "
+                f"{path.relative_to(root).as_posix()}"
+            )
+    return errors
+
+
 def write_release_manifest(directory: str | Path) -> Mapping[str, Any]:
     root = Path(directory).expanduser().resolve()
     if not root.is_dir():
@@ -83,6 +113,7 @@ def write_release_manifest(directory: str | Path) -> Mapping[str, Any]:
     errors = _required_errors(relative_paths)
     symlinks = _symlink_paths(root)
     errors.extend(f"release must not contain symlink: {path}" for path in symlinks)
+    errors.extend(_secret_errors(files, root))
     if errors:
         raise ValueError("; ".join(errors))
     payload = {
@@ -167,6 +198,7 @@ def verify_release_manifest(directory: str | Path) -> Mapping[str, Any]:
         path.relative_to(root).as_posix() for path in _release_files(root)
     }
     errors.extend(_required_errors(actual))
+    errors.extend(_secret_errors(_release_files(root), root))
     for relative in sorted(actual - observed):
         errors.append(f"untracked release file: {relative}")
     for relative in sorted(observed - actual):

@@ -103,6 +103,31 @@ def _target_identity_valid(identity: Mapping[str, Any] | None) -> bool:
     )
 
 
+def _fixture_target_identity_valid(
+    identity: Mapping[str, Any] | None,
+    *,
+    fixture_id: str,
+) -> bool:
+    """Apply identity fields required by a registered live fixture.
+
+    Frida's configured selector (for example ``usb``) is not evidence of the
+    device that actually ran.  Retained P5 records must include the observed
+    device identity alongside the package name so a later verifier can bind
+    the record to a concrete device session.
+    """
+
+    if not _target_identity_valid(identity):
+        return False
+    if fixture_id != "p5-android-frida-live":
+        return True
+    return all(str(identity.get(key) or "").strip() for key in (
+        "package_name",
+        "device_id",
+        "device_name",
+        "device_type",
+    ))
+
+
 def _load_target_identity(run_dir: Path, fixture: Mapping[str, Any]) -> tuple[dict[str, Any], str | None]:
     raw = fixture.get("target_identity_artifact")
     if not raw:
@@ -357,19 +382,24 @@ def _graphics_combined_contract_errors(run_dir: Path) -> list[str]:
         "proof": "graphics-combined/execution-proof.json",
     }
     payloads: dict[str, dict[str, Any]] = {}
+    errors: list[str] = []
     for key, relative in names.items():
         path = run_dir / relative
         if not path.is_file():
-            return []
+            errors.append(f"VLM contract artifact is missing: {relative}")
+            continue
         try:
             value = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError):
-            return []
+            errors.append(f"VLM contract artifact is invalid JSON: {relative}")
+            continue
         if not isinstance(value, Mapping):
-            return []
+            errors.append(f"VLM contract artifact must be a JSON object: {relative}")
+            continue
         payloads[key] = dict(value)
 
-    errors: list[str] = []
+    if errors:
+        return errors
     target = payloads["target"]
     pid = target.get("pid")
     hwnd = (target.get("metadata") or {}).get("hwnd") if isinstance(target.get("metadata"), Mapping) else target.get("hwnd")
@@ -429,6 +459,122 @@ def _graphics_combined_contract_errors(run_dir: Path) -> list[str]:
         errors.append("graphics execution proof is not successful")
     if proof.get("skipped_tests") != 0 or proof.get("executed_tests", 0) < 1:
         errors.append("graphics execution proof must have one executed and zero skipped tests")
+    return errors
+
+
+def _vlm_contract_errors(run_dir: Path) -> list[str]:
+    """Validate semantic bindings for the retained P7 VLM live record.
+
+    Artifact hashes prove retention, but the VLM record also needs to prove
+    that the HTTP response, input image and canary all belong to one request.
+    Secrets and endpoint URL material are intentionally absent from this
+    contract; only their content-addressed identity may be retained.
+    """
+    names = {
+        "target": "gui-vlm/target-identity.json",
+        "invocation": "gui-vlm/invocation.json",
+        "output": "gui-vlm/output.json",
+        "transport": "gui-vlm/transport-audit.json",
+        "canary": "gui-vlm/canary-verification.json",
+        "proof": "gui-vlm/execution-proof.json",
+    }
+    payloads: dict[str, dict[str, Any]] = {}
+    errors: list[str] = []
+    present = False
+    for key, relative in names.items():
+        path = run_dir / relative
+        if not path.is_file():
+            continue
+        present = True
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            errors.append(f"VLM artifact invalid JSON: {relative}")
+            continue
+        if not isinstance(value, Mapping):
+            errors.append(f"VLM artifact must be a JSON object: {relative}")
+            continue
+        payloads[key] = dict(value)
+
+    # Records without any VLM artifacts are handled by the generic artifact
+    # contract. Once a VLM artifact appears, report every missing or malformed
+    # member explicitly so retained records cannot fail silently.
+    if not present:
+        return []
+    for key, relative in names.items():
+        if key not in payloads and not any(relative in error for error in errors):
+            errors.append(f"VLM artifact is missing: {relative}")
+    if len(payloads) != len(names):
+        return errors
+
+    target = payloads["target"]
+
+    def digest(value: Any, label: str) -> str:
+        text = str(value or "").strip().lower()
+        if len(text) != 64 or any(char not in "0123456789abcdef" for char in text):
+            errors.append(f"VLM {label} must be a SHA-256 digest")
+            return ""
+        return text
+
+    image_digest = digest(target.get("image_sha256"), "image_sha256")
+    identity_digest = digest(target.get("sha256"), "target sha256")
+    canary_digest = digest(target.get("canary_sha256"), "canary_sha256")
+    digest(target.get("endpoint_sha256"), "endpoint_sha256")
+    if image_digest and identity_digest and image_digest != identity_digest:
+        errors.append("VLM target sha256 does not match image_sha256")
+    target_model = str(target.get("model") or "").strip()
+    if not target_model:
+        errors.append("VLM target identity is missing model")
+
+    invocation = payloads["invocation"]
+    if str(invocation.get("status") or "").lower() not in _SUCCESS_VALUES:
+        errors.append("VLM invocation is not successful")
+    output = payloads["output"]
+    if str(output.get("status") or "").lower() not in _SUCCESS_VALUES:
+        errors.append("VLM output is not successful")
+    visual_items = sum(
+        len(output.get(key))
+        for key in ("text_regions", "widgets")
+        if isinstance(output.get(key), list)
+    )
+    if visual_items < 1:
+        errors.append("VLM output contains no visual evidence")
+    provenance = output.get("provenance")
+    if not isinstance(provenance, Mapping) or not str(provenance.get("provider") or "").strip():
+        errors.append("VLM output is missing provider provenance")
+    elif target_model and str(provenance.get("model") or "").strip() != target_model:
+        errors.append("VLM output model does not match target identity")
+
+    transport = payloads["transport"]
+    if str(transport.get("status") or "").lower() not in _SUCCESS_VALUES:
+        errors.append("VLM transport audit is not successful")
+    if transport.get("transport") != "openai-compatible-http":
+        errors.append("VLM transport audit must identify openai-compatible-http")
+    if transport.get("authorization_persisted") is not False:
+        errors.append("VLM transport audit must confirm authorization was not persisted")
+    if transport.get("secret_source") != "environment":
+        errors.append("VLM transport secret source must be environment-backed")
+    if transport.get("canary_verified") is not True:
+        errors.append("VLM transport audit must confirm canary verification")
+    input_digest = str(transport.get("input_sha256") or "").strip().lower()
+    if image_digest and input_digest != image_digest:
+        errors.append("VLM transport input digest does not match target image digest")
+
+    canary = payloads["canary"]
+    if canary.get("verified") is not True:
+        errors.append("VLM canary verification is not true")
+    if canary_digest and str(canary.get("canary_sha256") or "").strip().lower() != canary_digest:
+        errors.append("VLM canary digest does not match target identity")
+    if not isinstance(canary.get("matched_items"), int) or canary.get("matched_items", 0) < 1:
+        errors.append("VLM canary verification has no matched item")
+
+    proof = payloads["proof"]
+    if str(proof.get("status") or "").lower() not in _SUCCESS_VALUES:
+        errors.append("VLM execution proof is not successful")
+    if proof.get("skipped_tests") != 0 or proof.get("executed_tests", 0) < 1:
+        errors.append("VLM execution proof must have one executed and zero skipped tests")
+    if proof.get("canary_verified") is not True:
+        errors.append("VLM execution proof must confirm canary verification")
     return errors
 
 
@@ -586,9 +732,14 @@ def run_acceptance_fixture(
     fixture_contract_errors = (
         _graphics_combined_contract_errors(run_dir)
         if fixture_id == "p7-graphics-combined-live"
+        else _vlm_contract_errors(run_dir)
+        if fixture_id == "p7-vlm-openai-live"
         else []
     )
-    target_valid = _target_identity_valid(effective_identity) and identity_matches
+    target_valid = _fixture_target_identity_valid(
+        effective_identity,
+        fixture_id=fixture_id,
+    ) and identity_matches
     live_capable = str(fixture.get("evidence_level")) in _LIVE_EVIDENCE_LEVELS
     execution_proof: dict[str, Any] = {}
     execution_proof_errors: list[str] = []
@@ -776,6 +927,8 @@ def verify_acceptance_record(record_file: str | Path) -> dict[str, Any]:
                 errors.append("live_verified record does not have a successful command outcome")
             if fixture_id == "p7-graphics-combined-live":
                 errors.extend(_graphics_combined_contract_errors(run_dir))
+            if fixture_id == "p7-vlm-openai-live":
+                errors.extend(_vlm_contract_errors(run_dir))
         constraints = record.get("verification_constraints")
         if not isinstance(constraints, Mapping) or not constraints or not all(value is True for value in constraints.values()):
             errors.append("live_verified claim lacks complete verification constraints")
@@ -829,7 +982,10 @@ def verify_acceptance_record(record_file: str | Path) -> dict[str, Any]:
                 "execution_passed": record.get("outcome") == "passed" and record.get("exit_code") == 0,
                 "live_evidence_level": str(fixture.get("evidence_level")) in _LIVE_EVIDENCE_LEVELS,
                 "execution_proof_valid": proof_valid,
-                "target_identity_present": _target_identity_valid(observed_identity),
+                "target_identity_present": _fixture_target_identity_valid(
+                    observed_identity,
+                    fixture_id=fixture_id,
+                ),
                 "target_identity_matches_artifact": (
                     not bool(missing_identity)
                     and _target_identities_match(
@@ -852,9 +1008,13 @@ def verify_acceptance_record(record_file: str | Path) -> dict[str, Any]:
                     role="cleanup",
                 )["verified"],
                 "fixture_contract_valid": not bool(
-                    _graphics_combined_contract_errors(run_dir)
-                    if fixture_id == "p7-graphics-combined-live"
-                    else []
+                    (
+                        _graphics_combined_contract_errors(run_dir)
+                        if fixture_id == "p7-graphics-combined-live"
+                        else _vlm_contract_errors(run_dir)
+                        if fixture_id == "p7-vlm-openai-live"
+                        else []
+                    )
                 ),
             }
             if dict(constraints or {}) != recomputed_constraints:

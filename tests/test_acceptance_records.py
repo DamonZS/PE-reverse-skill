@@ -258,6 +258,17 @@ class AcceptanceRecordTests(unittest.TestCase):
                 any("frame IDs do not match" in error for error in tampered["errors"])
             )
 
+    def test_vlm_fixture_rejects_invalid_contract_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            run_dir = Path(temporary) / "run"
+            (run_dir / "gui-vlm").mkdir(parents=True)
+            (run_dir / "gui-vlm" / "target-identity.json").write_text("{", encoding="utf-8")
+            from reverse_analyzer.acceptance import _vlm_contract_errors
+
+            errors = _vlm_contract_errors(run_dir)
+            self.assertTrue(any("invalid JSON" in error for error in errors))
+            self.assertTrue(any("artifact is missing" in error for error in errors))
+
     def test_vlm_fixture_contract_retains_hash_backed_live_proof(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             def runner(command, **kwargs):  # type: ignore[no-untyped-def]
@@ -278,10 +289,17 @@ class AcceptanceRecordTests(unittest.TestCase):
                         "status": "ok",
                         "text_regions": [{"text": "Save"}],
                         "widgets": [{"type": "button", "text": "Save"}],
+                        "provenance": {
+                            "provider": "openai-compatible-live",
+                            "model": "fixture-vision",
+                            "request_id": "fixture-request-1",
+                        },
                     },
                     "transport-audit.json": {
                         "status": "ok",
                         "transport": "openai-compatible-http",
+                        "input_sha256": "b" * 64,
+                        "secret_source": "environment",
                         "authorization_persisted": False,
                         "canary_verified": True,
                     },
@@ -328,6 +346,28 @@ class AcceptanceRecordTests(unittest.TestCase):
             verification = verify_acceptance_record(record["record_path"])
             self.assertEqual(verification["status"], "ok")
             self.assertTrue(verification["live_verified"])
+
+            # A recomputed artifact hash must not make an inconsistent image
+            # binding valid: the transport digest is part of the semantic proof.
+            transport_path = (
+                Path(record["run_directory"])
+                / "gui-vlm"
+                / "transport-audit.json"
+            )
+            transport_payload = json.loads(transport_path.read_text(encoding="utf-8"))
+            transport_payload["input_sha256"] = "d" * 64
+            transport_path.write_text(json.dumps(transport_payload), encoding="utf-8")
+            for entry in record["observed_artifacts"]:
+                if entry["path"].endswith("transport-audit.json"):
+                    encoded = transport_path.read_bytes()
+                    entry["size"] = len(encoded)
+                    entry["sha256"] = hashlib.sha256(encoded).hexdigest()
+            Path(record["record_path"]).write_text(json.dumps(record), encoding="utf-8")
+            tampered = verify_acceptance_record(record["record_path"])
+            self.assertEqual(tampered["status"], "failed")
+            self.assertTrue(
+                any("input digest does not match" in error for error in tampered["errors"])
+            )
 
     def test_windows_uia_fixture_contract_retains_hash_backed_live_proof(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

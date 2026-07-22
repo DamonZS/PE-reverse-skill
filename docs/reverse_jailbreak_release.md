@@ -6,6 +6,13 @@ Build a wheel and copy the schema/configuration assets with:
 ./scripts/build_reverse_jailbreak.ps1 -Clean
 ```
 
+For an offline or air-gapped builder with `setuptools` already installed, add
+`-NoBuildIsolation` so pip does not attempt to download build dependencies:
+
+```powershell
+./scripts/build_reverse_jailbreak.ps1 -Clean -NoBuildIsolation
+```
+
 Install the wheel, then use the standalone entry point:
 
 ```powershell
@@ -29,7 +36,8 @@ The build also writes `release-manifest.json` with the product version and exact
 size and SHA-256 of the wheel, schema, starter configuration, changelog, release
 notes, release guide, and smoke runner. `release-verify` rejects version drift,
 multiple wheels, missing, modified, path-escaping, duplicate, and untracked
-files. The smoke runner creates a temporary virtual environment, installs the
+files, as well as obvious API credential or Authorization bearer values in
+release contents. The smoke runner creates a temporary virtual environment, installs the
 wheel with its declared dependencies, and exercises every installed command:
 `doctor`, `profiles`, `strategies`, `validate`, `run`, `resume`, `report`,
 `promote`, `benchmark`, and `release-verify`. Endpoint checks and campaign runs

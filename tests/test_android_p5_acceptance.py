@@ -107,7 +107,17 @@ class AndroidP5AcceptanceContractTests(unittest.TestCase):
             }.items():
                 _write_json(session / name, payload)
             evidence = run_dir / "android-frida"
-            _write_json(evidence / "target-identity.json", {"kind": "android_package", "package_name": "com.fixture.app"})
+            _write_json(
+                evidence / "target-identity.json",
+                {
+                    "kind": "android_package",
+                    "package_name": "com.fixture.app",
+                    "device_selector": "usb",
+                    "device_id": "fixture-device-1",
+                    "device_name": "Fixture Android",
+                    "device_type": "usb",
+                },
+            )
             _write_json(evidence / "cleanup.json", {"status": "ok", "verified": True, "unloaded": True, "detached": True})
             _write_json(evidence / "execution-proof.json", {
                 "status": "ok", "provider": "frida-android", "evidence_class": "live_target_proof",
@@ -136,6 +146,51 @@ class AndroidP5AcceptanceContractTests(unittest.TestCase):
             verification = verify_acceptance_record(record_path)
             self.assertEqual(verification["status"], "failed")
             self.assertIn("recomputed acceptance state", " ".join(verification["errors"]))
+
+    def test_frida_fixture_rejects_selector_only_identity(self) -> None:
+        """A configured selector must not stand in for observed Frida device identity."""
+
+        def runner(command, **kwargs):  # type: ignore[no-untyped-def]
+            run_dir = Path(kwargs["env"]["REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR"])
+            evidence = run_dir / "android-frida"
+            _write_json(
+                evidence / "target-identity.json",
+                {"kind": "android_package", "package_name": "com.fixture.app", "device_selector": "usb"},
+            )
+            _write_json(evidence / "cleanup.json", {"status": "ok", "verified": True, "unloaded": True, "detached": True})
+            _write_json(
+                evidence / "execution-proof.json",
+                {
+                    "status": "ok",
+                    "provider": "frida-android",
+                    "evidence_class": "live_target_proof",
+                    "executed_tests": 1,
+                    "skipped_tests": 0,
+                    "live_operations": 1,
+                },
+            )
+            session = run_dir / "android_instrumentation" / "fixture-session"
+            for name in ("audit.json", "events.json", "rollback.json"):
+                _write_json(session / name, {"status": "ok"})
+            return subprocess.CompletedProcess(command, 0, stdout="frida ok", stderr="")
+
+        with tempfile.TemporaryDirectory() as temporary, mock.patch(
+            "reverse_analyzer.acceptance.validate_external_environment",
+            return_value=_ready_report("p5-android-frida-live"),
+        ):
+            record = run_acceptance_fixture(
+                "p5-android-frida-live",
+                temporary,
+                execute=True,
+                environ={"ANDROID_FRIDA_LIVE_PACKAGE": "com.fixture.app"},
+                runner=runner,
+            )
+            self.assertFalse(record["live_verified"])
+            persisted = json.loads(Path(record["record_path"]).read_text(encoding="utf-8"))
+            persisted["live_verified"] = True
+            Path(record["record_path"]).write_text(json.dumps(persisted), encoding="utf-8")
+            verification = verify_acceptance_record(record["record_path"])
+            self.assertEqual(verification["status"], "failed")
 
     def test_native_patch_fixture_requires_signed_deployment_launch_and_rollback(self) -> None:
         def runner(command, **kwargs):  # type: ignore[no-untyped-def]

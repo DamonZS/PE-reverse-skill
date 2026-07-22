@@ -1,6 +1,7 @@
 param(
     [string]$Output = "dist/reverse-jailbreak",
-    [switch]$Clean
+    [switch]$Clean,
+    [switch]$NoBuildIsolation
 )
 $ErrorActionPreference = "Stop"
 
@@ -16,7 +17,12 @@ if ((Test-Path $Output) -and $Clean) {
     Remove-Item -LiteralPath $Output -Recurse -Force
 }
 New-Item -ItemType Directory -Path $Output -Force | Out-Null
-Invoke-Python -m pip wheel . --no-deps --wheel-dir $Output
+$WheelArguments = @("-m", "pip", "wheel", ".", "--no-deps", "--wheel-dir", $Output)
+if ($NoBuildIsolation) {
+    # Offline/air-gapped builders use the already-installed build backend.
+    $WheelArguments += "--no-build-isolation"
+}
+Invoke-Python @WheelArguments
 Copy-Item schemas/jailbreak-campaign.schema.json $Output -Force
 Copy-Item config/jailbreak-campaign.example.json $Output -Force
 Copy-Item docs/reverse_jailbreak_release.md $Output -Force

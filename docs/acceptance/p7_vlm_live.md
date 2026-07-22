@@ -31,3 +31,11 @@ canary value; normalized model output remains part of the retained evidence.
 Loopback HTTP tests prove the production transport path but are not live model
 evidence. Graphics Present, ImGui host integration, matrix acquisition, and
 combined overlay behavior remain separate P7 gates.
+
+Independent record verification recomputes the VLM semantic contract. It
+requires valid content-addressed endpoint, image, and canary identities; binds
+the transport `input_sha256` to the retained image digest; requires an
+`openai-compatible-http` transport audit with environment-backed credentials;
+and checks output provenance, visual evidence, canary matching, and a
+non-skipped execution proof. Recomputing an artifact hash after changing one
+of these relationships does not make the record valid.

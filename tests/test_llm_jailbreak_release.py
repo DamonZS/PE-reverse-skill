@@ -54,6 +54,13 @@ class ReleaseCliTests(unittest.TestCase):
         self.assertIn("missing release notes for package version", script)
         self.assertNotIn("docs/releases/0.1.0.md", script)
 
+    def test_build_script_supports_offline_build_without_isolation(self):
+        script = (Path(__file__).parents[1] / "scripts/build_reverse_jailbreak.ps1").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("[switch]$NoBuildIsolation", script)
+        self.assertIn('"--no-build-isolation"', script)
+
     def test_release_workflow_rebuilds_when_release_metadata_changes(self):
         workflow = (Path(__file__).parents[1] / ".github/workflows/reverse-jailbreak-release.yml").read_text(
             encoding="utf-8"
@@ -210,6 +217,29 @@ class ReleaseCliTests(unittest.TestCase):
             self.assertFalse(result["ok"])
             self.assertTrue(any("sha256 mismatch" in error for error in result["errors"]))
             self.assertTrue(any("untracked release file" in error for error in result["errors"]))
+
+    def test_release_manifest_rejects_embedded_credential_material(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_release_fixture(root)
+            (root / "RELEASE_NOTES.md").write_text(
+                "Authorization: Bearer " + "A" * 32,
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "credential-like material"):
+                write_release_manifest(root)
+
+            # A previously generated manifest must not make a modified release
+            # acceptable either.
+            (root / "RELEASE_NOTES.md").write_text("clean", encoding="utf-8")
+            write_release_manifest(root)
+            (root / "RELEASE_NOTES.md").write_text(
+                "sk-" + "B" * 24,
+                encoding="utf-8",
+            )
+            result = verify_release_manifest(root)
+            self.assertFalse(result["ok"])
+            self.assertTrue(any("credential-like material" in error for error in result["errors"]))
 
     def test_release_manifest_rejects_malformed_payload(self):
         with tempfile.TemporaryDirectory() as directory:
