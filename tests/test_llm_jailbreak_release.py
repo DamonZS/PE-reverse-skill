@@ -137,11 +137,29 @@ class ReleaseCliTests(unittest.TestCase):
         self.assertIn('"docs/reverse_jailbreak_release.md"', workflow)
         self.assertIn('"reverse_analyzer/**"', workflow)
         self.assertIn('"requirements.txt"', workflow)
+        self.assertIn('"scripts/build_reverse_jailbreak.sh"', workflow)
+        self.assertIn('"reverse_analyzer/llm_jailbreak/release.py"', workflow)
         self.assertIn('python: "3.10"', workflow)
         self.assertIn('python: "3.13"', workflow)
         self.assertIn("os: ubuntu-latest", workflow)
         self.assertIn("if: matrix.publish", workflow)
         self.assertEqual(workflow.count("publish: true"), 1)
+
+    def test_release_workflow_uses_native_builder_for_each_runner(self):
+        workflow = (Path(__file__).parents[1] / ".github/workflows/reverse-jailbreak-release.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("if: runner.os == 'Windows'", workflow)
+        self.assertIn("if: runner.os != 'Windows'", workflow)
+        self.assertIn("bash scripts/build_reverse_jailbreak.sh", workflow)
+        self.assertIn("./scripts/build_reverse_jailbreak.ps1", workflow)
+
+    def test_release_workflow_runs_offline_benchmark_and_dashboard_regressions(self):
+        workflow = (Path(__file__).parents[1] / ".github/workflows/reverse-jailbreak-release.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("tests.test_llm_jailbreak_benchmark", workflow)
+        self.assertIn("tests.test_llm_jailbreak_dashboard", workflow)
 
     def test_release_workflows_separate_package_and_manual_live_acceptance(self):
         root = Path(__file__).parents[1]

@@ -7,7 +7,9 @@ on:
       - "config/jailbreak-campaign.example.json"
       - "schemas/jailbreak-campaign.schema.json"
       - "scripts/build_reverse_jailbreak.ps1"
+      - "scripts/build_reverse_jailbreak.sh"
       - "scripts/smoke_reverse_jailbreak_release.py"
+      - "reverse_analyzer/llm_jailbreak/release.py"
       - "docs/reverse_jailbreak_release.md"
       - "docs/releases/**"
       - "CHANGELOG.md"
@@ -20,7 +22,9 @@ on:
       - "config/jailbreak-campaign.example.json"
       - "schemas/jailbreak-campaign.schema.json"
       - "scripts/build_reverse_jailbreak.ps1"
+      - "scripts/build_reverse_jailbreak.sh"
       - "scripts/smoke_reverse_jailbreak_release.py"
+      - "reverse_analyzer/llm_jailbreak/release.py"
       - "docs/reverse_jailbreak_release.md"
       - "docs/releases/**"
       - "CHANGELOG.md"
@@ -60,9 +64,16 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Run release tests
         run: python -m unittest tests.test_llm_jailbreak_release
+      - name: Run offline benchmark regression
+        run: python -m unittest tests.test_llm_jailbreak_benchmark tests.test_llm_jailbreak_dashboard
       - name: Build and verify portable package
+        if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/build_reverse_jailbreak.ps1 -Output artifact/reverse-jailbreak -Clean
+      - name: Build and verify portable package (POSIX)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash scripts/build_reverse_jailbreak.sh --output artifact/reverse-jailbreak --clean
       - name: Smoke installed console entry point
         run: python artifact/reverse-jailbreak/smoke_release.py artifact/reverse-jailbreak
       - uses: actions/upload-artifact@v4
