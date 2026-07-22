@@ -18,7 +18,7 @@ permissions:
 jobs:
   vlm:
     if: inputs.fixture == 'p7-vlm-openai-live'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, p7-vlm]
     environment: p7-vlm-live
     timeout-minutes: 15
     env:
