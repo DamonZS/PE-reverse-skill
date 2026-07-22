@@ -79,8 +79,10 @@ python -m reverse_analyzer environment accept run `
 
 Promotion requires real device/package identity, hash-backed audit/events/
 rollback artifacts, and proof that spawn resume (when applicable), script
-unload, and session detach all completed. The default test path remains skipped
-until the fixture is explicitly enabled by the acceptance runner.
+unload, and session detach all completed. The retained target identity uses the
+device ID/name/type observed by Frida, not only the configured selector. The
+default test path remains skipped until the fixture is explicitly enabled by the
+acceptance runner.
 
 ## Native APK Patch And Device Rollback
 
@@ -112,6 +114,12 @@ installs and launches the restored copy, and performs final device cleanup. It
 retains the signed patched APK, provider evidence, deployment transcript,
 rollback proof, target identity, and structured execution proof. Passwords are
 read from environment variables and scanned out of retained JSON.
+
+Before the first install, the fixture records the ADB-reported serial and fails
+closed unless the device is online and the fixture package is absent. This
+prevents an existing installation from being overwritten and then removed by
+the acceptance cleanup path. Cleanup is armed only after the first mutation is
+attempted.
 
 Verify either new record with the same `environment accept verify` command.
 Until a real record is retained and independently verified, Frida and native

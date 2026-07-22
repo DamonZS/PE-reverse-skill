@@ -216,6 +216,8 @@ class EnvironmentValidationTests(unittest.TestCase):
         self.assertIn("REVERSE_ANALYZER_VLM_BASE_URL", fixture["missing_gates"])
         self.assertIn("REVERSE_ANALYZER_VLM_API_KEY", fixture["missing_gates"])
         self.assertIn("REVERSE_ANALYZER_VLM_IMAGE", fixture["missing_gates"])
+        self.assertIn("REVERSE_ANALYZER_VLM_CANARY", fixture["missing_gates"])
+        self.assertIn("gui-vlm/canary-verification.json", fixture["expected_artifacts"])
         self.assertEqual(fixture["required_executed_tests"], 1)
 
         ready = validate_external_environment(

@@ -17,6 +17,21 @@ def _enabled() -> bool:
     return os.environ.get("REVERSE_ANALYZER_RUN_VLM_LIVE", "").strip() == "1"
 
 
+def _normalized_canary(value: str) -> str:
+    return " ".join(value.split()).casefold()
+
+
+def _visual_text(output: dict[str, object]) -> list[str]:
+    values: list[str] = []
+    for collection in (output.get("text_regions"), output.get("widgets")):
+        if not isinstance(collection, list):
+            continue
+        for item in collection:
+            if isinstance(item, dict) and isinstance(item.get("text"), str):
+                values.append(str(item["text"]))
+    return values
+
+
 @unittest.skipUnless(_enabled(), "set REVERSE_ANALYZER_RUN_VLM_LIVE=1 for live VLM E2E")
 class LiveOpenAIVLMTests(unittest.TestCase):
     def test_live_image_analysis_retains_sanitized_acceptance_artifacts(self) -> None:
@@ -24,8 +39,10 @@ class LiveOpenAIVLMTests(unittest.TestCase):
         model = os.environ.get("REVERSE_ANALYZER_VLM_MODEL", "").strip()
         api_key = os.environ.get("REVERSE_ANALYZER_VLM_API_KEY", "")
         image = Path(os.environ.get("REVERSE_ANALYZER_VLM_IMAGE", ""))
+        canary = os.environ.get("REVERSE_ANALYZER_VLM_CANARY", "").strip()
         self.assertTrue(base_url and model and api_key, "live VLM endpoint, model, and API key are required")
         self.assertTrue(image.is_file(), "REVERSE_ANALYZER_VLM_IMAGE must identify a real image")
+        self.assertTrue(4 <= len(canary) <= 128, "VLM canary must contain 4 to 128 characters")
 
         loaded = load_vlm_provider(
             {
@@ -42,6 +59,12 @@ class LiveOpenAIVLMTests(unittest.TestCase):
         output = invocation.output or {}
         live_items = len(output.get("text_regions", [])) + len(output.get("widgets", []))
         self.assertGreater(live_items, 0, "live VLM response contained no visual evidence")
+        expected_canary = _normalized_canary(canary)
+        canary_matches = [
+            value for value in _visual_text(output)
+            if expected_canary in _normalized_canary(value)
+        ]
+        self.assertTrue(canary_matches, "controlled VLM canary was not observed")
 
         configured_run_dir = os.environ.get("REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR", "").strip()
         temporary: tempfile.TemporaryDirectory[str] | None = None
@@ -58,6 +81,7 @@ class LiveOpenAIVLMTests(unittest.TestCase):
         endpoint_identity = hashlib.sha256(
             f"{endpoint.scheme}://{endpoint.netloc}{endpoint.path.rstrip('/')}".encode("utf-8")
         ).hexdigest()
+        canary_digest = hashlib.sha256(canary.encode("utf-8")).hexdigest()
         artifacts = {
             "target-identity.json": {
                 "kind": "remote-openai-compatible-vlm",
@@ -65,6 +89,7 @@ class LiveOpenAIVLMTests(unittest.TestCase):
                 "model": model,
                 "sha256": image_digest,
                 "image_sha256": image_digest,
+                "canary_sha256": canary_digest,
             },
             "invocation.json": invocation.to_dict(),
             "output.json": output,
@@ -75,6 +100,13 @@ class LiveOpenAIVLMTests(unittest.TestCase):
                 "response_request_id": output.get("provenance", {}).get("request_id"),
                 "secret_source": "environment",
                 "authorization_persisted": False,
+                "canary_verified": True,
+            },
+            "canary-verification.json": {
+                "status": "ok",
+                "verified": True,
+                "canary_sha256": canary_digest,
+                "matched_items": len(canary_matches),
             },
             "execution-proof.json": {
                 "status": "ok",
@@ -84,6 +116,7 @@ class LiveOpenAIVLMTests(unittest.TestCase):
                 "skipped_tests": 0,
                 "live_operations": 1,
                 "visual_items": live_items,
+                "canary_verified": True,
             },
         }
         for name, payload in artifacts.items():

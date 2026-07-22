@@ -172,6 +172,9 @@ class AndroidP5InstrumentationLiveTests(unittest.TestCase):
             result = provider.execute(plan)
             self.assertEqual(result.status, "ok", result.to_dict())
             cleanup = result.after_snapshot["cleanup"]
+            device_identity = result.after_snapshot.get("device") or {}
+            self.assertIsInstance(device_identity, dict)
+            self.assertTrue(device_identity.get("id"), "Frida did not report a device ID")
             self.assertTrue(cleanup["ok"], cleanup)
             self.assertTrue(cleanup["unloaded"])
             self.assertTrue(cleanup["detached"])
@@ -191,7 +194,10 @@ class AndroidP5InstrumentationLiveTests(unittest.TestCase):
                     {
                         "kind": "android_package",
                         "package_name": package,
-                        "device": device,
+                        "device_selector": device,
+                        "device_id": device_identity.get("id"),
+                        "device_name": device_identity.get("name"),
+                        "device_type": device_identity.get("type"),
                         "mode": params["mode"],
                     },
                 )

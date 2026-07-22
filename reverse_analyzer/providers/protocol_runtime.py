@@ -1354,6 +1354,7 @@ class ProtocolRuntimeProvider:
                     "client_socket_identity": _socket_connection_identity(client),
                     "upstream": dict(upstream),
                     "status": "active",
+                    "half_close_events": [],
                 }
                 connections.append(connection_record)
                 upstream_socket: Optional[socket.socket] = None
@@ -1394,6 +1395,7 @@ class ProtocolRuntimeProvider:
                         mutation=mutation,
                         frames=frames,
                         counters=counters,
+                        lifecycle=connection_record["half_close_events"],
                     )
                     if connection_limit:
                         limit_reached = connection_limit
@@ -1740,6 +1742,7 @@ class ProtocolRuntimeProvider:
         errors: list[str] = []
         sent_bytes = 0
         received_bytes = 0
+        transmit_attempted = False
         limit_reached: Optional[str] = None
         source_path = Path(str(plan.parameters["capture_artifact"]))
         source_snapshot = _file_snapshot(source_path)
@@ -2253,6 +2256,7 @@ class ProtocolRuntimeProvider:
                         fail_closed_errors.extend(connection_fixture_errors)
                         raise RuntimeError("controlled HTTP fixture identity did not match")
 
+                    transmit_attempted = True
                     _send_with_deadline(
                         replay_socket,
                         request_wire,
@@ -2271,7 +2275,7 @@ class ProtocolRuntimeProvider:
                             source_sequence=request_message.get("sequence"),
                         )
                     )
-                    actual_responses = _receive_http1_responses(
+                    actual_responses, pending_tunnel_bytes = _receive_http1_responses(
                         replay_socket,
                         request_method=str(request_message.get("method") or ""),
                         limits=limits,
@@ -2325,6 +2329,109 @@ class ProtocolRuntimeProvider:
                             actual=actual_final,
                         )
                     )
+                    tunnel_frames = list(transaction.get("connect_tunnel_frames") or [])
+                    tunnel_half_close_events = list(
+                        transaction.get("connect_half_close_events") or []
+                    )
+                    tunnel_sent = bytearray()
+                    tunnel_received = bytearray()
+                    runtime_tunnel_frames: list[dict[str, Any]] = []
+                    applied_half_close_events: list[dict[str, Any]] = []
+                    if str(request_message.get("method") or "").upper() == "CONNECT":
+                        if not 200 <= int(actual_final.get("status_code") or 0) < 300:
+                            comparison_errors.append(
+                                "controlled fixture did not establish the CONNECT tunnel"
+                            )
+                        if not comparison_errors:
+                            for source_frame in tunnel_frames:
+                                data = _frame_payload(source_frame)
+                                if (
+                                    len(runtime_frames) >= int(limits.get("max_frames") or 0)
+                                    or sent_bytes + received_bytes + len(data)
+                                    > int(limits.get("max_bytes") or 0)
+                                ):
+                                    raise RuntimeError(
+                                        "CONNECT tunnel replay exhausted its frame or byte budget"
+                                    )
+                                direction = str(source_frame.get("direction") or "")
+                                if direction == "client_to_server":
+                                    transmit_attempted = True
+                                    _send_with_deadline(
+                                        replay_socket,
+                                        data,
+                                        deadline=deadline,
+                                        timeout_ms=int(
+                                            limits.get("socket_timeout_ms") or 0
+                                        ),
+                                    )
+                                    sent_bytes += len(data)
+                                    tunnel_sent.extend(data)
+                                elif direction == "server_to_client":
+                                    buffered_length = min(
+                                        len(data), len(pending_tunnel_bytes)
+                                    )
+                                    observed = bytes(
+                                        pending_tunnel_bytes[:buffered_length]
+                                    )
+                                    del pending_tunnel_bytes[:buffered_length]
+                                    if len(observed) < len(data):
+                                        observed += _recv_exact_with_deadline(
+                                            replay_socket,
+                                            len(data) - len(observed),
+                                            deadline=deadline,
+                                            timeout_ms=int(
+                                                limits.get("socket_timeout_ms") or 0
+                                            ),
+                                        )
+                                    received_bytes += len(observed)
+                                    tunnel_received.extend(observed)
+                                    if observed != data:
+                                        comparison_errors.append(
+                                            "controlled CONNECT tunnel response bytes did not match"
+                                        )
+                                else:
+                                    raise ValueError(
+                                        "CONNECT tunnel replay frame direction is invalid"
+                                    )
+                                runtime_tunnel_frame = _runtime_frame(
+                                        sequence=len(runtime_frames) + 1,
+                                        connection_id=runtime_connection_id,
+                                        direction=direction,
+                                        observed=data if direction == "client_to_server" else observed,
+                                        forwarded=data if direction == "client_to_server" else observed,
+                                        started=started,
+                                        source_sequence=source_frame.get("source_sequence"),
+                                    )
+                                runtime_frames.append(runtime_tunnel_frame)
+                                runtime_tunnel_frames.append(runtime_tunnel_frame)
+                                source_sequence = int(
+                                    source_frame.get("source_sequence") or 0
+                                )
+                                for event in tunnel_half_close_events:
+                                    if int(
+                                        event.get("after_source_frame_sequence") or 0
+                                    ) != source_sequence:
+                                        continue
+                                    applied_half_close_events.append(
+                                        _replay_connect_half_close(
+                                            replay_socket,
+                                            event,
+                                            deadline=deadline,
+                                            timeout_ms=int(
+                                                limits.get("socket_timeout_ms") or 0
+                                            ),
+                                        )
+                                    )
+                            if len(applied_half_close_events) != len(
+                                tunnel_half_close_events
+                            ):
+                                comparison_errors.append(
+                                    "CONNECT tunnel half-close events were not fully replayed"
+                                )
+                            if pending_tunnel_bytes:
+                                comparison_errors.append(
+                                    "controlled CONNECT tunnel returned trailing bytes"
+                                )
                     fixture_verified = not comparison_errors
                     if comparison_errors:
                         fail_closed_errors.extend(comparison_errors)
@@ -2353,6 +2460,31 @@ class ProtocolRuntimeProvider:
                                 "actual_response_body_sha256": actual_final.get(
                                     "body_sha256"
                                 ),
+                                "connect_authority": _mapping(
+                                    transaction.get("connect_tunnel")
+                                ).get("authority"),
+                                "connect_tunnel_frame_count": len(tunnel_frames),
+                                "connect_client_to_server_sha256": (
+                                    hashlib.sha256(tunnel_sent).hexdigest()
+                                    if tunnel_frames
+                                    else None
+                                ),
+                                "connect_server_to_client_sha256": (
+                                    hashlib.sha256(tunnel_received).hexdigest()
+                                    if tunnel_frames
+                                    else None
+                                ),
+                                "connect_tunnel_verified": (
+                                    fixture_verified if tunnel_frames else None
+                                ),
+                                "connect_transcript": _connect_transcript_evidence(
+                                    runtime_tunnel_frames
+                                ),
+                                "connect_half_close_events": applied_half_close_events,
+                                "connect_half_close_verified": len(
+                                    applied_half_close_events
+                                )
+                                == len(tunnel_half_close_events),
                                 "fixture_verified": fixture_verified,
                                 "comparison_errors": comparison_errors,
                             }
@@ -2367,11 +2499,21 @@ class ProtocolRuntimeProvider:
                         {
                             "status": "closed",
                             "fixture_verified": True,
-                            "sent_bytes": len(request_wire),
-                            "received_bytes": sum(
-                                int(item.get("wire_length") or 0)
-                                for item in actual_responses
+                            "sent_bytes": len(request_wire) + len(tunnel_sent),
+                            "received_bytes": (
+                                sum(
+                                    int(item.get("wire_length") or 0)
+                                    for item in actual_responses
+                                )
+                                + len(tunnel_received)
                             ),
+                            "tunnel_sent_bytes": len(tunnel_sent),
+                            "tunnel_received_bytes": len(tunnel_received),
+                            "half_close_events": applied_half_close_events,
+                            "cleanup": {
+                                "socket_closed": True,
+                                "mode": "finally_close",
+                            },
                         }
                     )
                 except (OSError, RuntimeError, ValueError) as exc:
@@ -2384,6 +2526,14 @@ class ProtocolRuntimeProvider:
                     break
                 finally:
                     _close_socket(replay_socket)
+                    try:
+                        socket_closed = replay_socket is None or replay_socket.fileno() == -1
+                    except OSError:
+                        socket_closed = True
+                    connection_record["cleanup"] = {
+                        "socket_closed": socket_closed,
+                        "mode": "finally_close_verified",
+                    }
 
         errors.extend(fail_closed_errors)
         source_count = len(transactions)
@@ -2410,8 +2560,9 @@ class ProtocolRuntimeProvider:
 
         after = {
             "session_state": "closed",
-            "side_effects": sent_bytes > 0,
-            "network_transmit": sent_bytes > 0,
+            "side_effects": transmit_attempted,
+            "network_transmit": transmit_attempted,
+            "transmit_attempted": transmit_attempted,
             "transport": "tcp",
             "application_protocol": "http/1.1",
             "capture_artifact": source_snapshot,
@@ -2424,6 +2575,7 @@ class ProtocolRuntimeProvider:
             "network_boundary": "explicit_loopback_ip_only",
             "replay_mode": "http_fixture",
             "replay_target_mode": "loopback",
+            "connect_replay_scope": "bounded_loopback_opaque_tunnel",
             "http_fixture": _public_http_fixture(fixture),
             "fixture_verified": all_verified and not fail_closed_errors,
             "exact_fixture_replay_verified": all_verified and not fail_closed_errors,
@@ -5027,6 +5179,7 @@ def _build_http_capture_evidence(
             bytes(directions["server_to_client"]),
             limits,
         )
+        record = records.get(connection_id, {})
         connection_messages = list(exchange.get("messages") or [])
         for message in connection_messages:
             message["sequence"] = len(messages) + 1
@@ -5037,6 +5190,66 @@ def _build_http_capture_evidence(
             pair["sequence"] = len(pairs) + 1
             pairs.append(pair)
         for tunnel in exchange.get("connect_tunnels") or []:
+            request = next(
+                (
+                    item
+                    for item in connection_messages
+                    if str(item.get("kind") or "") == "http_request"
+                    and str(item.get("method") or "").upper() == "CONNECT"
+                ),
+                {},
+            )
+            response = next(
+                (
+                    item
+                    for item in connection_messages
+                    if str(item.get("kind") or "") == "http_response"
+                    and 200 <= int(item.get("status_code") or 0) < 300
+                ),
+                {},
+            )
+            client_payload, client_errors = _opaque_tunnel_payload(
+                tunnel.get("client_to_server"),
+                direction="client_to_server",
+            )
+            server_payload, server_errors = _opaque_tunnel_payload(
+                tunnel.get("server_to_client"),
+                direction="server_to_client",
+            )
+            tunnel_frames, frame_errors = _connect_tunnel_source_frames(
+                frames,
+                connection_id=connection_id,
+                request_wire=_http_message_wire(request),
+                response_wire=_http_message_wire(response),
+                client_payload=client_payload,
+                server_payload=server_payload,
+            )
+            half_close_events, half_close_errors = _connect_half_close_events(
+                record.get("half_close_events"),
+                tunnel_frames=tunnel_frames,
+            )
+            authority_endpoint, authority_errors = _connect_authority_endpoint(
+                tunnel.get("authority")
+            )
+            tunnel.update(
+                {
+                    "authority_endpoint": authority_endpoint,
+                    "authority_endpoint_identity": _endpoint_identity(authority_endpoint),
+                    "transcript": _connect_transcript_evidence(tunnel_frames),
+                    "half_close_events": half_close_events,
+                    "half_close_verified": bool(half_close_events)
+                    and not half_close_errors,
+                }
+            )
+            errors.extend(
+                [
+                    *client_errors,
+                    *server_errors,
+                    *frame_errors,
+                    *half_close_errors,
+                    *authority_errors,
+                ]
+            )
             tunnel["sequence"] = len(tunnels) + 1
             tunnels.append(tunnel)
         exchange_errors = list(exchange.get("errors") or [])
@@ -5044,7 +5257,6 @@ def _build_http_capture_evidence(
         gap_count += int(exchange.get("gap_count") or 0)
         truncated = truncated or bool(exchange.get("truncated"))
         damaged = damaged or bool(exchange.get("damaged"))
-        record = records.get(connection_id, {})
         sessions.append(
             _prune(
                 {
@@ -5322,6 +5534,238 @@ def _opaque_tunnel_evidence(data: bytes) -> dict[str, Any]:
     }
 
 
+def _opaque_tunnel_payload(value: Any, *, direction: str) -> tuple[bytes, list[str]]:
+    evidence = _mapping(value)
+    errors: list[str] = []
+    encoded = evidence.get("payload_base64")
+    try:
+        payload = base64.b64decode(str(encoded).encode("ascii"), validate=True)
+    except (ValueError, UnicodeEncodeError):
+        payload = b""
+        errors.append(f"CONNECT {direction} payload_base64 is invalid")
+    try:
+        if int(evidence.get("length") or 0) != len(payload):
+            errors.append(f"CONNECT {direction} payload length does not match")
+    except (TypeError, ValueError, OverflowError):
+        errors.append(f"CONNECT {direction} payload length is invalid")
+    digest = str(evidence.get("sha256") or "").lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", digest):
+        errors.append(f"CONNECT {direction} payload hash is invalid")
+    elif digest != hashlib.sha256(payload).hexdigest():
+        errors.append(f"CONNECT {direction} payload hash does not match")
+    return payload, _deduplicate(errors)
+
+
+def _connect_authority_endpoint(authority: Any) -> tuple[dict[str, Any], list[str]]:
+    value = str(authority or "").strip()
+    host = ""
+    port_text = ""
+    if value.startswith("[") and "]:" in value:
+        host, _, port_text = value[1:].partition("]:")
+    else:
+        host, separator, port_text = value.rpartition(":")
+        if not separator:
+            host = ""
+    try:
+        port = int(port_text)
+    except (TypeError, ValueError, OverflowError):
+        port = 0
+    endpoint = {"host": host, "port": port}
+    ok, reason = _validate_endpoint(
+        endpoint,
+        allow_zero_port=False,
+        allow_remote=False,
+    )
+    return endpoint, [] if ok else [f"CONNECT authority is invalid: {reason}"]
+
+
+def _connect_tunnel_source_frames(
+    raw_frames: Sequence[Mapping[str, Any]],
+    *,
+    connection_id: str,
+    request_wire: bytes,
+    response_wire: bytes,
+    client_payload: bytes,
+    server_payload: bytes,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    prefixes = {
+        "client_to_server": request_wire,
+        "server_to_client": response_wire,
+    }
+    consumed = {"client_to_server": 0, "server_to_client": 0}
+    tunnel_frames: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for frame in raw_frames:
+        if str(frame.get("connection_id") or "") != connection_id:
+            continue
+        direction = str(frame.get("direction") or "")
+        if direction not in prefixes:
+            errors.append("CONNECT source frame direction is invalid")
+            continue
+        try:
+            data = _frame_payload(frame)
+        except ValueError as exc:
+            errors.append(str(exc))
+            continue
+        prefix = prefixes[direction]
+        offset = consumed[direction]
+        prefix_part = data[: max(0, len(prefix) - offset)]
+        if prefix_part != prefix[offset : offset + len(prefix_part)]:
+            errors.append(f"CONNECT {direction} frames do not match the HTTP handshake")
+            continue
+        consumed[direction] += len(prefix_part)
+        opaque = data[len(prefix_part) :]
+        if opaque:
+            tunnel_frames.append(
+                {
+                    "source_sequence": frame.get("sequence"),
+                    "direction": direction,
+                    "length": len(opaque),
+                    "sha256": hashlib.sha256(opaque).hexdigest(),
+                    "payload_base64": base64.b64encode(opaque).decode("ascii"),
+                }
+            )
+    for direction, prefix in prefixes.items():
+        if consumed[direction] != len(prefix):
+            errors.append(f"CONNECT {direction} handshake evidence is incomplete")
+    observed = {"client_to_server": bytearray(), "server_to_client": bytearray()}
+    for frame in tunnel_frames:
+        observed[str(frame["direction"])].extend(_frame_payload(frame))
+    if bytes(observed["client_to_server"]) != client_payload:
+        errors.append("CONNECT client_to_server tunnel evidence does not match source frames")
+    if bytes(observed["server_to_client"]) != server_payload:
+        errors.append("CONNECT server_to_client tunnel evidence does not match source frames")
+    return tunnel_frames, _deduplicate(errors)
+
+
+def _connect_transcript_evidence(
+    tunnel_frames: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    entries = [
+        {
+            "sequence": index,
+            "source_sequence": frame.get("source_sequence"),
+            "direction": str(frame.get("direction") or ""),
+            "length": int(frame.get("length") or 0),
+            "sha256": str(frame.get("sha256") or ""),
+        }
+        for index, frame in enumerate(tunnel_frames, start=1)
+    ]
+    canonical = json.dumps(
+        entries,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return {
+        "frame_count": len(entries),
+        "client_to_server_frame_count": sum(
+            1 for item in entries if item["direction"] == "client_to_server"
+        ),
+        "server_to_client_frame_count": sum(
+            1 for item in entries if item["direction"] == "server_to_client"
+        ),
+        "sha256": hashlib.sha256(canonical).hexdigest(),
+        "frames": entries,
+    }
+
+
+def _connect_half_close_events(
+    value: Any,
+    *,
+    tunnel_frames: Sequence[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    raw_events = value if isinstance(value, Sequence) and not isinstance(value, (str, bytes)) else []
+    source_sequences: set[int] = set()
+    source_sequence_errors: list[str] = []
+    for index, frame in enumerate(tunnel_frames, start=1):
+        try:
+            source_sequence = int(frame.get("source_sequence") or 0)
+        except (TypeError, ValueError, OverflowError):
+            source_sequence_errors.append(
+                f"CONNECT tunnel frame {index} has an invalid source sequence"
+            )
+            continue
+        if source_sequence > 0:
+            source_sequences.add(source_sequence)
+    events: list[dict[str, Any]] = []
+    errors: list[str] = list(source_sequence_errors)
+    seen_directions: set[str] = set()
+    previous_after_frame_sequence = 0
+    for index, item in enumerate(raw_events, start=1):
+        if not isinstance(item, Mapping):
+            errors.append(f"CONNECT half-close event {index} is not an object")
+            continue
+        event = dict(item)
+        direction = str(event.get("direction") or "")
+        try:
+            sequence = int(event.get("sequence") or 0)
+            after_frame_sequence = int(
+                event.get("after_source_frame_sequence")
+                or event.get("after_frame_sequence")
+                or 0
+            )
+        except (TypeError, ValueError, OverflowError):
+            errors.append(f"CONNECT half-close event {index} has invalid ordering")
+            continue
+        if sequence != index:
+            errors.append(f"CONNECT half-close event {index} has a sequence gap")
+        if direction not in _DIRECTIONS:
+            errors.append(f"CONNECT half-close event {index} has an invalid direction")
+            continue
+        if direction in seen_directions:
+            errors.append(f"CONNECT half-close direction {direction} is duplicated")
+        seen_directions.add(direction)
+        if after_frame_sequence not in source_sequences:
+            errors.append(
+                f"CONNECT half-close event {index} references an unknown source frame"
+            )
+            continue
+        if after_frame_sequence < previous_after_frame_sequence:
+            errors.append(f"CONNECT half-close event {index} is out of order")
+        previous_after_frame_sequence = after_frame_sequence
+        if event.get("propagated") is not True:
+            errors.append(f"CONNECT half-close {direction} was not propagated")
+        events.append(
+            {
+                "sequence": len(events) + 1,
+                "direction": direction,
+                "after_source_frame_sequence": after_frame_sequence,
+                "mode": str(event.get("mode") or ""),
+                "propagated": event.get("propagated") is True,
+            }
+        )
+    missing_directions = sorted(_DIRECTIONS - seen_directions)
+    if missing_directions:
+        errors.append(
+            "CONNECT half-close evidence is missing directions: "
+            + ", ".join(missing_directions)
+        )
+    return events, _deduplicate(errors)
+
+
+def _connect_transcript_errors(
+    value: Any,
+    *,
+    tunnel_frames: Sequence[Mapping[str, Any]],
+) -> list[str]:
+    expected = _mapping(value)
+    actual = _connect_transcript_evidence(tunnel_frames)
+    errors: list[str] = []
+    for name in (
+        "frame_count",
+        "client_to_server_frame_count",
+        "server_to_client_frame_count",
+        "sha256",
+    ):
+        if expected.get(name) != actual.get(name):
+            errors.append(f"CONNECT transcript {name} does not match source frames")
+    expected_frames = expected.get("frames")
+    if not isinstance(expected_frames, list) or expected_frames != actual["frames"]:
+        errors.append("CONNECT transcript frame order does not match source frames")
+    return _deduplicate(errors)
+
+
 def _http_transaction_limitations(
     request: Mapping[str, Any],
     response: Mapping[str, Any],
@@ -5331,8 +5775,8 @@ def _http_transaction_limitations(
     status_code = int(response.get("status_code") or 0)
     request_connection = _http_message_header_tokens(request, "connection")
     response_connection = _http_message_header_tokens(response, "connection")
-    if method == "CONNECT":
-        limitations.append("CONNECT tunnel replay is not generalized")
+    if method == "CONNECT" and not 200 <= status_code < 300:
+        limitations.append("CONNECT replay requires a successful 2xx handshake")
     if status_code == 101 or "upgrade" in request_connection or "upgrade" in response_connection:
         limitations.append("protocol upgrade replay is not generalized")
     return limitations
@@ -5648,6 +6092,8 @@ def _http_replay_transactions(
         raw_messages = _artifact_sequence(payload, "messages")
         raw_pairs = _artifact_sequence(payload, "request_response_pairs")
         raw_connections = _artifact_sequence(payload, "connections")
+        raw_frames = _artifact_sequence(payload, "frames")
+        raw_tunnels = _artifact_sequence(payload, "connect_tunnels")
     except ValueError as exc:
         return [], _deduplicate([*errors, str(exc)])
     if not raw_messages:
@@ -5656,6 +6102,25 @@ def _http_replay_transactions(
         errors.append("HTTP replay source contains no request-response pairs")
     if not raw_connections:
         errors.append("HTTP replay source contains no connection evidence")
+    if not raw_frames:
+        errors.append("HTTP replay source contains no frame evidence")
+    else:
+        frame_objects = [dict(item) for item in raw_frames if isinstance(item, Mapping)]
+        if len(frame_objects) != len(raw_frames):
+            errors.append("HTTP replay source contains a non-object frame")
+        else:
+            errors.extend(
+                _replay_frame_errors(
+                    frame_objects,
+                    limits,
+                    replay_mode="session",
+                )
+            )
+            for index, frame in enumerate(frame_objects, start=1):
+                if frame.get("sequence") != index:
+                    errors.append(f"HTTP source frame {index} has a sequence gap")
+                if str(frame.get("transport") or "tcp").lower() != "tcp":
+                    errors.append(f"HTTP source frame {index} is not TCP evidence")
 
     messages: dict[str, dict[str, Any]] = {}
     for index, item in enumerate(raw_messages, start=1):
@@ -5685,6 +6150,20 @@ def _http_replay_transactions(
             errors.append(f"HTTP source connection {index} has an invalid identity")
             continue
         connections[connection_id] = connection
+
+    tunnels_by_connection: dict[str, dict[str, Any]] = {}
+    for index, item in enumerate(raw_tunnels, start=1):
+        if not isinstance(item, Mapping):
+            errors.append(f"HTTP source CONNECT tunnel {index} is not an object")
+            continue
+        tunnel = dict(item)
+        connection_id = str(tunnel.get("connection_id") or "")
+        if not connection_id or connection_id in tunnels_by_connection:
+            errors.append(f"HTTP source CONNECT tunnel {index} has an invalid identity")
+            continue
+        if tunnel.get("sequence") != index:
+            errors.append(f"HTTP source CONNECT tunnel {index} has a sequence gap")
+        tunnels_by_connection[connection_id] = tunnel
 
     accounted_message_ids: set[str] = set()
     total_wire_bytes = 0
@@ -5804,6 +6283,107 @@ def _http_replay_transactions(
         replay_supported = bool(pair.get("replay_supported")) and not interim_responses
         if _http_transaction_limitations(request, response):
             replay_supported = False
+        connect_tunnel: dict[str, Any] = {}
+        connect_frames: list[dict[str, Any]] = []
+        connect_half_close_events: list[dict[str, Any]] = []
+        if request_method.upper() == "CONNECT":
+            connect_tunnel = tunnels_by_connection.pop(connection_id, {})
+            status_code = int(response.get("status_code") or 0)
+            if not 200 <= status_code < 300:
+                errors.append(
+                    f"HTTP source transaction {index} CONNECT response is not successful"
+                )
+            if not connect_tunnel:
+                errors.append(
+                    f"HTTP source transaction {index} has no CONNECT tunnel evidence"
+                )
+            else:
+                authority = str(request.get("request_target") or "")
+                if str(connect_tunnel.get("authority") or "") != authority:
+                    errors.append(
+                        f"HTTP source transaction {index} CONNECT authority drifted"
+                    )
+                if int(connect_tunnel.get("status_code") or 0) != status_code:
+                    errors.append(
+                        f"HTTP source transaction {index} CONNECT status is inconsistent"
+                    )
+                if connect_tunnel.get("established") is not True:
+                    errors.append(
+                        f"HTTP source transaction {index} CONNECT tunnel is not established"
+                    )
+                authority_endpoint, authority_errors = _connect_authority_endpoint(
+                    authority
+                )
+                if _mapping(connect_tunnel.get("authority_endpoint")) != authority_endpoint:
+                    authority_errors.append(
+                        "CONNECT authority endpoint evidence does not match"
+                    )
+                if _mapping(
+                    connect_tunnel.get("authority_endpoint_identity")
+                ) != _endpoint_identity(authority_endpoint):
+                    authority_errors.append(
+                        "CONNECT authority endpoint identity does not match"
+                    )
+                errors.extend(
+                    f"transaction {index}: {error}" for error in authority_errors
+                )
+                client_payload, client_errors = _opaque_tunnel_payload(
+                    connect_tunnel.get("client_to_server"),
+                    direction="client_to_server",
+                )
+                server_payload, server_errors = _opaque_tunnel_payload(
+                    connect_tunnel.get("server_to_client"),
+                    direction="server_to_client",
+                )
+                errors.extend(
+                    f"transaction {index}: {error}"
+                    for error in [*client_errors, *server_errors]
+                )
+                try:
+                    request_wire = _http_message_wire(request)
+                    response_wire = _http_message_wire(response)
+                except ValueError:
+                    request_wire = b""
+                    response_wire = b""
+                connect_frames, connect_frame_errors = _connect_tunnel_source_frames(
+                    [dict(item) for item in raw_frames if isinstance(item, Mapping)],
+                    connection_id=connection_id,
+                    request_wire=request_wire,
+                    response_wire=response_wire,
+                    client_payload=client_payload,
+                    server_payload=server_payload,
+                )
+                errors.extend(
+                    f"transaction {index}: {error}" for error in connect_frame_errors
+                )
+                transcript_errors = _connect_transcript_errors(
+                    connect_tunnel.get("transcript"),
+                    tunnel_frames=connect_frames,
+                )
+                connect_half_close_events, half_close_errors = _connect_half_close_events(
+                    connect_tunnel.get("half_close_events"),
+                    tunnel_frames=connect_frames,
+                )
+                errors.extend(
+                    f"transaction {index}: {error}"
+                    for error in [*transcript_errors, *half_close_errors]
+                )
+                if not client_payload or not server_payload:
+                    errors.append(
+                        f"HTTP source transaction {index} CONNECT tunnel is not bidirectional"
+                    )
+                replay_supported = (
+                    200 <= status_code < 300
+                    and not interim_responses
+                    and not authority_errors
+                    and not client_errors
+                    and not server_errors
+                    and not connect_frame_errors
+                    and not transcript_errors
+                    and not half_close_errors
+                    and bool(client_payload)
+                    and bool(server_payload)
+                )
         transactions.append(
             {
                 "sequence": index,
@@ -5813,6 +6393,9 @@ def _http_replay_transactions(
                 "response": response,
                 "interim_responses": interim_responses,
                 "source_connection": connection,
+                "connect_tunnel": connect_tunnel,
+                "connect_tunnel_frames": connect_frames,
+                "connect_half_close_events": connect_half_close_events,
                 "replay_supported": replay_supported,
                 "limitations": _deduplicate(transaction_limitations),
             }
@@ -5834,10 +6417,17 @@ def _http_replay_transactions(
             transaction_wires = []
         total_wire_bytes += sum(len(value) for value in transaction_wires)
         required_frames += 1 + len(interim_responses) + 1
+        if connect_frames:
+            total_wire_bytes += sum(
+                int(frame.get("length") or 0) for frame in connect_frames
+            )
+            required_frames += len(connect_frames)
 
     unlinked = set(messages) - accounted_message_ids
     if unlinked:
         errors.append("HTTP replay source contains uncorrelated HTTP messages")
+    if tunnels_by_connection:
+        errors.append("HTTP replay source contains uncorrelated CONNECT tunnel evidence")
     if int(after.get("message_count") or -1) != len(raw_messages):
         errors.append("HTTP replay source message_count is inconsistent")
     if int(after.get("request_response_pair_count") or -1) != len(raw_pairs):
@@ -5853,7 +6443,7 @@ def _http_replay_transactions(
         errors.append("HTTP replay source exceeds max_request_response_pairs")
     if len(transactions) > int(limits.get("max_connections") or 0):
         errors.append("HTTP fixture replay requires more than max_connections")
-    if required_frames > int(limits.get("max_frames") or 0):
+    if max(required_frames, len(raw_frames)) > int(limits.get("max_frames") or 0):
         errors.append("HTTP fixture replay requires more than max_frames")
     if total_wire_bytes > int(limits.get("max_bytes") or 0):
         errors.append("HTTP fixture replay source bytes exceed max_bytes")
@@ -6009,7 +6599,7 @@ def _receive_http1_responses(
     timeout_ms: int,
     byte_budget: int,
     response_frame_budget: int,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], bytearray]:
     if byte_budget <= 0:
         raise ValueError("HTTP response has no remaining byte budget")
     if response_frame_budget <= 0:
@@ -6067,11 +6657,15 @@ def _receive_http1_responses(
         informational = 100 <= status_code < 200 and status_code != 101
         if informational:
             continue
-        if offset != len(buffer):
+        is_connect_tunnel = (
+            str(request_method or "").upper() == "CONNECT"
+            and 200 <= status_code < 300
+        )
+        if offset != len(buffer) and not is_connect_tunnel:
             raise ValueError(
                 "controlled fixture returned trailing bytes after the final HTTP response"
             )
-        return responses
+        return responses, bytearray(buffer[offset:])
 
 
 def _http_response_match_errors(
@@ -6851,6 +7445,7 @@ def _proxy_connection(
     mutation: Mapping[str, Any],
     frames: list[dict[str, Any]],
     counters: dict[str, int],
+    lifecycle: Optional[list[dict[str, Any]]] = None,
 ) -> Optional[str]:
     client.setblocking(False)
     upstream.setblocking(False)
@@ -6894,6 +7489,11 @@ def _proxy_connection(
         if not readable:
             continue
         for source in readable:
+            if len(frames) >= int(limits["max_frames"]):
+                return "max_frames"
+            remaining_bytes = int(limits["max_bytes"]) - counters["observed_bytes"]
+            if remaining_bytes <= 0:
+                return "max_bytes"
             destination, direction = readers[source]
             try:
                 observed = source.recv(min(_RECV_BYTES, remaining_bytes))
@@ -6903,6 +7503,15 @@ def _proxy_connection(
                 observed = b""
             if not observed:
                 readers.pop(source, None)
+                event = {
+                    "sequence": len(lifecycle or []) + 1,
+                    "direction": direction,
+                    "after_frame_sequence": len(frames),
+                    "propagated": False,
+                    "mode": "tls_bounded_drain"
+                    if isinstance(destination, ssl.SSLSocket)
+                    else "tcp_shutdown_write",
+                }
                 if isinstance(destination, ssl.SSLSocket):
                     # SSLSocket.shutdown() discards the TLS layer before doing a
                     # TCP half-close. Keep decrypting any final application data
@@ -6910,11 +7519,15 @@ def _proxy_connection(
                     tls_drain_deadline = (
                         time.monotonic() + int(limits["socket_timeout_ms"]) / 1_000.0
                     )
+                    event["propagated"] = False
                 else:
                     try:
                         destination.shutdown(socket.SHUT_WR)
+                        event["propagated"] = True
                     except OSError:
-                        pass
+                        event["propagated"] = False
+                if lifecycle is not None:
+                    lifecycle.append(event)
                 continue
             forwarded, mutation_record, replacements = _mutate_frame(
                 observed,
@@ -6983,6 +7596,58 @@ def _send_with_deadline(
         if sent <= 0:
             raise ConnectionError("protocol runtime socket closed while sending")
         view = view[sent:]
+
+
+def _replay_connect_half_close(
+    value: socket.socket,
+    event: Mapping[str, Any],
+    *,
+    deadline: float,
+    timeout_ms: int,
+) -> dict[str, Any]:
+    direction = str(event.get("direction") or "")
+    if direction == "client_to_server":
+        if isinstance(value, ssl.SSLSocket):
+            raise RuntimeError(
+                "CONNECT half-close replay over TLS proxy transport is not supported"
+            )
+        value.shutdown(socket.SHUT_WR)
+        observed = "local_write_shutdown"
+    elif direction == "server_to_client":
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError(
+                "protocol runtime duration limit expired while verifying CONNECT half-close"
+            )
+        readable, _, _ = select.select(
+            [value],
+            [],
+            [],
+            min(timeout_ms / 1_000.0, remaining),
+        )
+        if not readable:
+            raise TimeoutError("CONNECT tunnel peer half-close verification timed out")
+        try:
+            trailing = value.recv(1)
+        except (ssl.SSLZeroReturnError, ssl.SSLEOFError):
+            trailing = b""
+        if trailing:
+            raise RuntimeError(
+                "CONNECT tunnel peer sent bytes after the retained transcript"
+            )
+        observed = "peer_eof"
+    else:
+        raise ValueError("CONNECT half-close direction is invalid")
+    return {
+        "sequence": int(event.get("sequence") or 0),
+        "direction": direction,
+        "after_source_frame_sequence": int(
+            event.get("after_source_frame_sequence") or 0
+        ),
+        "requested_mode": str(event.get("mode") or ""),
+        "observed": observed,
+        "verified": True,
+    }
 
 
 def _recv_exact_with_deadline(

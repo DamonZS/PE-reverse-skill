@@ -65,11 +65,41 @@ class ReleaseCliTests(unittest.TestCase):
 
     def test_release_commands_are_registered(self):
         parser = build_parser()
-        self.assertEqual(parser.parse_args(["resume", "campaign.json"]).command, "resume")
-        self.assertEqual(parser.parse_args(["report", "out"]).command, "report")
+        commands = {
+            parser.parse_args(arguments).command
+            for arguments in (
+                [
+                    "doctor",
+                    "--base-url",
+                    "http://127.0.0.1/v1",
+                    "--model",
+                    "fixture",
+                ],
+                ["profiles"],
+                ["strategies"],
+                ["validate", "campaign.json"],
+                ["run", "campaign.json"],
+                ["resume", "campaign.json"],
+                ["report", "out"],
+                ["promote", "out"],
+                ["benchmark", "campaign.json"],
+                ["release-verify", "dist"],
+            )
+        }
         self.assertEqual(
-            parser.parse_args(["release-verify", "dist"]).command,
-            "release-verify",
+            commands,
+            {
+                "doctor",
+                "profiles",
+                "strategies",
+                "validate",
+                "run",
+                "resume",
+                "report",
+                "promote",
+                "benchmark",
+                "release-verify",
+            },
         )
 
     def test_campaign_schema_matches_strict_message_and_scoring_contracts(self):

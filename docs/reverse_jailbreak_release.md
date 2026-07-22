@@ -30,8 +30,12 @@ size and SHA-256 of the wheel, schema, starter configuration, changelog, release
 notes, release guide, and smoke runner. `release-verify` rejects version drift,
 multiple wheels, missing, modified, path-escaping, duplicate, and untracked
 files. The smoke runner creates a temporary virtual environment, installs the
-wheel with its declared dependencies, and exercises the installed console entry
-point. Use `-Clean` for deterministic repeated builds.
+wheel with its declared dependencies, and exercises every installed command:
+`doctor`, `profiles`, `strategies`, `validate`, `run`, `resume`, `report`,
+`promote`, `benchmark`, and `release-verify`. Endpoint checks and campaign runs
+use a temporary loopback-only OpenAI-compatible fixture and a disposable
+environment-variable credential, so package smoke does not require an external
+endpoint or retained secret. Use `-Clean` for deterministic repeated builds.
 
 The normal release CI builds, verifies, installs, and smokes the package without
 calling an external model endpoint. The retained live acceptance workflow is

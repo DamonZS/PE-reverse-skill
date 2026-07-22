@@ -120,7 +120,7 @@ class HttpFixtureServer:
 
 
 class ConnectEchoTarget:
-    def __init__(self) -> None:
+    def __init__(self, *, respond_after_eof: bool = False) -> None:
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.listener.bind(("127.0.0.1", 0))
@@ -128,6 +128,8 @@ class ConnectEchoTarget:
         self.listener.settimeout(0.1)
         self.port = int(self.listener.getsockname()[1])
         self.received = b""
+        self.respond_after_eof = respond_after_eof
+        self.eof_observed = False
         self.errors: list[str] = []
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._serve, daemon=True)
@@ -152,7 +154,17 @@ class ConnectEchoTarget:
             try:
                 with connection:
                     connection.settimeout(1)
-                    self.received = connection.recv(4096)
+                    if self.respond_after_eof:
+                        received = bytearray()
+                        while True:
+                            chunk = connection.recv(4096)
+                            if not chunk:
+                                self.eof_observed = True
+                                break
+                            received.extend(chunk)
+                        self.received = bytes(received)
+                    else:
+                        self.received = connection.recv(4096)
                     connection.sendall(self.received.upper())
                 return
             except OSError as exc:
@@ -161,15 +173,26 @@ class ConnectEchoTarget:
 
 
 class ConnectProxyFixture:
-    def __init__(self, target_port: int) -> None:
+    def __init__(
+        self,
+        target_port: int,
+        *,
+        authority_port: int | None = None,
+        relay_half_close: bool = False,
+    ) -> None:
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.listener.bind(("127.0.0.1", 0))
         self.listener.listen(1)
         self.listener.settimeout(0.1)
+        self.host = "127.0.0.1"
         self.port = int(self.listener.getsockname()[1])
         self.target_port = target_port
+        self.authority_port = authority_port or target_port
+        self.relay_half_close = relay_half_close
         self.request = b""
+        self.client_eof_observed = False
+        self.upstream_eof_observed = False
         self.errors: list[str] = []
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._serve, daemon=True)
@@ -201,17 +224,33 @@ class ConnectProxyFixture:
                             raise ConnectionError("CONNECT request ended before headers")
                         request.extend(chunk)
                     self.request = bytes(request)
-                    expected = f"127.0.0.1:{self.target_port}".encode("ascii")
+                    expected = f"127.0.0.1:{self.authority_port}".encode("ascii")
                     if not self.request.startswith(b"CONNECT " + expected + b" HTTP/1.1\r\n"):
                         raise ValueError("CONNECT authority did not match the fixture target")
                     with socket.create_connection(
                         ("127.0.0.1", self.target_port), timeout=1
                     ) as upstream:
                         client.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
-                        payload = client.recv(4096)
-                        upstream.sendall(payload)
-                        response = upstream.recv(4096)
-                        client.sendall(response)
+                        if self.relay_half_close:
+                            while True:
+                                payload = client.recv(4096)
+                                if not payload:
+                                    self.client_eof_observed = True
+                                    upstream.shutdown(socket.SHUT_WR)
+                                    break
+                                upstream.sendall(payload)
+                            while True:
+                                response = upstream.recv(4096)
+                                if not response:
+                                    self.upstream_eof_observed = True
+                                    client.shutdown(socket.SHUT_WR)
+                                    break
+                                client.sendall(response)
+                        else:
+                            payload = client.recv(4096)
+                            upstream.sendall(payload)
+                            response = upstream.recv(4096)
+                            client.sendall(response)
                 return
             except (OSError, ValueError) as exc:
                 self.errors.append(str(exc) or exc.__class__.__name__)
@@ -800,7 +839,7 @@ class ProtocolRuntimeHttpTests(unittest.TestCase):
         self.assertFalse(result.after_snapshot["real_socket_evidence"])
         self.assertFalse(result.after_snapshot["real_capture_success"])
 
-    def test_connect_replay_is_explicitly_partial_not_success(self) -> None:
+    def test_connect_hostname_authority_fails_closed_before_replay(self) -> None:
         request_wire = (
             b"CONNECT localhost:443 HTTP/1.1\r\nHost: localhost:443\r\n\r\n"
         )
@@ -810,30 +849,157 @@ class ProtocolRuntimeHttpTests(unittest.TestCase):
             response_wire,
             session_id="http-connect-capture",
         )
-        self.assertEqual(capture_result.status, "ok")
-        self.assertFalse(
-            capture_result.after_snapshot["request_response_pairs"][0][
-                "replay_supported"
-            ]
+        self.assertEqual(capture_result.status, "partial")
+        self.assertIn(
+            "host must be an IP literal",
+            " ".join(capture_result.report_section["errors"]),
         )
         artifact = self._materialize(capture_result, "connect-source")
         server = HttpFixtureServer(response_wire)
         try:
             plan = self.provider.plan(self._replay_request(artifact, server))
             validation = self.provider.validate(plan)
-            self.assertTrue(validation.ok, validation.errors)
-            result = self.provider.execute(plan)
+            self.assertFalse(validation.ok)
+            with patch(
+                "reverse_analyzer.providers.protocol_runtime._connect_loopback",
+                side_effect=AssertionError("invalid CONNECT source opened a socket"),
+            ):
+                result = self.provider.execute(plan)
         finally:
             server.close()
 
-        self.assertEqual(result.status, "partial")
-        self.assertFalse(result.after_snapshot["network_transmit"])
-        self.assertEqual(result.after_snapshot["generalized_replay"], "partial")
-        self.assertIn(
-            "CONNECT tunnel replay is not generalized",
-            result.after_snapshot["generalized_replay_limitations"],
+        self.assertEqual(result.status, "failed")
+        self.assertFalse(result.provenance["network_transmit"])
+        self.assertEqual(server.received, [])
+
+    def test_real_loopback_connect_capture_replay_preserves_half_close(self) -> None:
+        source_target = ConnectEchoTarget(respond_after_eof=True)
+        source_proxy = ConnectProxyFixture(
+            source_target.port,
+            relay_half_close=True,
         )
-        self.assertFalse(result.after_snapshot["fixture_verified"])
+        payload = b"bounded-connect-replay"
+        try:
+            request = CapabilityRequest(
+                capability="protocol_runtime",
+                action="loopback_http_capture",
+                target=TargetIdentity(
+                    kind="http-connect-proxy",
+                    display_name=f"http://127.0.0.1:{source_proxy.port}",
+                ),
+                params={
+                    "listen_host": "127.0.0.1",
+                    "listen_port": 0,
+                    "upstream_host": "127.0.0.1",
+                    "upstream_port": source_proxy.port,
+                    **self._limits(),
+                },
+                session_id="http-connect-replay-source",
+                provenance={"test_case": self.id()},
+            )
+            plan = self.provider.plan(request)
+            self.assertTrue(self.provider.validate(plan).ok)
+            ready: queue.Queue[dict[str, Any]] = queue.Queue()
+            outcome: dict[str, Any] = {}
+
+            def run_capture() -> None:
+                outcome["result"] = self.provider.execute(
+                    plan,
+                    context={"protocol_runtime_ready": ready.put},
+                )
+
+            worker = threading.Thread(target=run_capture, daemon=True)
+            worker.start()
+            endpoint = ready.get(timeout=2)
+            authority = f"127.0.0.1:{source_target.port}".encode("ascii")
+            with socket.create_connection(
+                (str(endpoint["host"]), int(endpoint["port"])), timeout=1
+            ) as client:
+                client.sendall(
+                    b"CONNECT "
+                    + authority
+                    + b" HTTP/1.1\r\nHost: "
+                    + authority
+                    + b"\r\n\r\n"
+                )
+                response = bytearray()
+                while b"\r\n\r\n" not in response:
+                    response.extend(client.recv(4096))
+                marker = response.index(b"\r\n\r\n") + 4
+                self.assertEqual(
+                    bytes(response[:marker]),
+                    b"HTTP/1.1 200 Connection Established\r\n\r\n",
+                )
+                tunnel_response = bytearray(response[marker:])
+                client.sendall(payload)
+                client.shutdown(socket.SHUT_WR)
+                while True:
+                    chunk = client.recv(4096)
+                    if not chunk:
+                        break
+                    tunnel_response.extend(chunk)
+                self.assertEqual(bytes(tunnel_response), payload.upper())
+
+            worker.join(timeout=4)
+            self.assertFalse(worker.is_alive(), "CONNECT capture exceeded its bound")
+            capture_result = outcome["result"]
+            self.assertEqual(
+                capture_result.status,
+                "ok",
+                capture_result.report_section["errors"],
+            )
+            source_tunnel = capture_result.after_snapshot["connect_tunnels"][0]
+            self.assertTrue(source_tunnel["half_close_verified"])
+            self.assertEqual(source_tunnel["transcript"]["frame_count"], 2)
+            self.assertTrue(source_target.eof_observed)
+            self.assertTrue(source_proxy.client_eof_observed)
+            self.assertTrue(source_proxy.upstream_eof_observed)
+
+            artifact = self._materialize(capture_result, "connect-replay-source")
+            replay_target = ConnectEchoTarget(respond_after_eof=True)
+            replay_proxy = ConnectProxyFixture(
+                replay_target.port,
+                authority_port=source_target.port,
+                relay_half_close=True,
+            )
+            try:
+                replay_plan = self.provider.plan(
+                    self._replay_request(artifact, replay_proxy)
+                )
+                validation = self.provider.validate(replay_plan)
+                self.assertTrue(validation.ok, validation.errors)
+                replay_result = self.provider.execute(replay_plan)
+            finally:
+                replay_proxy.close()
+                replay_target.close()
+
+            self.assertEqual(
+                replay_result.status,
+                "ok",
+                replay_result.report_section["errors"],
+            )
+            replay_connection = replay_result.after_snapshot["connections"][0]
+            replay_transaction = replay_result.after_snapshot[
+                "request_response_pairs"
+            ][0]
+            self.assertTrue(replay_result.after_snapshot["fixture_verified"])
+            self.assertTrue(replay_transaction["connect_tunnel_verified"])
+            self.assertTrue(replay_transaction["connect_half_close_verified"])
+            self.assertEqual(
+                replay_transaction["connect_transcript"]["sha256"],
+                source_tunnel["transcript"]["sha256"],
+            )
+            self.assertEqual(replay_target.received, payload)
+            self.assertTrue(replay_target.eof_observed)
+            self.assertTrue(replay_proxy.client_eof_observed)
+            self.assertTrue(replay_proxy.upstream_eof_observed)
+            self.assertTrue(replay_connection["cleanup"]["socket_closed"])
+            rollback = self.provider.rollback(replay_result)
+            self.assertTrue(rollback.ok)
+            self.assertTrue(rollback.details["completed"])
+        finally:
+            source_proxy.close()
+            source_target.close()
 
     def test_real_loopback_connect_tunnel_capture_mutation_and_rollback(self) -> None:
         target = ConnectEchoTarget()

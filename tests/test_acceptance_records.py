@@ -15,6 +15,7 @@ from reverse_analyzer.acceptance import (
     verify_acceptance_record,
 )
 from reverse_analyzer.environment_validation import validate_external_environment
+from tests.e2e.test_gui_vlm_live import _normalized_canary, _visual_text
 
 
 def _write_live_memory_artifacts(
@@ -63,6 +64,17 @@ def _write_live_memory_artifacts(
 
 
 class AcceptanceRecordTests(unittest.TestCase):
+    def test_vlm_canary_matching_normalizes_case_and_whitespace(self) -> None:
+        output = {
+            "text_regions": [{"text": "Status: VLM   Canary 42"}],
+            "widgets": [{"text": "Save"}, {"type": "button"}],
+        }
+
+        observed = [_normalized_canary(item) for item in _visual_text(output)]
+
+        self.assertIn("vlm canary 42", observed[0])
+        self.assertEqual(len(observed), 2)
+
     def test_graphics_combined_fixture_contract_retains_hash_backed_proof(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             def runner(command, **kwargs):  # type: ignore[no-untyped-def]
@@ -167,6 +179,7 @@ class AcceptanceRecordTests(unittest.TestCase):
                         "model": "fixture-vision",
                         "sha256": "b" * 64,
                         "image_sha256": "b" * 64,
+                        "canary_sha256": "c" * 64,
                     },
                     "invocation.json": {"status": "ok", "duration_ms": 12},
                     "output.json": {
@@ -178,6 +191,13 @@ class AcceptanceRecordTests(unittest.TestCase):
                         "status": "ok",
                         "transport": "openai-compatible-http",
                         "authorization_persisted": False,
+                        "canary_verified": True,
+                    },
+                    "canary-verification.json": {
+                        "status": "ok",
+                        "verified": True,
+                        "canary_sha256": "c" * 64,
+                        "matched_items": 1,
                     },
                     "execution-proof.json": {
                         "status": "ok",
@@ -186,6 +206,7 @@ class AcceptanceRecordTests(unittest.TestCase):
                         "executed_tests": 1,
                         "skipped_tests": 0,
                         "live_operations": 1,
+                        "canary_verified": True,
                     },
                 }
                 for name, payload in artifacts.items():
@@ -198,6 +219,7 @@ class AcceptanceRecordTests(unittest.TestCase):
                 "REVERSE_ANALYZER_VLM_MODEL": "fixture-vision",
                 "REVERSE_ANALYZER_VLM_API_KEY": "fixture-secret",
                 "REVERSE_ANALYZER_VLM_IMAGE": "fixture.png",
+                "REVERSE_ANALYZER_VLM_CANARY": "VLM-CANARY-42",
             }
             record = run_acceptance_fixture(
                 "p7-vlm-openai-live",

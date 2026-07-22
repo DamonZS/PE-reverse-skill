@@ -599,6 +599,7 @@ _P0_P4_ACCEPTANCE_FIXTURES: tuple[dict[str, Any], ...] = (
             "REVERSE_ANALYZER_VLM_MODEL",
             "REVERSE_ANALYZER_VLM_API_KEY",
             "REVERSE_ANALYZER_VLM_IMAGE",
+            "REVERSE_ANALYZER_VLM_CANARY",
         ],
         "command": "$env:REVERSE_ANALYZER_RUN_VLM_LIVE='1'; python -m unittest tests.e2e.test_gui_vlm_live.LiveOpenAIVLMTests.test_live_image_analysis_retains_sanitized_acceptance_artifacts",
         "argv": [
@@ -613,6 +614,7 @@ _P0_P4_ACCEPTANCE_FIXTURES: tuple[dict[str, Any], ...] = (
             "gui-vlm/invocation.json",
             "gui-vlm/output.json",
             "gui-vlm/transport-audit.json",
+            "gui-vlm/canary-verification.json",
         ],
         "execution_proof_artifact": "gui-vlm/execution-proof.json",
         "required_executed_tests": 1,

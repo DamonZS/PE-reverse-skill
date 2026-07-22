@@ -20,8 +20,12 @@ The retained contract requires:
 The production HTTP/1.1 capture path also recognizes a bounded loopback
 `CONNECT` session. After a successful `2xx` response it switches to opaque
 tunnel mode and retains the authority, handshake status, bidirectional tunnel
-byte counts and SHA-256 values, while preserving frame-level mutation evidence.
-The tunneled protocol is intentionally not decoded or replayed as HTTP.
+byte counts and SHA-256 values, while preserving ordered transcript frame
+evidence, source-frame references, TCP half-close propagation/peer-EOF evidence,
+and verified socket cleanup. The bounded replay path replays only IPv4/IPv6
+loopback authorities and validates the retained endpoint identity before any
+bytes are sent. The tunneled protocol is intentionally not decoded or replayed
+as HTTP.
 
 Run the opt-in fixture through the acceptance registry:
 
@@ -41,8 +45,9 @@ non-synthetic provenance, target identity, and execution proof validation.
 ## Remaining boundary
 
 This acceptance covers controlled IPv4 loopback TLS capture and ordered session
-replay. CONNECT tunnel capture is covered as an opaque post-handshake subset;
-generalized CONNECT replay, arbitrary-interface capture, unmanaged TLS
+replay. Bounded loopback opaque CONNECT capture and replay, including transcript
+and half-close verification, is complete for the declared scope. Generalized
+CONNECT replay, arbitrary-interface capture, unmanaged TLS
 decryption, HTTP/2 and HTTP/3, and unrestricted remote endpoint/session replay
 remain outside the accepted scope. Passive adapter execution also remains
 dependent on an installed local capture tool and is limited to a loopback

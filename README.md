@@ -440,7 +440,7 @@ python -m reverse_analyzer dashboard --workspace . --out .\dashboard `
 | kernel bridge、签名驱动、live IOCTL fixture | 外部 Windows lab stack | `environment-validation.json` 可呈现依赖状态，但当前 kernel runtime 仍是 `missing`；文件发现或 bridge probe 不构成驱动 E2E。 |
 | MemProcFS/LeechCore、DMA 硬件与采集权限 | 外部硬件/runtime | 当前 DMA provider 仍是 `missing`；可执行文件 probe 不证明硬件初始化、地址转换或 live acquisition。 |
 | `comtypes`、Tesseract、VLM provider | 可选 GUI/OCR/model runtime | UIA 需要 Windows 桌面和真实窗口；VLM/OCR 还需要非测试 provider、真实图像和成功请求，mock/plugin discovery 不闭合验证。 |
-| OpenAI-compatible endpoint 与 API key | 外部模型服务/凭据 | 主动模型越狱工具的生产 HTTP 路径已经实现；真实 campaign 仍需可达 endpoint 和由环境变量提供的 API key，因此能力状态为 `dependency-gated`。 |
+| OpenAI-compatible endpoint 与 API key | 外部模型服务/凭据 | 主动模型越狱工具的生产 HTTP 路径和保留验收已闭合；可达 endpoint 与通过环境变量提供的 API key 是部署和周期 live regression 输入，不再是实现状态门禁。 |
 
 `windows_memory_runtime` 和 `windows_controlled_injector` 仅在 Windows 执行。即使平台正确，进程位数、目标生命周期、访问令牌、保护进程和内存权限也可能使操作以 `failed` 结束。PE patch、APK 本地处理、协议导入、报告和 Dashboard 本身不要求 Windows。
 

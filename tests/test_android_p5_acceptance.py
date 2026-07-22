@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from reverse_analyzer.acceptance import run_acceptance_fixture, verify_acceptance_record
+from tests.e2e.test_android_native_patch_live import _adb_fixture_preflight
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:
@@ -33,6 +34,67 @@ def _ready_report(fixture_id: str) -> dict[str, object]:
 
 
 class AndroidP5AcceptanceContractTests(unittest.TestCase):
+    def test_native_patch_preflight_rejects_existing_package_before_mutation(self) -> None:
+        commands: list[list[str]] = []
+        responses = iter(
+            [
+                {"ok": True, "stdout": "device\n"},
+                {"ok": True, "stdout": "emulator-5554\n"},
+                {"ok": True, "stdout": "package:/data/app/fixture.apk\n"},
+            ]
+        )
+
+        def runner(command, **_kwargs):  # type: ignore[no-untyped-def]
+            commands.append(command)
+            return next(responses)
+
+        with self.assertRaisesRegex(RuntimeError, "already installed"):
+            _adb_fixture_preflight(
+                ["adb", "-s", "emulator-5554"],
+                "com.fixture.app",
+                runner=runner,
+            )
+
+        self.assertEqual(len(commands), 3)
+        self.assertNotIn("install", " ".join(" ".join(item) for item in commands))
+
+    def test_native_patch_preflight_records_observed_device_and_clean_baseline(self) -> None:
+        responses = iter(
+            [
+                {"ok": True, "stdout": "device\n"},
+                {"ok": True, "stdout": "device-serial-1\n"},
+                {"ok": True, "stdout": ""},
+            ]
+        )
+
+        serial, evidence = _adb_fixture_preflight(
+            ["adb"],
+            "com.fixture.app",
+            runner=lambda *_args, **_kwargs: next(responses),
+        )
+
+        self.assertEqual(serial, "device-serial-1")
+        self.assertEqual(
+            [item["step"] for item in evidence],
+            ["device_state", "device_serial", "package_absent_precondition"],
+        )
+
+    def test_native_patch_preflight_rejects_failed_package_baseline_query(self) -> None:
+        responses = iter(
+            [
+                {"ok": True, "stdout": "device\n"},
+                {"ok": True, "stdout": "device-serial-1\n"},
+                {"ok": False, "stdout": "", "stderr": "transport error"},
+            ]
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "baseline query failed"):
+            _adb_fixture_preflight(
+                ["adb"],
+                "com.fixture.app",
+                runner=lambda *_args, **_kwargs: next(responses),
+            )
+
     def test_frida_fixture_requires_cleanup_and_non_skipped_live_proof(self) -> None:
         def runner(command, **kwargs):  # type: ignore[no-untyped-def]
             run_dir = Path(kwargs["env"]["REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR"])

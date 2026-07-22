@@ -68,6 +68,35 @@ def _run(command: list[str], *, timeout: float = 180.0) -> dict[str, object]:
     }
 
 
+def _adb_fixture_preflight(
+    adb_prefix: list[str],
+    package: str,
+    *,
+    runner=_run,
+) -> tuple[str, list[dict[str, object]]]:
+    device_state = runner([*adb_prefix, "get-state"], timeout=60)
+    if not (device_state["ok"] and str(device_state["stdout"]).strip() == "device"):
+        raise RuntimeError("ADB target is not online")
+    observed_serial = runner([*adb_prefix, "get-serialno"], timeout=60)
+    observed_serial_value = str(observed_serial["stdout"]).strip()
+    if not (observed_serial["ok"] and observed_serial_value not in {"", "unknown"}):
+        raise RuntimeError("ADB target did not report a stable serial")
+    installed_before = runner(
+        [*adb_prefix, "shell", "pm", "path", package], timeout=60
+    )
+    if not installed_before["ok"]:
+        raise RuntimeError("ADB package baseline query failed")
+    if str(installed_before["stdout"]).strip():
+        raise RuntimeError(
+            "fixture package is already installed; use a clean test-device baseline"
+        )
+    return observed_serial_value, [
+        {"step": "device_state", **device_state},
+        {"step": "device_serial", **observed_serial},
+        {"step": "package_absent_precondition", **installed_before},
+    ]
+
+
 @unittest.skipUnless(
     os.environ.get("RUN_ANDROID_NATIVE_PATCH_LIVE") == "1",
     "set RUN_ANDROID_NATIVE_PATCH_LIVE=1 to run native patch acceptance",
@@ -97,6 +126,13 @@ class AndroidNativePatchLiveTests(unittest.TestCase):
         serial = os.environ.get("ANDROID_NATIVE_PATCH_LIVE_DEVICE", "").strip()
         adb_prefix = [str(adb), "-s", serial] if serial else [str(adb)]
 
+        try:
+            observed_serial_value, preflight = _adb_fixture_preflight(
+                adb_prefix, package
+            )
+        except RuntimeError as exc:
+            self.fail(str(exc))
+
         acceptance_root = os.environ.get("REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR", "")
         temporary = tempfile.TemporaryDirectory() if not acceptance_root else None
         root = Path(acceptance_root or temporary.name).expanduser().resolve()
@@ -104,7 +140,8 @@ class AndroidNativePatchLiveTests(unittest.TestCase):
         patched = evidence / "retained" / "patched-signed.apk"
         source_hash = _sha256(source)
         provider = AndroidNativePatchProvider()
-        deployment: list[dict[str, object]] = []
+        deployment: list[dict[str, object]] = preflight
+        device_mutated = False
         try:
             params = {
                 **spec,
@@ -140,6 +177,7 @@ class AndroidNativePatchLiveTests(unittest.TestCase):
             deployment.append({"step": "verify_patched_signature", **signature})
             self.assertTrue(signature["ok"], signature)
 
+            device_mutated = True
             install = _run([*adb_prefix, "install", "-r", str(patched)])
             deployment.append({"step": "install_patched", **install})
             self.assertTrue(install["ok"], install)
@@ -186,7 +224,14 @@ class AndroidNativePatchLiveTests(unittest.TestCase):
             provider.collect_artifacts(result, str(evidence))
             _write_json(
                 evidence / "target-identity.json",
-                {"kind": "apk_fixture", "package_name": package, "sample_sha256": source_hash, "device": serial or "default"},
+                {
+                    "kind": "apk_fixture",
+                    "package_name": package,
+                    "sample_sha256": source_hash,
+                    "device_serial": observed_serial_value,
+                    "requested_device": serial or "default",
+                    "package_absent_before": True,
+                },
             )
             _write_json(evidence / "deployment.json", {"status": "ok", "operations": deployment})
             _write_json(
@@ -227,7 +272,7 @@ class AndroidNativePatchLiveTests(unittest.TestCase):
                 if secret:
                     self.assertNotIn(secret, retained_text)
         finally:
-            if adb and package:
+            if adb and package and device_mutated:
                 _run([*adb_prefix, "uninstall", package], timeout=60)
             if temporary is not None:
                 temporary.cleanup()
