@@ -6,6 +6,7 @@ import struct
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 import zlib
 
@@ -158,6 +159,97 @@ class AndroidJadxTests(unittest.TestCase):
                 (out_dir / "android" / "java_decompilation.json").read_text(encoding="utf-8")
             )
             self.assertEqual(persisted, section)
+
+    def test_production_runner_probes_jadx_before_decompilation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            apk = root / "sample.apk"
+            out_dir = root / "out"
+            executable = root / "jadx.exe"
+            executable.write_bytes(b"fixture")
+            _write_apk(apk)
+            commands: list[list[str]] = []
+
+            def bounded_runner(
+                command: list[str],
+                *,
+                timeout_seconds: float,
+                max_output_bytes: int,
+            ) -> JadxCommandOutput:
+                commands.append(list(command))
+                if any("--version" in item for item in command):
+                    self.assertLessEqual(timeout_seconds, 15.0)
+                    self.assertEqual(max_output_bytes, 64 * 1024)
+                    return JadxCommandOutput(0, "1.5.1\n", "")
+                output_dir = Path(command[command.index("-d") + 1])
+                source_dir = output_dir / "sources" / "com" / "example"
+                source_dir.mkdir(parents=True)
+                (source_dir / "Main.java").write_text("class Main {}\n", encoding="utf-8")
+                return JadxCommandOutput(0, "complete", "")
+
+            with patch(
+                "reverse_analyzer.tools.android._run_bounded_jadx_command",
+                side_effect=bounded_runner,
+            ):
+                result = android_analyze(
+                    apk,
+                    out_dir,
+                    config={
+                        "java_decompilation": {
+                            "enabled": True,
+                            "executable": str(executable),
+                        }
+                    },
+                )
+
+            section = result["java_decompilation"]
+            self.assertEqual(section["status"], "passed", section)
+            self.assertEqual(len(commands), 2)
+            self.assertEqual(section["dependency"]["probe"]["status"], "passed")
+            self.assertEqual(section["dependency"]["probe"]["version"], "1.5.1")
+            self.assertEqual(section["dependency"]["probe"]["command"], ["jadx", "--version"])
+
+    def test_failed_production_probe_stops_before_jadx_output_is_created(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            apk = root / "sample.apk"
+            out_dir = root / "out"
+            executable = root / "jadx.exe"
+            executable.write_bytes(b"fixture")
+            _write_apk(apk)
+            commands: list[list[str]] = []
+
+            def failed_probe(
+                command: list[str],
+                *,
+                timeout_seconds: float,
+                max_output_bytes: int,
+            ) -> JadxCommandOutput:
+                commands.append(list(command))
+                return JadxCommandOutput(1, "", "broken runtime")
+
+            with patch(
+                "reverse_analyzer.tools.android._run_bounded_jadx_command",
+                side_effect=failed_probe,
+            ):
+                result = android_analyze(
+                    apk,
+                    out_dir,
+                    config={
+                        "java_decompilation": {
+                            "enabled": True,
+                            "executable": str(executable),
+                        }
+                    },
+                )
+
+            section = result["java_decompilation"]
+            self.assertEqual(section["status"], "unavailable")
+            self.assertEqual(section["dependency"]["state"], "unavailable")
+            self.assertEqual(section["dependency"]["probe"]["status"], "failed")
+            self.assertEqual(section["dependency"]["probe"]["version"], "broken runtime")
+            self.assertEqual(len(commands), 1)
+            self.assertFalse((out_dir / "android" / "jadx").exists())
 
     def test_evidence_flag_can_explicitly_request_jadx(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

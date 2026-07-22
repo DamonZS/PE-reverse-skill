@@ -269,6 +269,161 @@ class AcceptanceRecordTests(unittest.TestCase):
             self.assertTrue(any("invalid JSON" in error for error in errors))
             self.assertTrue(any("artifact is missing" in error for error in errors))
 
+    def test_imgui_fixture_rejects_rehashed_cross_artifact_tampering(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            plugin_bytes = b"MZ" + b"production-imgui-plugin" * 8
+            plugin_sha256 = hashlib.sha256(plugin_bytes).hexdigest()
+            target = {
+                "kind": "process",
+                "pid": 4321,
+                "display_name": "controlled-imgui-host",
+                "metadata": {"architecture": "x64"},
+            }
+            target_hash = hashlib.sha256(
+                json.dumps(target, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            operations = ["load", "initialize", "install_hook", "frame_evidence", "shutdown", "unload"]
+            session_id = "imgui-live-session"
+            precondition_hash = "d" * 64
+            lifecycle = []
+            for sequence, operation in enumerate(operations, start=1):
+                lifecycle.append({
+                    "operation": operation,
+                    "sequence": sequence,
+                    "session_id": session_id,
+                    "target_identity_hash": target_hash,
+                    "precondition_hash": precondition_hash,
+                    "backend": "d3d11",
+                    "evidence_class": "live_host_proof",
+                    "live_verified": True,
+                    "proof": {
+                        "source": "native_host_bridge",
+                        "observed": True,
+                        "observed_at": "2026-07-22T00:00:00Z",
+                    },
+                    "bridge_call": {"process_cleanup": {"process_exited": True}},
+                })
+
+            def runner(command, **kwargs):  # type: ignore[no-untyped-def]
+                evidence = Path(kwargs["env"]["REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR"]) / "imgui"
+                evidence.mkdir(parents=True)
+                artifacts = {
+                    "target-identity.json": target,
+                    "renderer-plugin.json": {
+                        "status": "ok",
+                        "provider": "imgui_renderer",
+                        "production_build": True,
+                        "official_imgui_origin_verified": True,
+                        "sha256": plugin_sha256,
+                        "size": len(plugin_bytes),
+                        "architecture": "x64",
+                        "exports": ["ReverseAnalyzerImGuiCreate"],
+                        "retained_binary": "imgui/reverse_analyzer_imgui_renderer.dll",
+                        "hook_target_resolution_hash": "e" * 64,
+                    },
+                    "frame-lifecycle.json": {
+                        "status": "ok",
+                        "fixture_id": "p4-imgui-d3d11-live",
+                        "session_id": session_id,
+                        "bridge_identity": {
+                            "adapter": "local_json_subprocess",
+                            "protocol": "reverse-analyzer.native-bridge",
+                            "protocol_version": 1,
+                            "capability": "imgui_renderer_runtime",
+                            "executable_sha256": "f" * 64,
+                        },
+                        "plan": {
+                            "target_identity": target,
+                            "target_identity_hash": target_hash,
+                            "precondition_hash": precondition_hash,
+                            "backend": "d3d11",
+                            "operations": operations,
+                        },
+                        "execution": {
+                            "status": "ok",
+                            "live_verified": True,
+                            "evidence_class": "live_host_proof",
+                            "lifecycle": lifecycle,
+                        },
+                        "artifacts": {"provenance": {
+                            "session_id": session_id,
+                            "target_identity_hash": target_hash,
+                            "precondition_hash": precondition_hash,
+                            "backend": "d3d11",
+                            "evidence_class": "live_host_proof",
+                            "live_verified": True,
+                        }},
+                    },
+                    "hook-restoration.json": {
+                        "status": "completed",
+                        "verified": True,
+                        "rollback_verified": True,
+                        "cleanup_verified": True,
+                        "renderer_shutdown": True,
+                        "module_unloaded": True,
+                        "hook_restored": True,
+                        "shutdown": lifecycle[4],
+                        "unload": lifecycle[5],
+                    },
+                    "execution-proof.json": {
+                        "status": "ok",
+                        "provider": "imgui_renderer",
+                        "evidence_class": "live_host_proof",
+                        "executed_tests": 1,
+                        "skipped_tests": 0,
+                        "live_operations": len(operations),
+                        "actions": operations,
+                        "plugin_sha256": plugin_sha256,
+                    },
+                }
+                for name, payload in artifacts.items():
+                    (evidence / name).write_text(json.dumps(payload), encoding="utf-8")
+                (evidence / "reverse_analyzer_imgui_renderer.dll").write_bytes(plugin_bytes)
+                return subprocess.CompletedProcess(command, 0, stdout="imgui live ok", stderr="")
+
+            environment = {
+                "DEAR_IMGUI_ROOT": "imgui-checkout",
+                "REVERSE_ANALYZER_GRAPHICS_FIXTURE_PID": "4321",
+                "REVERSE_ANALYZER_IMGUI_BRIDGE": "imgui-bridge.exe",
+                "REVERSE_ANALYZER_IMGUI_PRESENT_RESOLUTION": "present-resolution.json",
+            }
+            ready_report = {"status": "ok", "acceptance_fixtures": [{
+                "id": "p4-imgui-d3d11-live",
+                "status": "ready_to_run",
+                "configured_gates": sorted(environment),
+                "missing_gates": [],
+                "workflow_states": {},
+            }]}
+            with mock.patch(
+                "reverse_analyzer.acceptance.validate_external_environment",
+                return_value=ready_report,
+            ):
+                record = run_acceptance_fixture(
+                    "p4-imgui-d3d11-live",
+                    temporary,
+                    execute=True,
+                    environ=environment,
+                    system="Windows",
+                    runner=runner,
+                )
+
+            self.assertTrue(record["live_verified"], record["fixture_contract_errors"])
+            self.assertEqual(verify_acceptance_record(record["record_path"])["status"], "ok")
+
+            proof_path = Path(record["run_directory"]) / "imgui/execution-proof.json"
+            proof = json.loads(proof_path.read_text(encoding="utf-8"))
+            proof["plugin_sha256"] = "0" * 64
+            proof_path.write_text(json.dumps(proof), encoding="utf-8")
+            for entry in record["observed_artifacts"]:
+                if entry["path"] == "imgui/execution-proof.json":
+                    encoded = proof_path.read_bytes()
+                    entry["size"] = len(encoded)
+                    entry["sha256"] = hashlib.sha256(encoded).hexdigest()
+            Path(record["record_path"]).write_text(json.dumps(record), encoding="utf-8")
+            tampered = verify_acceptance_record(record["record_path"])
+            self.assertEqual(tampered["status"], "failed")
+            self.assertTrue(any("bind the plugin" in error for error in tampered["errors"]))
+
     def test_vlm_fixture_contract_retains_hash_backed_live_proof(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             def runner(command, **kwargs):  # type: ignore[no-untyped-def]
@@ -518,6 +673,31 @@ class AcceptanceRecordTests(unittest.TestCase):
 
         self.assertTrue(record["verification_constraints"]["provenance_non_synthetic"])
         self.assertTrue(record["live_verified"])
+
+    def test_execution_proof_provenance_is_checked(self) -> None:
+        """A synthetic execution proof cannot satisfy the live provenance gate."""
+        with tempfile.TemporaryDirectory() as temporary:
+            def runner(command, **kwargs):  # type: ignore[no-untyped-def]
+                run_dir = Path(kwargs["env"]["REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR"])
+                _write_live_memory_artifacts(run_dir)
+                proof = run_dir / "memory" / "execution-proof.json"
+                payload = json.loads(proof.read_text(encoding="utf-8"))
+                payload["provenance"] = {"evidence_class": "synthetic"}
+                proof.write_text(json.dumps(payload), encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+            record = run_acceptance_fixture(
+                "p1-memory-runtime-live",
+                temporary,
+                execute=True,
+                target_identity={"pid": 1234},
+                environ={},
+                system="Windows",
+                runner=runner,
+            )
+
+        self.assertFalse(record["verification_constraints"]["provenance_non_synthetic"])
+        self.assertTrue(record["rejected_provenance"])
 
     def test_missing_artifacts_and_failed_command_never_verify(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

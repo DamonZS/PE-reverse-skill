@@ -859,7 +859,14 @@ class AndroidRebuildProvider:
                 error="verify artifact parent is not writable",
             )
             if _coerce_bool(plan.parameters.get("verify_signature"), default=False):
-                details = _resolve_named_tools(plan, runner, ("apksigner",))["apksigner"]
+                details = _resolve_named_tools(
+                    plan,
+                    runner,
+                    ("apksigner",),
+                    probe=True,
+                    cwd=source_path.parent,
+                    timeout=min(self.timeout, 15.0),
+                )["apksigner"]
                 checks.append(
                     {
                         "name": "apksigner_available",
@@ -964,7 +971,14 @@ class AndroidRebuildProvider:
                 path=str(temporary_unpack),
             )
             if strategy == _APKTOOL_REBUILD:
-                details = _resolve_named_tools(plan, runner, ("apktool",))["apktool"]
+                details = _resolve_named_tools(
+                    plan,
+                    runner,
+                    ("apktool",),
+                    probe=True,
+                    cwd=source_path.parent,
+                    timeout=min(self.timeout, 15.0),
+                )["apktool"]
                 checks.append(
                     {
                         "name": "apktool_available",
@@ -1090,7 +1104,14 @@ class AndroidRebuildProvider:
                 }
             )
         elif strategy == _APKTOOL_REBUILD:
-            tools = _resolve_toolchain(plan, runner)
+            signing_errors = _signing_configuration_errors(plan.parameters.get("signing"))
+            tools = _resolve_toolchain(
+                plan,
+                runner,
+                probe=not signing_errors,
+                cwd=source_path if source_is_project else source_path.parent,
+                timeout=min(self.timeout, 15.0),
+            )
             for name in ("apktool", "apksigner"):
                 details = tools[name]
                 checks.append(
@@ -1102,19 +1123,25 @@ class AndroidRebuildProvider:
                 )
                 if not details["available"]:
                     warnings.append(f"{name} is unavailable; apktool_rebuild cannot execute")
-            tools_available = all(item["available"] for item in tools.values())
-            if tools_available:
-                signing_errors = _signing_configuration_errors(plan.parameters.get("signing"))
-                signing_ok = not signing_errors
+            if signing_errors:
                 checks.append(
                     {
                         "name": "signing_configuration",
-                        "status": "ok" if signing_ok else "failed",
+                        "status": "failed",
                         "mode": _json_mapping(plan.parameters.get("signing")).get("mode"),
                         "errors": signing_errors,
                     }
                 )
                 errors.extend(signing_errors)
+            elif all(item["available"] for item in tools.values()):
+                checks.append(
+                    {
+                        "name": "signing_configuration",
+                        "status": "ok",
+                        "mode": _json_mapping(plan.parameters.get("signing")).get("mode"),
+                        "errors": [],
+                    }
+                )
             else:
                 checks.append(
                     {
@@ -2822,20 +2849,97 @@ def _password_argument(value: Any) -> str:
     return f"pass:{text}"
 
 
-def _resolve_toolchain(plan: CapabilityPlan, runner: Any) -> dict[str, dict[str, Any]]:
-    return _resolve_named_tools(plan, runner, ("apktool", "apksigner"))
+def _resolve_toolchain(
+    plan: CapabilityPlan,
+    runner: Any,
+    *,
+    probe: bool = False,
+    cwd: Optional[Path] = None,
+    timeout: float = 15.0,
+) -> dict[str, dict[str, Any]]:
+    return _resolve_named_tools(
+        plan,
+        runner,
+        ("apktool", "apksigner"),
+        probe=probe,
+        cwd=cwd,
+        timeout=timeout,
+    )
 
 
 def _resolve_named_tools(
     plan: CapabilityPlan,
     runner: Any,
     names: Sequence[str],
+    *,
+    probe: bool = False,
+    cwd: Optional[Path] = None,
+    timeout: float = 15.0,
 ) -> dict[str, dict[str, Any]]:
     configured = _json_mapping(plan.parameters.get("tools"))
-    return {
+    resolved = {
         name: _resolve_tool(runner, str(configured.get(name) or name), name=name)
         for name in names
     }
+    if probe:
+        probe_cwd = (cwd or Path.cwd()).expanduser().resolve()
+        resolved = {
+            name: _probe_tool(
+                runner,
+                details,
+                name=name,
+                cwd=probe_cwd,
+                timeout=timeout,
+            )
+            for name, details in resolved.items()
+        }
+    return resolved
+
+
+def _probe_tool(
+    runner: Any,
+    details: Mapping[str, Any],
+    *,
+    name: str,
+    cwd: Path,
+    timeout: float,
+) -> dict[str, Any]:
+    result = dict(details)
+    if not result.get("available"):
+        return result
+    arguments = ["--version"] if name == "apktool" else ["version"]
+    command = [str(result.get("path") or result.get("configured") or name), *arguments]
+    try:
+        normalized = _command_result(
+            _invoke_runner(runner, command, cwd=cwd, timeout=max(1.0, timeout))
+        )
+    except Exception as exc:  # noqa: BLE001 - dependency diagnostics fail closed
+        normalized = {
+            "ok": False,
+            "returncode": None,
+            "stdout": "",
+            "stderr": f"{type(exc).__name__}: {exc}",
+        }
+    output = str(normalized.get("stdout") or normalized.get("stderr") or "").strip()
+    version = output.splitlines()[0][:512] if output else None
+    runnable = normalized.get("ok") is True
+    result.update(
+        {
+            "available": runnable,
+            "runnable": runnable,
+            "probe": {
+                "command": _redact_command(command),
+                "returncode": normalized.get("returncode"),
+                "version": version,
+            },
+            "reason": (
+                None
+                if runnable
+                else f"{name} version probe failed: {version or 'no diagnostic output'}"
+            ),
+        }
+    )
+    return result
 
 
 def _resolve_tool(runner: Any, command: str, *, name: str) -> dict[str, Any]:

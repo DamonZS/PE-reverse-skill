@@ -23,7 +23,10 @@ python -m reverse_analyzer environment accept run `
 The fixture requires generated Java or Kotlin source, an unchanged input APK
 hash, target identity, toolchain metadata, one executed test, zero skips, and a
 positive live-operation count. The retained record includes the Jadx summary
-and generated source hashes.
+and generated source hashes. The production path first runs a bounded offline
+`jadx --version` probe; the retained toolchain artifact includes its normalized
+version and return code. A failed probe stops before the output directory or
+decompilation command is created.
 
 ## APK Rebuild And Signing
 
@@ -49,6 +52,12 @@ The fixture executes `apktool`, signs and verifies with `apksigner`, retains a
 copy of the verified APK with its SHA-256, confirms the source APK is unchanged,
 and removes the operational output through provider rollback. Password values
 must not appear in the retained JSON artifacts.
+
+Provider validation resolves both executables and runs bounded, read-only
+version probes (`apktool --version` and `apksigner version`) before any rebuild
+output is written. A path that merely exists but cannot start is reported as an
+unavailable dependency together with the redacted probe command, return code,
+and first diagnostic line.
 
 Verify either resulting record independently:
 

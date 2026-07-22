@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import importlib.metadata
+import importlib.util
 import ipaddress
 import json
 import os
@@ -43,12 +45,18 @@ _UDP_CAPTURE = "loopback_udp_proxy_capture"
 _UDP_REPLAY = "loopback_udp_replay"
 _HTTP_CAPTURE = "loopback_http_capture"
 _HTTP_REPLAY = "http_fixture_replay"
+_PROTOCOL_ADAPTER_PREFLIGHT = "protocol_adapter_preflight"
 _PASSIVE_CAPTURE = "passive_capture"
 _PASSIVE_IMPORT = "passive_capture_import"
 _CAPTURE_ACTIONS = {_CAPTURE, _UDP_CAPTURE, _HTTP_CAPTURE}
 _REPLAY_ACTIONS = {_REPLAY, _UDP_REPLAY, _HTTP_REPLAY}
 _PASSIVE_ACTIONS = {_PASSIVE_CAPTURE, _PASSIVE_IMPORT}
-_SUPPORTED_ACTIONS = _CAPTURE_ACTIONS | _REPLAY_ACTIONS | _PASSIVE_ACTIONS
+_SUPPORTED_ACTIONS = (
+    _CAPTURE_ACTIONS
+    | _REPLAY_ACTIONS
+    | _PASSIVE_ACTIONS
+    | {_PROTOCOL_ADAPTER_PREFLIGHT}
+)
 _ACTION_ALIASES = {
     "capture": _PASSIVE_CAPTURE,
     "capture_import": _PASSIVE_IMPORT,
@@ -72,6 +80,9 @@ _ACTION_ALIASES = {
     "http_session_capture": _HTTP_CAPTURE,
     "loopback_http1_capture": _HTTP_CAPTURE,
     "loopback_http_proxy_capture": _HTTP_CAPTURE,
+    "adapter_preflight": _PROTOCOL_ADAPTER_PREFLIGHT,
+    "http2_adapter_preflight": _PROTOCOL_ADAPTER_PREFLIGHT,
+    "protocol_preflight": _PROTOCOL_ADAPTER_PREFLIGHT,
 }
 _DIRECTIONS = {"client_to_server", "server_to_client"}
 _REPLAY_FRAME_DIRECTIONS = _DIRECTIONS | {"a_to_b", "b_to_a"}
@@ -80,6 +91,8 @@ _REPLAY_MODES = {"frames", "session"}
 _REPLAY_TARGET_MODES = {"loopback", "offline_fixture"}
 _CAPTURE_SOURCE_FORMATS = {"pcap", "pcapng", "json", "jsonl", "raw"}
 _CAPTURE_ADAPTERS = ("dumpcap", "tshark", "tcpdump")
+_HTTP2_ADAPTERS = ("hyper-h2",)
+_HTTP2_ADAPTER_CONTRACT_VERSION = 1
 _DEFAULT_DURATION_MS = 2_000
 _MAX_DURATION_MS = 30_000
 _DEFAULT_SOCKET_TIMEOUT_MS = 500
@@ -135,6 +148,7 @@ class ProtocolRuntimeProvider:
         _REPLAY,
         _UDP_REPLAY,
         _HTTP_REPLAY,
+        _PROTOCOL_ADAPTER_PREFLIGHT,
     )
     safety_boundary = "passive_or_explicit_loopback_only"
 
@@ -164,7 +178,38 @@ class ProtocolRuntimeProvider:
         target_endpoint = _target_endpoint(parameters)
         tls_audit = _tls_audit_config(parameters.get("tls"))
         traffic_visibility = _tls_traffic_visibility(parameters.get("tls"))
-        if action in _PASSIVE_ACTIONS:
+        if action == _PROTOCOL_ADAPTER_PREFLIGHT:
+            dependency_probe = _probe_protocol_adapter(
+                str(parameters.get("application_protocol") or ""),
+                str(parameters.get("protocol_adapter") or "auto"),
+            )
+            parameters["adapter_probe"] = dependency_probe
+            before_snapshot = {
+                "session_state": "planned",
+                "session": _session_snapshot(
+                    session_id,
+                    action=action,
+                    mode="protocol_adapter_preflight",
+                    state="planned",
+                ),
+                "application_protocol": parameters.get("application_protocol"),
+                "protocol_adapter": parameters.get("protocol_adapter"),
+                "adapter_contract": dict(
+                    _mapping(parameters.get("adapter_contract"))
+                ),
+                "dependency_probe": dependency_probe,
+                "network_boundary": network_boundary,
+                "network_transmit": False,
+                "target_endpoint": {},
+            }
+            precondition_hash = _sha256_json(
+                {
+                    "action": action,
+                    "target": _target_identity(request.target),
+                    "parameters": parameters,
+                }
+            )
+        elif action in _PASSIVE_ACTIONS:
             capture_mode = str(parameters.get("capture_mode") or "offline_import")
             if capture_mode == "offline_import":
                 source_snapshot = _capture_source_snapshot(
@@ -286,7 +331,9 @@ class ProtocolRuntimeProvider:
             rollback_plan={
                 "supported": True,
                 "mode": (
-                    "terminate_passive_capture_adapter"
+                    "close_preflight_session"
+                    if action == _PROTOCOL_ADAPTER_PREFLIGHT
+                    else "terminate_passive_capture_adapter"
                     if action in _PASSIVE_ACTIONS
                     else "close_ephemeral_sockets"
                 ),
@@ -372,7 +419,9 @@ class ProtocolRuntimeProvider:
             limits=limits,
         )
 
-        if plan.action in _PASSIVE_ACTIONS:
+        if plan.action == _PROTOCOL_ADAPTER_PREFLIGHT:
+            self._validate_protocol_adapter_preflight(plan, check)
+        elif plan.action in _PASSIVE_ACTIONS:
             self._validate_passive_capture(plan, check, warnings)
         elif plan.action in _CAPTURE_ACTIONS:
             self._validate_capture(plan, check, warnings)
@@ -413,7 +462,9 @@ class ProtocolRuntimeProvider:
                 errors=list(validation.errors),
             )
 
-        if plan.action in _PASSIVE_ACTIONS:
+        if plan.action == _PROTOCOL_ADAPTER_PREFLIGHT:
+            outcome = self._execute_protocol_adapter_preflight(plan)
+        elif plan.action in _PASSIVE_ACTIONS:
             outcome = self._execute_passive_capture(plan)
         elif plan.action == _HTTP_CAPTURE:
             outcome = self._execute_http_capture(plan, context=context)
@@ -441,6 +492,77 @@ class ProtocolRuntimeProvider:
             errors=list(outcome.get("errors") or []),
         )
 
+    def _validate_protocol_adapter_preflight(
+        self,
+        plan: CapabilityPlan,
+        check: Callable[..., None],
+    ) -> None:
+        parameters = plan.parameters
+        protocol = str(parameters.get("application_protocol") or "")
+        adapter = str(parameters.get("protocol_adapter") or "")
+        contract = _mapping(parameters.get("adapter_contract"))
+        check(
+            "protocol_adapter_protocol",
+            protocol == "http/2",
+            "protocol adapter preflight currently requires application_protocol=http/2",
+            application_protocol=protocol,
+        )
+        check(
+            "protocol_adapter_name",
+            adapter in {"auto", *_HTTP2_ADAPTERS},
+            "unsupported HTTP/2 protocol adapter",
+            protocol_adapter=adapter,
+        )
+        check(
+            "protocol_adapter_contract",
+            contract == _http2_adapter_contract(),
+            "HTTP/2 protocol adapter contract is invalid",
+            adapter_contract=contract,
+        )
+        check(
+            "protocol_adapter_no_network_transmit",
+            parameters.get("allow_remote") is False
+            and _network_boundary(parameters) == "local_dependency_probe_only",
+            "protocol adapter preflight must not enable network transmission",
+            network_boundary=_network_boundary(parameters),
+        )
+
+    def _execute_protocol_adapter_preflight(
+        self,
+        plan: CapabilityPlan,
+    ) -> dict[str, Any]:
+        started = time.monotonic()
+        probe = _probe_protocol_adapter(
+            str(plan.parameters.get("application_protocol") or ""),
+            str(plan.parameters.get("protocol_adapter") or "auto"),
+        )
+        available = probe.get("status") == "available"
+        status = "ok" if available else "dependency-gated"
+        errors = [] if available else [str(probe.get("reason") or "adapter unavailable")]
+        after = {
+            "session_state": "closed",
+            "side_effects": False,
+            "network_transmit": False,
+            "application_protocol": plan.parameters.get("application_protocol"),
+            "protocol_adapter": probe.get("adapter"),
+            "adapter_contract": dict(
+                _mapping(plan.parameters.get("adapter_contract"))
+            ),
+            "adapter_contract_sha256": _sha256_json(
+                _mapping(plan.parameters.get("adapter_contract"))
+            ),
+            "dependency_state": probe.get("status"),
+            "dependency_probe": probe,
+            "capture_supported": False,
+            "replay_supported": False,
+            "live_verified": False,
+            "network_boundary": _network_boundary(plan.parameters),
+            "outcome_class": status,
+            "elapsed_ms": round((time.monotonic() - started) * 1_000, 3),
+            "errors": errors,
+        }
+        return {"status": status, "after_snapshot": _prune(after), "errors": errors}
+
     def rollback(
         self,
         result: CapabilityExecutionResult,
@@ -448,9 +570,12 @@ class ProtocolRuntimeProvider:
     ) -> CapabilityRollbackResult:
         del context
         closed = str(result.after_snapshot.get("session_state") or "") == "closed"
+        preflight = result.action == _PROTOCOL_ADAPTER_PREFLIGHT
         passive = result.action in _PASSIVE_ACTIONS
         rollback_mode = (
-            "terminate_passive_capture_adapter"
+            "close_preflight_session"
+            if preflight
+            else "terminate_passive_capture_adapter"
             if passive and result.after_snapshot.get("capture_mode") == "adapter"
             else "close_passive_import_session"
             if passive
@@ -2199,7 +2324,13 @@ class ProtocolRuntimeProvider:
                 if len(connections) >= int(limits.get("max_connections") or 0):
                     limit_reached = "max_connections"
                     break
-                if len(runtime_frames) + 2 > int(limits.get("max_frames") or 0):
+                expected_interim_responses = list(
+                    transaction.get("interim_responses") or []
+                )
+                expected_response_count = 1 + len(expected_interim_responses) + 1
+                if len(runtime_frames) + expected_response_count > int(
+                    limits.get("max_frames") or 0
+                ):
                     limit_reached = "max_frames"
                     break
                 if not bool(transaction.get("replay_supported")):
@@ -2208,6 +2339,7 @@ class ProtocolRuntimeProvider:
 
                 request_message = _mapping(transaction.get("request"))
                 expected_response = _mapping(transaction.get("response"))
+                expected_responses = [*expected_interim_responses, expected_response]
                 request_wire = _http_message_wire(request_message)
                 if (
                     sent_bytes
@@ -2293,7 +2425,11 @@ class ProtocolRuntimeProvider:
                     )
                     if not actual_responses:
                         raise RuntimeError("controlled fixture returned no HTTP/1.1 response")
-                    actual_final = actual_responses[-1]
+                    if len(actual_responses) != len(expected_responses):
+                        raise RuntimeError(
+                            "controlled fixture response sequence length did not match the capture"
+                        )
+                    comparison_errors: list[str] = []
                     for response_index, response in enumerate(actual_responses, start=1):
                         response_wire = _http_message_wire(response)
                         received_bytes += len(response_wire)
@@ -2313,15 +2449,19 @@ class ProtocolRuntimeProvider:
                                 "id": f"{runtime_connection_id}-response-{response_index}",
                                 "connection_id": runtime_connection_id,
                                 "sequence": len(runtime_messages) + 1,
-                                "source_message_id": expected_response.get("id"),
+                                "source_message_id": expected_responses[
+                                    response_index - 1
+                                ].get("id"),
                             }
                         )
                         runtime_messages.append(runtime_message)
+                        comparison_errors.extend(
+                            _http_response_match_errors(
+                                expected_responses[response_index - 1], response
+                            )
+                        )
 
-                    comparison_errors = _http_response_match_errors(
-                        expected_response,
-                        actual_final,
-                    )
+                    actual_final = actual_responses[-1]
                     comparison_errors.extend(
                         _verify_http_fixture_response(
                             fixture,
@@ -3183,6 +3323,26 @@ def _normalize_parameters(
             _DEFAULT_MAX_HTTP_HEADERS,
         ),
     }
+    if action == _PROTOCOL_ADAPTER_PREFLIGHT:
+        application_protocol = _normalize_application_protocol(
+            params.get("application_protocol")
+            or params.get("protocol")
+            or params.get("protocol_version")
+            or "http/2",
+            http_default=False,
+        )
+        adapter = str(
+            params.get("protocol_adapter") or params.get("adapter") or "auto"
+        ).strip().lower()
+        return {
+            "application_protocol": application_protocol,
+            "protocol_adapter": adapter,
+            "adapter_contract": _http2_adapter_contract(),
+            "limits": limits,
+            "transport": "tcp",
+            "allow_remote": False,
+            "network_boundary": "local_dependency_probe_only",
+        }
     if action in _PASSIVE_ACTIONS:
         source_value = (
             params.get("capture_source")
@@ -3391,6 +3551,8 @@ def _normalize_application_protocol(value: Any, *, http_default: bool) -> str:
     normalized = str(value or "").strip().lower().replace("_", "").replace("-", "")
     if normalized in {"http", "http1", "http11", "http/1.1"}:
         return "http/1.1"
+    if normalized in {"h2", "http2", "http/2"}:
+        return "http/2"
     if not normalized and http_default:
         return "http/1.1"
     return "opaque"
@@ -3831,6 +3993,134 @@ def _probe_passive_capture_adapter(requested: str) -> dict[str, Any]:
     }
 
 
+def _http2_adapter_contract() -> dict[str, Any]:
+    return {
+        "schema_version": _HTTP2_ADAPTER_CONTRACT_VERSION,
+        "application_protocol": "http/2",
+        "adapter": "hyper-h2",
+        "distribution": "h2",
+        "module": "h2",
+        "version_spec": ">=4.1,<5",
+        "required_capabilities": [
+            "connection_state_machine",
+            "connection_configuration",
+            "frame_codec",
+            "hpack",
+            "stream_events",
+        ],
+        "capture_contract": "not_implemented",
+        "replay_contract": "not_implemented",
+        "live_acceptance": "not_verified",
+    }
+
+
+def _probe_protocol_adapter(protocol: str, requested: str) -> dict[str, Any]:
+    normalized_protocol = _normalize_application_protocol(protocol, http_default=False)
+    adapter = str(requested or "auto").strip().lower()
+    selected = "hyper-h2" if adapter == "auto" else adapter
+    base = {
+        "protocol": normalized_protocol,
+        "requested": adapter,
+        "adapter": selected,
+        "contract": _http2_adapter_contract(),
+        "dependency_kind": "python_distribution",
+        "network_transmit": False,
+        "capture_supported": False,
+        "replay_supported": False,
+        "live_verified": False,
+    }
+    if normalized_protocol != "http/2":
+        return {
+            **base,
+            "status": "dependency-gated",
+            "reason": "protocol adapter preflight currently supports HTTP/2 only",
+        }
+    if selected not in _HTTP2_ADAPTERS:
+        return {
+            **base,
+            "status": "dependency-gated",
+            "reason": "unsupported HTTP/2 protocol adapter",
+        }
+    discovery_error = ""
+    try:
+        spec = importlib.util.find_spec("h2")
+    except (ImportError, ValueError) as exc:
+        spec = None
+        discovery_error = f"{type(exc).__name__}: {exc}"
+    try:
+        version = importlib.metadata.version("h2")
+    except (importlib.metadata.PackageNotFoundError, OSError, ValueError) as exc:
+        version = ""
+        discovery_error = discovery_error or f"{type(exc).__name__}: {exc}"
+    match = re.match(r"^(\d+)\.(\d+)", version)
+    version_supported = bool(
+        match
+        and int(match.group(1)) == 4
+        and int(match.group(2)) >= 1
+    )
+    if spec is None or not version:
+        return {
+            **base,
+            "status": "dependency-gated",
+            "module_found": spec is not None,
+            "distribution_found": bool(version),
+            "discovery_error": discovery_error,
+            "reason": "HTTP/2 adapter dependency h2>=4.1,<5 is not installed",
+        }
+    if not version_supported:
+        return {
+            **base,
+            "status": "dependency-gated",
+            "module_found": True,
+            "distribution_found": True,
+            "version": version,
+            "version_supported": False,
+            "reason": "HTTP/2 adapter dependency version is outside >=4.1,<5",
+        }
+    capability_symbols = {
+        "connection_state_machine": ("h2.connection", "H2Connection"),
+        "connection_configuration": ("h2.config", "H2Configuration"),
+        "stream_events": ("h2.events", "ResponseReceived"),
+        "hpack": ("hpack", "Encoder"),
+        "frame_codec": ("hyperframe.frame", "Frame"),
+    }
+    capability_probe: dict[str, bool] = {}
+    capability_error = ""
+    try:
+        for capability, (module_name, symbol_name) in capability_symbols.items():
+            module = importlib.import_module(module_name)
+            capability_probe[capability] = hasattr(module, symbol_name)
+    except (ImportError, OSError, RuntimeError) as exc:
+        capability_error = f"{type(exc).__name__}: {exc}"
+    capabilities_available = (
+        len(capability_probe) == len(capability_symbols)
+        and all(capability_probe.values())
+    )
+    if not capabilities_available:
+        return {
+            **base,
+            "status": "dependency-gated",
+            "module_found": True,
+            "distribution_found": True,
+            "version": version,
+            "version_supported": True,
+            "capability_probe": capability_probe,
+            "capability_error": capability_error,
+            "reason": "HTTP/2 adapter does not satisfy the required runtime interface",
+        }
+    return {
+        **base,
+        "status": "available",
+        "module_found": True,
+        "distribution_found": True,
+        "version": version,
+        "version_supported": True,
+        "capability_probe": capability_probe,
+        "real_adapter": True,
+        "mock_provider": False,
+    }
+
+
 def _adapter_probe_identity(value: Mapping[str, Any]) -> tuple[Any, ...]:
     executable = _mapping(value.get("executable"))
     return (
@@ -4253,6 +4543,8 @@ def _session_snapshot(
 
 
 def _execution_kind(action: str, parameters: Mapping[str, Any]) -> str:
+    if action == _PROTOCOL_ADAPTER_PREFLIGHT:
+        return "protocol_adapter_preflight"
     if action in _PASSIVE_ACTIONS:
         return (
             "passive_capture_adapter"
@@ -4273,7 +4565,7 @@ def _execution_kind(action: str, parameters: Mapping[str, Any]) -> str:
 
 
 def _plan_network_transmit(action: str, parameters: Mapping[str, Any]) -> bool:
-    if action in _PASSIVE_ACTIONS:
+    if action == _PROTOCOL_ADAPTER_PREFLIGHT or action in _PASSIVE_ACTIONS:
         return False
     if action in _REPLAY_ACTIONS:
         return parameters.get("replay_target_mode") != "offline_fixture"
@@ -4281,7 +4573,15 @@ def _plan_network_transmit(action: str, parameters: Mapping[str, Any]) -> bool:
 
 
 def _plan_steps(action: str, parameters: Mapping[str, Any]) -> list[dict[str, str]]:
-    if action in _PASSIVE_ACTIONS:
+    if action == _PROTOCOL_ADAPTER_PREFLIGHT:
+        names = [
+            "validate_local_dependency_probe_boundary",
+            "validate_protocol_adapter_contract",
+            "probe_python_distribution",
+            "record_dependency_identity",
+            "collect_protocol_evidence",
+        ]
+    elif action in _PASSIVE_ACTIONS:
         capture_step = (
             "run_passive_loopback_capture_adapter"
             if parameters.get("capture_mode") == "adapter"
@@ -6276,11 +6576,7 @@ def _http_replay_transactions(
                 *_http_transaction_limitations(request, response),
             ]
         )
-        if interim_responses:
-            transaction_limitations.append(
-                "informational response sequencing is not generalized"
-            )
-        replay_supported = bool(pair.get("replay_supported")) and not interim_responses
+        replay_supported = bool(pair.get("replay_supported"))
         if _http_transaction_limitations(request, response):
             replay_supported = False
         connect_tunnel: dict[str, Any] = {}
@@ -6374,7 +6670,6 @@ def _http_replay_transactions(
                     )
                 replay_supported = (
                     200 <= status_code < 300
-                    and not interim_responses
                     and not authority_errors
                     and not client_errors
                     and not server_errors

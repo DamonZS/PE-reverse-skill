@@ -71,6 +71,8 @@ class AndroidP5JadxLiveTests(unittest.TestCase):
             section = result["java_decompilation"]
             self.assertEqual(section["status"], "passed", section)
             self.assertEqual(section["dependency"]["state"], "available")
+            self.assertEqual(section["dependency"]["probe"]["status"], "passed")
+            self.assertTrue(section["dependency"]["probe"]["version"])
             self.assertGreater(section["output"]["source_file_count"], 0)
             self.assertTrue(section["target"]["unchanged"])
             self.assertEqual(hashlib.sha256(apk.read_bytes()).hexdigest(), before)
@@ -102,6 +104,7 @@ class AndroidP5JadxLiveTests(unittest.TestCase):
                         "status": "ok",
                         "provider": "jadx",
                         "dependency_state": section["dependency"]["state"],
+                        "probe": section["dependency"]["probe"],
                         "executable": Path(command[0]).name if command else "jadx",
                         "returncode": section.get("returncode"),
                         "source_file_count": section["output"]["source_file_count"],

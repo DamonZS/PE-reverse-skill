@@ -1157,6 +1157,13 @@ class ImGuiRendererProviderTests(unittest.TestCase):
             "status": "ok",
             "fixture_id": acceptance.fixture_id,
             "session_id": acceptance.session_id,
+            "bridge_identity": {
+                "adapter": bridge.describe()["adapter"],
+                "protocol": bridge.describe()["protocol"],
+                "protocol_version": bridge.describe()["protocol_version"],
+                "capability": bridge.describe()["capability"],
+                "executable_sha256": bridge.describe()["executable_identity"]["sha256"],
+            },
             "plan": host_plan,
             "execution": host_execution,
             "artifacts": host_artifacts,

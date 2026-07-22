@@ -635,6 +635,75 @@ class ProtocolRuntimeHttpTests(unittest.TestCase):
             fixture_entries[0]["sha256"], hashlib.sha256(fixture_path.read_bytes()).hexdigest()
         )
 
+    def test_informational_response_sequence_replays_in_capture_order(self) -> None:
+        request_wire = (
+            b"POST /continue HTTP/1.1\r\nHost: localhost\r\n"
+            b"Content-Length: 4\r\n\r\ndata"
+        )
+        response_wire = (
+            b"HTTP/1.1 100 Continue\r\n\r\n"
+            b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK"
+        )
+        _, capture_result, _ = self._capture(request_wire, response_wire)
+        capture_payload = capture_result.to_dict()
+        pair = capture_payload["after_snapshot"]["request_response_pairs"][0]
+        self.assertEqual(len(pair["interim_response_message_ids"]), 1)
+        interim_id = pair["interim_response_message_ids"][0]
+        final_id = pair["response_message_id"]
+        artifact = self._materialize(capture_result, "http-interim-source")
+        server = HttpFixtureServer(response_wire)
+        fixture_path = self.root / "interim-http-fixture.json"
+        fixture_path.write_text(
+            json.dumps(
+                {
+                    "expected_transaction_count": 1,
+                    "expected_status_codes": [200],
+                    "endpoint": {"host": "127.0.0.1", "port": server.port},
+                },
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+        try:
+            plan = self.provider.plan(
+                self._replay_request(artifact, server, http_fixture=str(fixture_path))
+            )
+            self.assertTrue(self.provider.validate(plan).ok)
+            result = self.provider.execute(plan)
+        finally:
+            server.close()
+        self.assertEqual(result.status, "ok", result.report_section["errors"])
+        replay_payload = result.to_dict()
+        responses = [
+            item for item in replay_payload["after_snapshot"]["messages"]
+            if item.get("kind") == "http_response"
+        ]
+        self.assertEqual([item["status_code"] for item in responses], [100, 200])
+        self.assertEqual(
+            [item["source_message_id"] for item in responses],
+            [interim_id, final_id],
+        )
+
+    def test_informational_response_sequence_length_mismatch_fails_closed(self) -> None:
+        request_wire = b"GET /continue HTTP/1.1\r\nHost: localhost\r\n\r\n"
+        captured_response = (
+            b"HTTP/1.1 100 Continue\r\n\r\n"
+            b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK"
+        )
+        _, capture_result, _ = self._capture(request_wire, captured_response)
+        artifact = self._materialize(capture_result, "http-interim-mismatch-source")
+        server = HttpFixtureServer(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK"
+        )
+        try:
+            plan = self.provider.plan(self._replay_request(artifact, server))
+            self.assertTrue(self.provider.validate(plan).ok)
+            result = self.provider.execute(plan)
+        finally:
+            server.close()
+        self.assertEqual(result.status, "failed")
+        self.assertIn("sequence length", " ".join(result.report_section["errors"]))
+
     def test_response_mismatch_is_fail_closed(self) -> None:
         request_wire = b"GET /mismatch HTTP/1.1\r\nHost: localhost\r\n\r\n"
         captured_response = (

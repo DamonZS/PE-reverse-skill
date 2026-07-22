@@ -82,6 +82,24 @@ class FakeAndroidRunner:
         return {"returncode": 0, "stdout": "verified", "stderr": ""}
 
 
+class BrokenVersionRunner(FakeAndroidRunner):
+    def run(
+        self,
+        command: Sequence[str],
+        *,
+        cwd: str | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        args = [str(item) for item in command]
+        tool = Path(args[0]).name.lower()
+        if ("apktool" in tool and args[1:] == ["--version"]) or (
+            "apksigner" in tool and args[1:] == ["version"]
+        ):
+            self.calls.append(args)
+            return {"returncode": 2, "stdout": "", "stderr": "wrapper failed"}
+        return super().run(command, cwd=cwd, timeout=timeout)
+
+
 class NoneResultRunner:
     def which(self, command: str) -> str:
         return command
@@ -515,6 +533,52 @@ class AndroidRebuildProviderTests(unittest.TestCase):
                 self.assertEqual(result.status, "unavailable")
                 self.assertFalse(result.after_snapshot["side_effects"])
 
+    def test_external_tool_version_probe_fails_before_writing_output(self) -> None:
+        runner = BrokenVersionRunner()
+        provider = AndroidRebuildProvider(runner=runner)
+        output = self.root / "broken-toolchain.apk"
+        keystore = self.root / "broken-toolchain.keystore"
+        keystore.write_bytes(b"fixture-keystore")
+        plan = provider.plan(
+            self.request(
+                "rebuild",
+                params={
+                    "strategy": "apktool_rebuild",
+                    "out_path": str(output),
+                    "keystore": str(keystore),
+                    "ks_pass": "fixture-password",
+                },
+                session_id="broken-toolchain",
+            )
+        )
+
+        validation = provider.validate(plan)
+
+        tool_checks = {
+            check["name"]: check
+            for check in validation.checks
+            if check["name"] in {"apktool_available", "apksigner_available"}
+        }
+        self.assertEqual(set(tool_checks), {"apktool_available", "apksigner_available"})
+        for check in tool_checks.values():
+            self.assertEqual(check["status"], "unavailable")
+            self.assertFalse(check["runnable"])
+            self.assertEqual(check["probe"]["returncode"], 2)
+            self.assertEqual(check["probe"]["version"], "wrapper failed")
+            self.assertIn("version probe failed", check["reason"])
+
+        result = provider.execute(plan)
+        self.assertEqual(result.status, "unavailable")
+        self.assertFalse(result.after_snapshot["side_effects"])
+        self.assertFalse(output.exists())
+        self.assertTrue(runner.calls)
+        self.assertTrue(
+            all(
+                call[1:] in (["--version"], ["version"])
+                for call in runner.calls
+            )
+        )
+
     def test_injected_runner_handles_apktool_rebuild_unpack_and_verify(self) -> None:
         runner = FakeAndroidRunner()
         provider = AndroidRebuildProvider(runner=runner)
@@ -598,11 +662,11 @@ class AndroidRebuildProviderTests(unittest.TestCase):
 
         result = provider.execute(plan)
 
-        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.status, "unavailable")
         self.assertFalse(result.after_snapshot["side_effects"])
-        self.assertEqual(result.report_section["signing"]["status"], "failed")
+        self.assertEqual(result.report_section["signing"]["status"], "unavailable")
         verify_payload = json.loads(Path(plan.parameters["verify_path"]).read_text("utf-8"))
-        self.assertFalse(verify_payload["commands"][0]["ok"])
+        self.assertEqual(verify_payload.get("commands", []), [])
 
     def test_successful_command_without_rebuild_output_is_failed(self) -> None:
         output = self.root / "missing-output.apk"
@@ -864,12 +928,27 @@ class AndroidRebuildProviderTests(unittest.TestCase):
         self.assertEqual(Path(plan.parameters["project_dir"]), project.resolve())
         validation = provider.validate(plan)
         self.assertTrue(validation.ok, validation.errors)
+        tool_checks = {
+            check["name"]: check
+            for check in validation.checks
+            if check["name"] in {"apktool_available", "apksigner_available"}
+        }
+        self.assertEqual(set(tool_checks), {"apktool_available", "apksigner_available"})
+        for check in tool_checks.values():
+            self.assertEqual(check["status"], "ok")
+            self.assertTrue(check["runnable"])
+            self.assertEqual(check["probe"]["returncode"], 0)
+            self.assertEqual(check["probe"]["version"], "verified")
         result = provider.execute(plan)
 
         self.assertEqual(result.status, "ok")
         self.assertTrue(output.is_file())
         self.assertEqual(LocalAndroidRebuildBackend().snapshot(project)["sha256"], project_hash)
-        apktool_actions = [call[1] for call in runner.calls if "apktool" in Path(call[0]).name.lower()]
+        apktool_actions = [
+            call[1]
+            for call in runner.calls
+            if "apktool" in Path(call[0]).name.lower() and call[1] in {"d", "b"}
+        ]
         self.assertEqual(apktool_actions, ["b"])
         self.assertEqual(result.provenance["source_kind"], "apktool_project")
 

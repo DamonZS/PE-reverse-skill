@@ -66,6 +66,8 @@ _MAX_JADX_OUTPUT_BYTES = 16 * 1024 * 1024
 _MAX_JADX_GENERATED_BYTES = 2 * 1024 * 1024 * 1024
 _MAX_JADX_GENERATED_FILES = 100_000
 _MAX_JADX_LOG_CHARS = 8_192
+_JADX_PROBE_TIMEOUT_SECONDS = 15.0
+_JADX_PROBE_MAX_OUTPUT_BYTES = 64 * 1024
 _JADX_OUTPUT_DIRECTORY = "jadx"
 
 _FRAMEWORK_NAMES = (
@@ -356,6 +358,7 @@ def _java_decompilation_payload(
     target_sha256_before: str | None = None,
     target_sha256_after: str | None = None,
     warnings: Sequence[str] = (),
+    dependency_probe: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -367,6 +370,7 @@ def _java_decompilation_payload(
             "name": "jadx",
             "state": dependency_state,
             "executable": executable_name,
+            "probe": dict(dependency_probe or {}),
         },
         "command": list(command),
         "command_metadata": {
@@ -505,6 +509,33 @@ def android_java_decompile(
         )
 
     executable_name = executable.name
+    command_runner = runner or _run_bounded_jadx_command
+    dependency_probe: dict[str, Any] = {
+        "status": "not_run",
+        "command": ["jadx", "--version"],
+        "version": None,
+    }
+    if runner is None:
+        dependency_probe = _probe_jadx_runtime(
+            executable,
+            command_runner,
+            timeout_seconds=min(timeout_seconds, _JADX_PROBE_TIMEOUT_SECONDS),
+        )
+        if dependency_probe["status"] != "passed":
+            return finish(
+                _java_decompilation_payload(
+                    status="unavailable",
+                    requested=True,
+                    reason=str(dependency_probe["reason"]),
+                    dependency_state="unavailable",
+                    executable_name=executable_name,
+                    output=_empty_jadx_output(output_relative),
+                    dependency_probe=dependency_probe,
+                )
+            )
+    else:
+        dependency_probe["reason"] = "tool probe is owned by the injected runner"
+
     try:
         if output_path.is_symlink():
             raise ValueError("JADX output directory must not be a symbolic link")
@@ -529,10 +560,10 @@ def android_java_decompile(
                 dependency_state="available",
                 executable_name=executable_name,
                 output=_empty_jadx_output(output_relative),
+                dependency_probe=dependency_probe,
             )
         )
 
-    command_runner = runner or _run_bounded_jadx_command
     command_output: JadxCommandOutput | None = None
     execution_error: str | None = None
     execution_status = "failed"
@@ -621,6 +652,7 @@ def android_java_decompile(
             target_sha256_before=precondition_hash,
             target_sha256_after=postcondition_hash,
             warnings=[f"executable discovery: {discovery_state}"],
+            dependency_probe=dependency_probe,
         )
     )
 
@@ -730,6 +762,71 @@ def _build_jadx_command(
         "<APK>",
     ]
     return actual, recorded
+
+
+def _build_jadx_probe_command(executable: Path) -> list[str]:
+    logical = [str(executable), "--version"]
+    if os.name != "nt" or executable.suffix.lower() not in {".bat", ".cmd"}:
+        return logical
+    if any(re.search(r"[&|<>^%!\r\n]", item) for item in logical):
+        raise ValueError("batch-backed JADX path contains unsupported command metacharacters")
+    command_processor = os.environ.get("COMSPEC") or shutil.which("cmd.exe")
+    if not command_processor:
+        raise ValueError("cmd.exe is required to probe jadx.bat")
+    return [command_processor, "/d", "/c", subprocess.list2cmdline(logical)]
+
+
+def _probe_jadx_runtime(
+    executable: Path,
+    runner: JadxRunner,
+    *,
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    """Fail closed before decompilation when the discovered JADX is not runnable."""
+
+    try:
+        command = _build_jadx_probe_command(executable)
+        raw_output = runner(
+            command,
+            timeout_seconds=timeout_seconds,
+            max_output_bytes=_JADX_PROBE_MAX_OUTPUT_BYTES,
+        )
+        output = _normalize_jadx_command_output(raw_output, _JADX_PROBE_MAX_OUTPUT_BYTES)
+    except (_JadxTimeoutError, subprocess.TimeoutExpired, TimeoutError):
+        return {
+            "status": "failed",
+            "command": ["jadx", "--version"],
+            "returncode": None,
+            "version": None,
+            "reason": "JADX version probe timed out",
+        }
+    except (OSError, RuntimeError, TypeError, ValueError, _JadxOutputLimitError) as exc:
+        return {
+            "status": "failed",
+            "command": ["jadx", "--version"],
+            "returncode": None,
+            "version": None,
+            "reason": f"JADX version probe failed: {type(exc).__name__}: {exc}",
+        }
+
+    version_text = (output.stdout or output.stderr).strip()
+    version = version_text.splitlines()[0][:_MAX_JADX_LOG_CHARS] if version_text else None
+    if output.returncode != 0 or not version:
+        diagnostic = version or f"exit status {output.returncode}"
+        return {
+            "status": "failed",
+            "command": ["jadx", "--version"],
+            "returncode": output.returncode,
+            "version": version,
+            "reason": f"JADX version probe failed: {diagnostic}",
+        }
+    return {
+        "status": "passed",
+        "command": ["jadx", "--version"],
+        "returncode": output.returncode,
+        "version": version,
+        "reason": "JADX executable passed the bounded version probe",
+    }
 
 
 def _normalize_jadx_command_output(raw: Any, max_output_bytes: int) -> JadxCommandOutput:

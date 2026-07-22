@@ -53,6 +53,14 @@ graphics bridge and invokes only its dedicated acceptance test. The
 PID, production ImGui bridge, and retained live Present-resolution evidence. It
 also invokes only its dedicated production-build/host-lifecycle test.
 
+The retained ImGui contract includes the built renderer DLL rather than only
+its manifest. Independent verification recomputes the DLL size and SHA-256 and
+binds the process target, D3D11 host plan, ordered load/initialize/hook/frame/
+shutdown/unload lifecycle, native observation proofs, bridge executable digest,
+hook restoration, cleanup, and execution proof to one session. Editing an
+artifact and updating its recorded hash does not satisfy these cross-artifact
+bindings.
+
 No retained combined graphics or ImGui record is checked in. Until a real run
 is retained and reviewed, Graphics Present and ImGui remain dependency-gated,
 and the combined projection/overlay capability remains partial.

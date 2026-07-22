@@ -462,6 +462,157 @@ def _graphics_combined_contract_errors(run_dir: Path) -> list[str]:
     return errors
 
 
+def _imgui_contract_errors(run_dir: Path) -> list[str]:
+    """Bind the retained ImGui plugin and native host lifecycle evidence."""
+
+    names = {
+        "target": "imgui/target-identity.json",
+        "plugin": "imgui/renderer-plugin.json",
+        "frame": "imgui/frame-lifecycle.json",
+        "restoration": "imgui/hook-restoration.json",
+        "proof": "imgui/execution-proof.json",
+    }
+    payloads: dict[str, dict[str, Any]] = {}
+    errors: list[str] = []
+    for key, relative in names.items():
+        path = run_dir / relative
+        if not path.is_file():
+            errors.append(f"ImGui contract artifact is missing: {relative}")
+            continue
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            errors.append(f"ImGui contract artifact is invalid JSON: {relative}")
+            continue
+        if not isinstance(value, Mapping):
+            errors.append(f"ImGui contract artifact must be a JSON object: {relative}")
+            continue
+        payloads[key] = dict(value)
+    plugin_binary = run_dir / "imgui/reverse_analyzer_imgui_renderer.dll"
+    if not plugin_binary.is_file():
+        errors.append("ImGui retained plugin binary is missing")
+    if errors:
+        return errors
+
+    target = payloads["target"]
+    target_hash = _json_hash(target)
+    target_pid = target.get("pid")
+    if type(target_pid) is not int or target_pid <= 0 or target.get("kind") != "process":
+        errors.append("ImGui target identity must be a process with a positive PID")
+
+    plugin = payloads["plugin"]
+    plugin_hash = str(plugin.get("sha256") or "").lower()
+    if not (len(plugin_hash) == 64 and all(char in "0123456789abcdef" for char in plugin_hash)):
+        errors.append("ImGui renderer plugin sha256 is invalid")
+    else:
+        if _sha256(plugin_binary) != plugin_hash:
+            errors.append("ImGui retained plugin binary sha256 does not match renderer manifest")
+    if plugin.get("size") != plugin_binary.stat().st_size:
+        errors.append("ImGui retained plugin binary size does not match renderer manifest")
+    if (
+        str(plugin.get("status") or "").lower() not in _SUCCESS_VALUES
+        or plugin.get("production_build") is not True
+        or plugin.get("official_imgui_origin_verified") is not True
+        or plugin.get("retained_binary") != "imgui/reverse_analyzer_imgui_renderer.dll"
+    ):
+        errors.append("ImGui renderer plugin is not a retained official production build")
+
+    operations = ("load", "initialize", "install_hook", "frame_evidence", "shutdown", "unload")
+    frame = payloads["frame"]
+    plan = frame.get("plan") if isinstance(frame.get("plan"), Mapping) else {}
+    execution = frame.get("execution") if isinstance(frame.get("execution"), Mapping) else {}
+    artifacts = frame.get("artifacts") if isinstance(frame.get("artifacts"), Mapping) else {}
+    provenance = artifacts.get("provenance") if isinstance(artifacts.get("provenance"), Mapping) else {}
+    lifecycle = execution.get("lifecycle") if isinstance(execution.get("lifecycle"), list) else []
+    session_id = str(frame.get("session_id") or "")
+    precondition_hash = str(plan.get("precondition_hash") or "")
+    if (
+        frame.get("status") != "ok"
+        or frame.get("fixture_id") != "p4-imgui-d3d11-live"
+        or not session_id
+        or plan.get("target_identity") != target
+        or plan.get("target_identity_hash") != target_hash
+        or plan.get("backend") != "d3d11"
+        or tuple(plan.get("operations") or ()) != operations
+    ):
+        errors.append("ImGui frame plan does not bind the registered target and D3D11 lifecycle")
+    if (
+        execution.get("status") != "ok"
+        or execution.get("live_verified") is not True
+        or execution.get("evidence_class") != "live_host_proof"
+        or len(lifecycle) != len(operations)
+    ):
+        errors.append("ImGui frame execution is not a complete live host lifecycle")
+
+    for sequence, operation in enumerate(operations, start=1):
+        item = lifecycle[sequence - 1] if len(lifecycle) >= sequence and isinstance(lifecycle[sequence - 1], Mapping) else {}
+        proof = item.get("proof") if isinstance(item.get("proof"), Mapping) else {}
+        cleanup = (
+            item.get("bridge_call", {}).get("process_cleanup", {})
+            if isinstance(item.get("bridge_call"), Mapping)
+            and isinstance(item.get("bridge_call", {}).get("process_cleanup"), Mapping)
+            else {}
+        )
+        if (
+            item.get("operation") != operation
+            or item.get("sequence") != sequence
+            or item.get("session_id") != session_id
+            or item.get("target_identity_hash") != target_hash
+            or item.get("precondition_hash") != precondition_hash
+            or item.get("backend") != "d3d11"
+            or item.get("evidence_class") != "live_host_proof"
+            or item.get("live_verified") is not True
+            or proof.get("source") != "native_host_bridge"
+            or proof.get("observed") is not True
+            or not str(proof.get("observed_at") or "")
+            or cleanup.get("process_exited") is not True
+        ):
+            errors.append(f"ImGui lifecycle operation is not bound or verified: {operation}")
+
+    if (
+        provenance.get("session_id") != session_id
+        or provenance.get("target_identity_hash") != target_hash
+        or provenance.get("precondition_hash") != precondition_hash
+        or provenance.get("backend") != "d3d11"
+        or provenance.get("evidence_class") != "live_host_proof"
+        or provenance.get("live_verified") is not True
+    ):
+        errors.append("ImGui lifecycle provenance does not match the host plan")
+    bridge_identity = frame.get("bridge_identity") if isinstance(frame.get("bridge_identity"), Mapping) else {}
+    bridge_hash = str(bridge_identity.get("executable_sha256") or "").lower()
+    if (
+        bridge_identity.get("adapter") != "local_json_subprocess"
+        or bridge_identity.get("protocol") != "reverse-analyzer.native-bridge"
+        or bridge_identity.get("protocol_version") != 1
+        or bridge_identity.get("capability") != "imgui_renderer_runtime"
+        or len(bridge_hash) != 64
+        or any(char not in "0123456789abcdef" for char in bridge_hash)
+    ):
+        errors.append("ImGui frame lifecycle lacks a stable production bridge identity")
+
+    restoration = payloads["restoration"]
+    if any(restoration.get(key) is not True for key in (
+        "verified", "rollback_verified", "cleanup_verified", "renderer_shutdown", "module_unloaded", "hook_restored"
+    )):
+        errors.append("ImGui hook restoration is incomplete")
+    if restoration.get("shutdown") != (lifecycle[4] if len(lifecycle) > 4 else None) or restoration.get("unload") != (lifecycle[5] if len(lifecycle) > 5 else None):
+        errors.append("ImGui hook restoration does not bind the shutdown/unload lifecycle")
+
+    proof = payloads["proof"]
+    if (
+        str(proof.get("status") or "").lower() not in _SUCCESS_VALUES
+        or proof.get("provider") != plugin.get("provider")
+        or proof.get("evidence_class") != "live_host_proof"
+        or proof.get("executed_tests") != 1
+        or proof.get("skipped_tests") != 0
+        or proof.get("live_operations") != len(operations)
+        or tuple(proof.get("actions") or ()) != operations
+        or proof.get("plugin_sha256") != plugin_hash
+    ):
+        errors.append("ImGui execution proof does not bind the plugin and complete lifecycle")
+    return errors
+
+
 def _vlm_contract_errors(run_dir: Path) -> list[str]:
     """Validate semantic bindings for the retained P7 VLM live record.
 
@@ -732,6 +883,8 @@ def run_acceptance_fixture(
     fixture_contract_errors = (
         _graphics_combined_contract_errors(run_dir)
         if fixture_id == "p7-graphics-combined-live"
+        else _imgui_contract_errors(run_dir)
+        if fixture_id == "p4-imgui-d3d11-live"
         else _vlm_contract_errors(run_dir)
         if fixture_id == "p7-vlm-openai-live"
         else []
@@ -759,6 +912,12 @@ def run_acceptance_fixture(
                 int(fixture.get("required_executed_tests") or 1),
             ),
         )
+        # The proof is retained evidence too; apply the same provenance
+        # policy as the fixture's expected artifacts.
+        provenance_paths = [*expected_files]
+        if execution_proof_path is not None and execution_proof_path not in provenance_paths:
+            provenance_paths.append(execution_proof_path)
+        provenance_valid, rejected_provenance = _artifact_provenance_valid(provenance_paths)
     constraints = {
         "registered_fixture": True,
         "structured_argv": True,
@@ -905,6 +1064,11 @@ def verify_acceptance_record(record_file: str | Path) -> dict[str, Any]:
             elif not _target_identities_match(recorded_identity, identity):
                 errors.append("record target identity does not match retained target identity artifact")
             provenance_valid, rejected = _artifact_provenance_valid(observed_files)
+            proof_path = _load_json_artifact(run_dir, fixture.get("execution_proof_artifact"))[2]
+            if proof_path is not None and proof_path not in observed_files:
+                proof_provenance_valid, proof_rejected = _artifact_provenance_valid([proof_path])
+                provenance_valid = provenance_valid and proof_provenance_valid
+                rejected = [*rejected, *proof_rejected]
             if not provenance_valid:
                 errors.extend(f"synthetic provenance in artifact: {item}" for item in rejected)
             rollback_files, _ = _matching_files(run_dir, fixture.get("rollback_artifacts") or [])
@@ -927,6 +1091,8 @@ def verify_acceptance_record(record_file: str | Path) -> dict[str, Any]:
                 errors.append("live_verified record does not have a successful command outcome")
             if fixture_id == "p7-graphics-combined-live":
                 errors.extend(_graphics_combined_contract_errors(run_dir))
+            if fixture_id == "p4-imgui-d3d11-live":
+                errors.extend(_imgui_contract_errors(run_dir))
             if fixture_id == "p7-vlm-openai-live":
                 errors.extend(_vlm_contract_errors(run_dir))
         constraints = record.get("verification_constraints")
@@ -958,6 +1124,10 @@ def verify_acceptance_record(record_file: str | Path) -> dict[str, Any]:
             expected_files, missing_expected = _matching_files(
                 run_dir, fixture.get("expected_artifacts") or []
             )
+            proof_path = _load_json_artifact(run_dir, fixture.get("execution_proof_artifact"))[2]
+            provenance_files = [*expected_files]
+            if proof_path is not None and proof_path not in provenance_files:
+                provenance_files.append(proof_path)
             rollback_files, _ = _matching_files(run_dir, fixture.get("rollback_artifacts") or [])
             cleanup_files, _ = _matching_files(run_dir, fixture.get("cleanup_artifacts") or [])
             environment_state = _environment_fixture_state(run_dir, fixture_id)
@@ -994,7 +1164,7 @@ def verify_acceptance_record(record_file: str | Path) -> dict[str, Any]:
                     )
                 ),
                 "expected_artifacts_complete": not missing_expected,
-                "provenance_non_synthetic": _artifact_provenance_valid(expected_files)[0],
+                "provenance_non_synthetic": _artifact_provenance_valid(provenance_files)[0],
                 "rollback_verified": _fixture_proof_ok(
                     rollback_files,
                     required=bool(fixture.get("mutating")),
@@ -1011,6 +1181,8 @@ def verify_acceptance_record(record_file: str | Path) -> dict[str, Any]:
                     (
                         _graphics_combined_contract_errors(run_dir)
                         if fixture_id == "p7-graphics-combined-live"
+                        else _imgui_contract_errors(run_dir)
+                        if fixture_id == "p4-imgui-d3d11-live"
                         else _vlm_contract_errors(run_dir)
                         if fixture_id == "p7-vlm-openai-live"
                         else []
