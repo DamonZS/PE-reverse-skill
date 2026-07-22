@@ -17,6 +17,11 @@ The retained contract requires:
 - capture and replay audit artifacts with SHA-256 entries;
 - target identity, execution proof, and rollback/cleanup evidence.
 
+The fixture is non-mutating with respect to the captured target, but its
+registered contract still requires the provider rollback/socket-close artifact
+as cleanup proof. The verifier rechecks that artifact independently from the
+record's persisted boolean constraints.
+
 The production HTTP/1.1 capture path also recognizes a bounded loopback
 `CONNECT` session. After a successful `2xx` response it switches to opaque
 tunnel mode and retains the authority, handshake status, bidirectional tunnel

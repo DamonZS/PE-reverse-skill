@@ -27,6 +27,13 @@ P6 additionally has the opt-in `p6-protocol-runtime-loopback` registered
 acceptance fixture. Its exact evidence contract and remaining boundary are in
 `docs/acceptance/p6_protocol_runtime.md`.
 
+Every retained live record is independently rechecked against the registered
+fixture and its retained `environment-validation.json`. Promotion therefore
+requires the environment readiness status, configured gates, missing gates,
+execution proof, target identity, artifact set, provenance, and cleanup or
+rollback evidence to agree with the recomputed contract; editing hashes and
+constraint booleans together does not bypass verification.
+
 P5 now has separate registered fixtures for real Jadx decompilation, APK
 rebuild/sign/verify/rollback, Frida attach-or-spawn lifecycle cleanup, and native
 APK patch/sign/device deployment/launch/rollback. Their environment contracts
