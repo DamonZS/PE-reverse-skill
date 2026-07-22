@@ -40,7 +40,11 @@ the campaign loader. All five built-in instruction profiles are included as
 wheel package data, so an installed release does not depend on a source checkout.
 The build also writes `release-manifest.json` with the product version and exact
 size and SHA-256 of the wheel, schema, starter configuration, changelog, release
-notes, release guide, and smoke runner. `release-verify` rejects version drift,
+notes, release guide, CycloneDX `sbom.cdx.json`, and smoke runner. The SBOM is
+derived from the built wheel metadata and binds the application version, supported
+Python range, and declared direct dependencies; manifest verification cross-checks
+those values against the wheel before accepting the bundle.
+`release-verify` rejects version drift,
 multiple wheels, missing, modified, path-escaping, duplicate, and untracked
 files, as well as obvious API credential or Authorization bearer values in
 release contents. Before installation, the standalone smoke runner independently

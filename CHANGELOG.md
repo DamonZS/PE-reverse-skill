@@ -13,6 +13,6 @@ Semantic Versioning.
 - Stable checkpoints, cross-session resume, evidence manifests, semantic judge
   records, and retained-evidence promotion checks.
 - Portable wheel bundle with JSON Schema, starter configuration, release notes,
-  file hashes, and an isolated-install smoke runner.
+  file hashes, CycloneDX SBOM, and an isolated-install smoke runner.
 
 [0.1.0]: docs/releases/0.1.0.md

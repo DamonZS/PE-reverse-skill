@@ -64,6 +64,7 @@ if (-not (Test-Path -LiteralPath $ReleaseNotes -PathType Leaf)) {
 }
 Copy-Item $ReleaseNotes (Join-Path $Output "RELEASE_NOTES.md") -Force
 Copy-Item scripts/smoke_reverse_jailbreak_release.py (Join-Path $Output "smoke_release.py") -Force
+Invoke-Python -m reverse_analyzer.llm_jailbreak.release sbom $Output
 Invoke-Python -m reverse_analyzer.llm_jailbreak.release build $Output
 Invoke-Python -m reverse_analyzer.llm_jailbreak.release verify $Output
 Write-Host "Portable package written to $Output"

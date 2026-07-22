@@ -1,11 +1,13 @@
 import json
 import re
+import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from reverse_analyzer import __version__
 from reverse_analyzer.llm_jailbreak.cli import build_parser, main
@@ -17,15 +19,15 @@ from reverse_analyzer.llm_jailbreak.instruction_assets import (
 from reverse_analyzer.llm_jailbreak.release import (
     verify_release_manifest,
     write_release_manifest,
+    write_release_sbom,
 )
 from reverse_analyzer.llm_jailbreak.models import Campaign, CampaignValidationError
-from scripts.smoke_reverse_jailbreak_release import _load_verified_manifest
+from scripts.smoke_reverse_jailbreak_release import _load_verified_manifest, _run
 
 
 class ReleaseCliTests(unittest.TestCase):
     def _write_release_fixture(self, root: Path) -> None:
         for name, content in (
-            (f"reverse_analyzer-{__version__}-py3-none-any.whl", "wheel"),
             ("CHANGELOG.md", "changelog"),
             ("RELEASE_NOTES.md", "release notes"),
             ("jailbreak-campaign.schema.json", "{}"),
@@ -34,6 +36,24 @@ class ReleaseCliTests(unittest.TestCase):
             ("smoke_release.py", "print('ok')"),
         ):
             (root / name).write_text(content, encoding="utf-8")
+        wheel = root / f"reverse_analyzer-{__version__}-py3-none-any.whl"
+        metadata = "\n".join(
+            (
+                "Metadata-Version: 2.1",
+                "Name: reverse-analyzer",
+                f"Version: {__version__}",
+                "Requires-Python: >=3.10",
+                "Requires-Dist: capstone>=5.0",
+                "Requires-Dist: pefile>=2023.2.7",
+                "Requires-Dist: requests>=2.28",
+                "",
+            )
+        )
+        with ZipFile(wheel, "w", compression=ZIP_DEFLATED) as archive:
+            archive.writestr(
+                f"reverse_analyzer-{__version__}.dist-info/METADATA", metadata
+            )
+        write_release_sbom(root)
 
     def test_build_metadata_uses_runtime_version_source(self):
         pyproject = (Path(__file__).parents[1] / "pyproject.toml").read_text(
@@ -61,6 +81,29 @@ class ReleaseCliTests(unittest.TestCase):
         )
         self.assertIn("[switch]$NoBuildIsolation", script)
         self.assertIn('"--no-build-isolation"', script)
+
+    def test_release_sbom_is_deterministic_and_lists_direct_dependencies(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_release_fixture(root)
+            first = write_release_sbom(root)
+            first_bytes = (root / "sbom.cdx.json").read_bytes()
+            second = write_release_sbom(root)
+
+            self.assertEqual(first, second)
+            self.assertEqual(first_bytes, (root / "sbom.cdx.json").read_bytes())
+            self.assertEqual(first["bomFormat"], "CycloneDX")
+            self.assertEqual(first["metadata"]["component"]["version"], __version__)
+            names = {component["name"] for component in first["components"]}
+            self.assertIn("requests", names)
+            requests = next(
+                component for component in first["components"]
+                if component["name"] == "requests"
+            )
+            self.assertEqual(requests["purl"], "pkg:pypi/requests")
+            self.assertEqual(
+                requests["properties"][0]["value"], "requests>=2.28"
+            )
 
     def test_build_script_pins_wheel_timestamp_for_reproducibility(self):
         script = (Path(__file__).parents[1] / "scripts/build_reverse_jailbreak.ps1").read_text(
@@ -235,6 +278,37 @@ class ReleaseCliTests(unittest.TestCase):
             self.assertTrue(any("sha256 mismatch" in error for error in result["errors"]))
             self.assertTrue(any("untracked release file" in error for error in result["errors"]))
 
+    def test_release_manifest_rejects_semantically_invalid_sbom(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_release_fixture(root)
+            (root / "sbom.cdx.json").write_text("{}", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "CycloneDX 1.5"):
+                write_release_manifest(root)
+
+    def test_release_manifest_rejects_sbom_dependency_drift_from_wheel(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_release_fixture(root)
+            payload = json.loads((root / "sbom.cdx.json").read_text(encoding="utf-8"))
+            payload["components"] = payload["components"][:-1]
+            (root / "sbom.cdx.json").write_text(json.dumps(payload), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "dependencies do not match"):
+                write_release_manifest(root)
+
+    def test_release_manifest_rejects_malformed_sbom_component_properties(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write_release_fixture(root)
+            payload = json.loads((root / "sbom.cdx.json").read_text(encoding="utf-8"))
+            payload["components"][0]["properties"] = None
+            (root / "sbom.cdx.json").write_text(json.dumps(payload), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "invalid dependency component"):
+                write_release_manifest(root)
+
     def test_portable_smoke_verifies_release_before_installation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -246,6 +320,20 @@ class ReleaseCliTests(unittest.TestCase):
             wheel.write_text("tampered wheel", encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "(size|sha256) mismatch"):
                 _load_verified_manifest(root)
+
+    def test_portable_smoke_preserves_bounded_subprocess_diagnostics(self):
+        failure = subprocess.CalledProcessError(
+            7,
+            ["fixture"],
+            output="x" * 5000,
+            stderr="diagnostic",
+        )
+        with patch("subprocess.run", side_effect=failure):
+            with self.assertRaisesRegex(
+                RuntimeError, "exit code 7.*diagnostic"
+            ) as raised:
+                _run(["fixture"])
+        self.assertNotIn("x" * 4001, str(raised.exception))
 
     def test_release_manifest_rejects_embedded_credential_material(self):
         with tempfile.TemporaryDirectory() as directory:

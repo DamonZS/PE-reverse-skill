@@ -91,15 +91,23 @@ def _load_verified_manifest(release: Path) -> Mapping[str, Any]:
 
 
 def _run(command: list[str], *, env: Mapping[str, str] | None = None) -> str:
-    completed = subprocess.run(
-        command,
-        check=True,
-        env=dict(env) if env is not None else None,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        timeout=180,
-    )
+    try:
+        completed = subprocess.run(
+            command,
+            check=True,
+            env=dict(env) if env is not None else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=180,
+        )
+    except subprocess.CalledProcessError as exc:
+        stdout = (exc.stdout or "")[-4000:]
+        stderr = (exc.stderr or "")[-4000:]
+        raise RuntimeError(
+            f"release smoke subprocess failed with exit code {exc.returncode}: "
+            f"stdout={stdout!r}; stderr={stderr!r}"
+        ) from exc
     return completed.stdout
 
 
