@@ -57,6 +57,13 @@ python -m reverse_analyzer environment accept verify `
   --record <workspace>\acceptance\records\<fixture>--<session>.json
 ```
 
+Independent verification re-evaluates the registered fixture contract against
+the retained record. It checks the structured command and expected artifact
+patterns, reloads the target-identity artifact, scans retained JSON for
+synthetic provenance, and rechecks the rollback and cleanup proof contents in
+addition to recomputing artifact sizes and SHA-256 values. Editing a record's
+hash list cannot turn an unverified restore or cleanup into live evidence.
+
 Until a real record is retained and independently verified, both capability
 rows remain `dependency-gated`.
 

@@ -9,6 +9,9 @@ on:
       - "schemas/jailbreak-campaign.schema.json"
       - "scripts/build_reverse_jailbreak.ps1"
       - "scripts/smoke_reverse_jailbreak_release.py"
+      - "docs/reverse_jailbreak_release.md"
+      - "docs/releases/**"
+      - "CHANGELOG.md"
       - "pyproject.toml"
       - ".github/workflows/reverse-jailbreak-release.yml"
   pull_request:
@@ -19,6 +22,9 @@ on:
       - "schemas/jailbreak-campaign.schema.json"
       - "scripts/build_reverse_jailbreak.ps1"
       - "scripts/smoke_reverse_jailbreak_release.py"
+      - "docs/reverse_jailbreak_release.md"
+      - "docs/releases/**"
+      - "CHANGELOG.md"
       - "pyproject.toml"
       - ".github/workflows/reverse-jailbreak-release.yml"
   workflow_dispatch:

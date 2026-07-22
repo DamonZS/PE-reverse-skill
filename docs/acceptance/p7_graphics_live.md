@@ -32,7 +32,12 @@ visible projected point.
 
 The retained record binds and hashes target identity, Present observation,
 matrix capture, projection output, production GDI overlay audit, graphics stop,
-overlay resource cleanup, and structured non-skipped execution proof.
+overlay resource cleanup, and structured non-skipped execution proof. Independent
+verification also recomputes the cross-artifact contract: PID/HWND must agree,
+Present and matrix frame IDs must match, projection/overlay provenance must bind
+to that frame, and cleanup/execution proofs must be successful. Recomputing an
+artifact hash after changing one of these relationships does not make the record
+valid.
 
 Verify the resulting immutable record:
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import tempfile
@@ -290,6 +291,47 @@ class AndroidP5AcceptanceContractTests(unittest.TestCase):
             verification = verify_acceptance_record(record["record_path"])
             self.assertEqual(verification["status"], "ok")
             self.assertTrue(verification["live_verified"])
+
+    def test_live_record_reverification_rejects_tampered_rollback_proof(self) -> None:
+        """A valid hash list must not turn a failed Android rollback into proof."""
+
+        def runner(command, **kwargs):  # type: ignore[no-untyped-def]
+            run_dir = Path(kwargs["env"]["REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR"])
+            evidence = run_dir / "android-rebuild"
+            retained = evidence / "retained" / "fixture-signed.apk"
+            retained.parent.mkdir(parents=True)
+            retained.write_bytes(b"signed-patched-fixture")
+            _write_json(evidence / "provider" / "rebuild_verify.json", {"status": "ok", "verified": True})
+            _write_json(evidence / "provider" / "rebuild_audit.json", {"status": "ok"})
+            _write_json(evidence / "retained-artifact.json", {"status": "ok", "signature_verified": True})
+            _write_json(evidence / "target-identity.json", {"kind": "apk_fixture", "sample_sha256": "a" * 64})
+            _write_json(evidence / "rollback.json", {"status": "ok", "verified": True, "restored": True})
+            _write_json(evidence / "execution-proof.json", {
+                "status": "ok", "provider": "android-rebuild", "evidence_class": "live_host_proof",
+                "executed_tests": 1, "skipped_tests": 0, "live_operations": 2,
+            })
+            return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+        with tempfile.TemporaryDirectory() as temporary, mock.patch(
+            "reverse_analyzer.acceptance.validate_external_environment",
+            return_value=_ready_report("p5-android-rebuild-sign-live"),
+        ):
+            record = run_acceptance_fixture(
+                "p5-android-rebuild-sign-live", temporary, execute=True,
+                environ={"ANDROID_REBUILD_LIVE_APK": "fixture.apk"}, runner=runner,
+            )
+            self.assertTrue(record["live_verified"], record)
+            rollback = Path(record["run_directory"]) / "android-rebuild" / "rollback.json"
+            rollback.write_text(json.dumps({"status": "failed", "verified": False}), encoding="utf-8")
+            for entry in record["observed_artifacts"]:
+                if entry["path"] == "android-rebuild/rollback.json":
+                    entry["size"] = rollback.stat().st_size
+                    entry["sha256"] = hashlib.sha256(rollback.read_bytes()).hexdigest()
+            Path(record["record_path"]).write_text(json.dumps(record), encoding="utf-8")
+
+            verification = verify_acceptance_record(record["record_path"])
+            self.assertEqual(verification["status"], "failed")
+            self.assertIn("rollback proof is missing or unverified", verification["errors"])
 
 
 if __name__ == "__main__":

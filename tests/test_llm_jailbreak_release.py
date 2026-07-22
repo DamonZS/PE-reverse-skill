@@ -45,6 +45,23 @@ class ReleaseCliTests(unittest.TestCase):
         )
         self.assertRegex(__version__, re.compile(r"^\d+\.\d+\.\d+"))
 
+    def test_build_script_resolves_release_notes_from_runtime_version(self):
+        script = (Path(__file__).parents[1] / "scripts/build_reverse_jailbreak.ps1").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("reverse_analyzer._version", script)
+        self.assertIn('$ReleaseNotes = Join-Path "docs/releases" ($Version + ".md")', script)
+        self.assertIn("missing release notes for package version", script)
+        self.assertNotIn("docs/releases/0.1.0.md", script)
+
+    def test_release_workflow_rebuilds_when_release_metadata_changes(self):
+        workflow = (Path(__file__).parents[1] / ".github/workflows/reverse-jailbreak-release.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('"docs/releases/**"', workflow)
+        self.assertIn('"CHANGELOG.md"', workflow)
+        self.assertIn('"docs/reverse_jailbreak_release.md"', workflow)
+
     def test_release_workflows_separate_package_and_manual_live_acceptance(self):
         root = Path(__file__).parents[1]
         package_workflow = (

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import tempfile
@@ -86,20 +87,27 @@ class AcceptanceRecordTests(unittest.TestCase):
                         "kind": "process",
                         "pid": 4321,
                         "display_name": "controlled-graphics-host-4321",
+                        "metadata": {"hwnd": 9001},
                     },
                     "present-observation.json": {
                         "status": "ok",
                         "provider": "windows_presentmon",
+                        "target_pid": 4321,
                         "event_count": 3,
+                        "last_event": {"pid": 4321},
+                        "matrix_frame_id": "frame-3",
                     },
                     "matrix-capture.json": {
                         "status": "ok",
                         "source": "native_host_bridge",
+                        "pid": 4321,
+                        "hwnd": 9001,
                         "frame_id": "frame-3",
                         "matrix": [1, 0, 0, 0] * 4,
                     },
                     "projection.json": {
                         "status": "ok",
+                        "matrix_frame_id": "frame-3",
                         "visible_point_count": 1,
                     },
                     "overlay-audit.json": {
@@ -165,6 +173,30 @@ class AcceptanceRecordTests(unittest.TestCase):
             verification = verify_acceptance_record(record["record_path"])
             self.assertEqual(verification["status"], "ok")
             self.assertTrue(verification["live_verified"])
+
+            # Integrity verification must also reject a cross-component frame
+            # mismatch even when an attacker recomputes the retained file hash.
+            matrix_path = (
+                Path(record["run_directory"])
+                / "graphics-combined"
+                / "matrix-capture.json"
+            )
+            matrix_payload = json.loads(matrix_path.read_text(encoding="utf-8"))
+            matrix_payload["frame_id"] = "frame-tampered"
+            matrix_path.write_text(json.dumps(matrix_payload), encoding="utf-8")
+            for entry in record["observed_artifacts"]:
+                if entry["path"].endswith("matrix-capture.json"):
+                    encoded = matrix_path.read_bytes()
+                    entry["size"] = len(encoded)
+                    entry["sha256"] = hashlib.sha256(encoded).hexdigest()
+            Path(record["record_path"]).write_text(
+                json.dumps(record), encoding="utf-8"
+            )
+            tampered = verify_acceptance_record(record["record_path"])
+            self.assertEqual(tampered["status"], "failed")
+            self.assertTrue(
+                any("frame IDs do not match" in error for error in tampered["errors"])
+            )
 
     def test_vlm_fixture_contract_retains_hash_backed_live_proof(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

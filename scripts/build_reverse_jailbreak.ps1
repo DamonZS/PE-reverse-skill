@@ -21,7 +21,15 @@ Copy-Item schemas/jailbreak-campaign.schema.json $Output -Force
 Copy-Item config/jailbreak-campaign.example.json $Output -Force
 Copy-Item docs/reverse_jailbreak_release.md $Output -Force
 Copy-Item CHANGELOG.md $Output -Force
-Copy-Item docs/releases/0.1.0.md (Join-Path $Output "RELEASE_NOTES.md") -Force
+$Version = (& python -c "from reverse_analyzer._version import __version__; print(__version__)").Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($Version)) {
+    throw "could not resolve package version from reverse_analyzer._version"
+}
+$ReleaseNotes = Join-Path "docs/releases" ($Version + ".md")
+if (-not (Test-Path -LiteralPath $ReleaseNotes -PathType Leaf)) {
+    throw "missing release notes for package version ${Version}: $ReleaseNotes"
+}
+Copy-Item $ReleaseNotes (Join-Path $Output "RELEASE_NOTES.md") -Force
 Copy-Item scripts/smoke_reverse_jailbreak_release.py (Join-Path $Output "smoke_release.py") -Force
 Invoke-Python -m reverse_analyzer.llm_jailbreak.release build $Output
 Invoke-Python -m reverse_analyzer.llm_jailbreak.release verify $Output
