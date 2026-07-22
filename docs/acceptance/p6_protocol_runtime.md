@@ -39,14 +39,16 @@ same order, with exact wire-byte matches for every retained `1xx` response and
 the final response. Status `101` remains outside this path because it changes
 the protocol rather than continuing the HTTP/1.1 response sequence.
 
-The `protocol_adapter_preflight` action provides a local, non-transmitting
-HTTP/2 adapter readiness check. Its versioned contract probes the `hyper-h2`
-implementation (`h2>=4.1,<5`), records dependency identity and required frame,
-HPACK, connection-state, and multiplexing capabilities, and emits an auditable
-artifact. The repository does not currently declare that dependency, and the
-preflight explicitly records `capture_supported: false`,
-`replay_supported: false`, and `live_verified: false`; it is not HTTP/2 runtime
-or acceptance evidence.
+The `protocol_adapter_preflight` action remains a local, non-transmitting
+HTTP/2 adapter readiness check. In addition, `loopback_http2_capture` and
+`http2_fixture_replay` execute a bounded h2c prior-knowledge session through
+the production provider and `hyper-h2` (`h2>=4.1,<5`). Capture records the real
+loopback socket identity, stream id, state-machine event sequence, ordered
+HTTP/2 frame metadata, and SHA-256-bound client/server wire bytes. Replay reads
+the materialized and hash-bound capture artifact, restores the captured request
+on a second real loopback session, and verifies response headers and body hash.
+The focused test uses independent capture and replay servers, so dependency
+probing alone cannot satisfy the runtime assertions.
 
 Run the opt-in fixture through the acceptance registry:
 
@@ -67,10 +69,11 @@ non-synthetic provenance, target identity, and execution proof validation.
 
 This acceptance covers controlled IPv4 loopback TLS capture and ordered session
 replay. Bounded loopback opaque CONNECT capture and replay, including transcript
-and half-close verification, and exact informational-response sequence replay
-are complete for the declared scope. Generalized CONNECT replay,
-arbitrary-interface capture, unmanaged TLS
-decryption, HTTP/2 and HTTP/3, and unrestricted remote endpoint/session replay
-remain outside the accepted scope. Passive adapter execution also remains
-dependent on an installed local capture tool and is limited to a loopback
-interface.
+and half-close verification, exact informational-response sequence replay, and
+cleartext prior-knowledge HTTP/2 request/response capture and replay are complete
+for their declared scopes. The HTTP/2 test is deterministic repository evidence;
+a retained environment acceptance record is still pending. Generalized CONNECT
+replay, arbitrary-interface capture, unmanaged TLS decryption, HTTP/2 over TLS
+with ALPN, HTTP/3, and unrestricted remote endpoint/session replay remain outside
+the accepted scope. Passive adapter execution also remains dependent on an
+installed local capture tool and is limited to a loopback interface.

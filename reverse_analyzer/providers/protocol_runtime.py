@@ -45,11 +45,13 @@ _UDP_CAPTURE = "loopback_udp_proxy_capture"
 _UDP_REPLAY = "loopback_udp_replay"
 _HTTP_CAPTURE = "loopback_http_capture"
 _HTTP_REPLAY = "http_fixture_replay"
+_HTTP2_CAPTURE = "loopback_http2_capture"
+_HTTP2_REPLAY = "http2_fixture_replay"
 _PROTOCOL_ADAPTER_PREFLIGHT = "protocol_adapter_preflight"
 _PASSIVE_CAPTURE = "passive_capture"
 _PASSIVE_IMPORT = "passive_capture_import"
-_CAPTURE_ACTIONS = {_CAPTURE, _UDP_CAPTURE, _HTTP_CAPTURE}
-_REPLAY_ACTIONS = {_REPLAY, _UDP_REPLAY, _HTTP_REPLAY}
+_CAPTURE_ACTIONS = {_CAPTURE, _UDP_CAPTURE, _HTTP_CAPTURE, _HTTP2_CAPTURE}
+_REPLAY_ACTIONS = {_REPLAY, _UDP_REPLAY, _HTTP_REPLAY, _HTTP2_REPLAY}
 _PASSIVE_ACTIONS = {_PASSIVE_CAPTURE, _PASSIVE_IMPORT}
 _SUPPORTED_ACTIONS = (
     _CAPTURE_ACTIONS
@@ -80,6 +82,12 @@ _ACTION_ALIASES = {
     "http_session_capture": _HTTP_CAPTURE,
     "loopback_http1_capture": _HTTP_CAPTURE,
     "loopback_http_proxy_capture": _HTTP_CAPTURE,
+    "http2_capture": _HTTP2_CAPTURE,
+    "h2_capture": _HTTP2_CAPTURE,
+    "loopback_h2_capture": _HTTP2_CAPTURE,
+    "http2_replay": _HTTP2_REPLAY,
+    "h2_replay": _HTTP2_REPLAY,
+    "loopback_http2_replay": _HTTP2_REPLAY,
     "adapter_preflight": _PROTOCOL_ADAPTER_PREFLIGHT,
     "http2_adapter_preflight": _PROTOCOL_ADAPTER_PREFLIGHT,
     "protocol_preflight": _PROTOCOL_ADAPTER_PREFLIGHT,
@@ -145,9 +153,11 @@ class ProtocolRuntimeProvider:
         _CAPTURE,
         _UDP_CAPTURE,
         _HTTP_CAPTURE,
+        _HTTP2_CAPTURE,
         _REPLAY,
         _UDP_REPLAY,
         _HTTP_REPLAY,
+        _HTTP2_REPLAY,
         _PROTOCOL_ADAPTER_PREFLIGHT,
     )
     safety_boundary = "passive_or_explicit_loopback_only"
@@ -258,7 +268,11 @@ class ProtocolRuntimeProvider:
                 "session": _session_snapshot(
                     session_id,
                     action=action,
-                    mode="loopback_proxy",
+                    mode=(
+                        "real_loopback_http2_client"
+                        if action == _HTTP2_CAPTURE
+                        else "loopback_proxy"
+                    ),
                     state="planned",
                 ),
                 "transport": parameters["transport"],
@@ -277,6 +291,10 @@ class ProtocolRuntimeProvider:
                 "traffic_visibility": traffic_visibility,
                 "network_boundary": network_boundary,
             }
+            if action == _HTTP2_CAPTURE:
+                before_snapshot["dependency_probe"] = _probe_protocol_adapter(
+                    "http/2", "hyper-h2"
+                )
             precondition_hash = _capture_precondition_hash(
                 parameters,
                 request.target,
@@ -466,12 +484,16 @@ class ProtocolRuntimeProvider:
             outcome = self._execute_protocol_adapter_preflight(plan)
         elif plan.action in _PASSIVE_ACTIONS:
             outcome = self._execute_passive_capture(plan)
+        elif plan.action == _HTTP2_CAPTURE:
+            outcome = self._execute_http2_capture(plan)
         elif plan.action == _HTTP_CAPTURE:
             outcome = self._execute_http_capture(plan, context=context)
         elif plan.action == _CAPTURE:
             outcome = self._execute_capture(plan, context=context)
         elif plan.action == _UDP_CAPTURE:
             outcome = self._execute_udp_capture(plan, context=context)
+        elif plan.action == _HTTP2_REPLAY:
+            outcome = self._execute_http2_replay(plan)
         elif plan.action == _HTTP_REPLAY:
             outcome = self._execute_http_replay(plan)
         elif str(plan.parameters.get("replay_target_mode") or "loopback") == "offline_fixture":
@@ -1078,7 +1100,7 @@ class ProtocolRuntimeProvider:
         listen = _mapping(plan.parameters.get("listen_endpoint"))
         upstream = _mapping(plan.parameters.get("upstream_endpoint"))
         allow_remote = plan.parameters.get("allow_remote")
-        http_capture = plan.action == _HTTP_CAPTURE
+        http_capture = plan.action in {_HTTP_CAPTURE, _HTTP2_CAPTURE}
         allow_remote_ok = isinstance(allow_remote, bool)
         check(
             "remote_access_opt_in",
@@ -1110,12 +1132,30 @@ class ProtocolRuntimeProvider:
                 listen_endpoint_identity=_endpoint_identity(listen),
                 upstream_endpoint_identity=_endpoint_identity(upstream),
             )
+            expected_protocol = "http/2" if plan.action == _HTTP2_CAPTURE else "http/1.1"
             check(
                 "http_application_protocol",
-                plan.parameters.get("application_protocol") == "http/1.1",
-                "HTTP capture supports only HTTP/1.1",
+                plan.parameters.get("application_protocol") == expected_protocol,
+                f"HTTP capture action requires {expected_protocol}",
                 application_protocol=plan.parameters.get("application_protocol"),
             )
+            if plan.action == _HTTP2_CAPTURE:
+                adapter_probe = _probe_protocol_adapter("http/2", "hyper-h2")
+                check(
+                    "http2_adapter",
+                    adapter_probe.get("status") == "available",
+                    str(adapter_probe.get("reason") or "HTTP/2 adapter is unavailable"),
+                    dependency_probe=adapter_probe,
+                )
+                request_errors = _http2_request_errors(
+                    plan.parameters.get("http2_request")
+                )
+                check(
+                    "http2_request",
+                    not request_errors,
+                    "; ".join(request_errors) or "HTTP/2 request is invalid",
+                    request=_public_http2_request(plan.parameters.get("http2_request")),
+                )
         listen_ok, listen_reason = _validate_endpoint(
             listen,
             allow_zero_port=True,
@@ -1190,7 +1230,7 @@ class ProtocolRuntimeProvider:
     ) -> None:
         destination = _mapping(plan.parameters.get("destination_endpoint"))
         replay_target_mode = str(plan.parameters.get("replay_target_mode") or "loopback")
-        http_replay = plan.action == _HTTP_REPLAY
+        http_replay = plan.action in {_HTTP_REPLAY, _HTTP2_REPLAY}
         check(
             "replay_target_mode",
             replay_target_mode == "loopback" if http_replay else replay_target_mode in _REPLAY_TARGET_MODES,
@@ -1246,19 +1286,29 @@ class ProtocolRuntimeProvider:
             replay_target_mode=replay_target_mode,
         )
         if http_replay:
+            expected_protocol = "http/2" if plan.action == _HTTP2_REPLAY else "http/1.1"
             check(
                 "http_application_protocol",
-                plan.parameters.get("application_protocol") == "http/1.1",
-                "HTTP fixture replay supports only HTTP/1.1",
+                plan.parameters.get("application_protocol") == expected_protocol,
+                f"HTTP fixture replay action requires {expected_protocol}",
                 application_protocol=plan.parameters.get("application_protocol"),
             )
-            fixture_errors = _http_fixture_errors(plan.parameters.get("http_fixture"))
-            check(
-                "controlled_http_fixture",
-                not fixture_errors,
-                "; ".join(fixture_errors) or "controlled HTTP fixture is invalid",
-                fixture=_public_http_fixture(plan.parameters.get("http_fixture")),
-            )
+            if plan.action == _HTTP_REPLAY:
+                fixture_errors = _http_fixture_errors(plan.parameters.get("http_fixture"))
+                check(
+                    "controlled_http_fixture",
+                    not fixture_errors,
+                    "; ".join(fixture_errors) or "controlled HTTP fixture is invalid",
+                    fixture=_public_http_fixture(plan.parameters.get("http_fixture")),
+                )
+            else:
+                adapter_probe = _probe_protocol_adapter("http/2", "hyper-h2")
+                check(
+                    "http2_adapter",
+                    adapter_probe.get("status") == "available",
+                    str(adapter_probe.get("reason") or "HTTP/2 adapter is unavailable"),
+                    dependency_probe=adapter_probe,
+                )
         fixture_errors = _offline_fixture_errors(plan.parameters.get("offline_fixture"))
         if replay_target_mode == "offline_fixture":
             check(
@@ -1366,7 +1416,10 @@ class ProtocolRuntimeProvider:
                 payload, digest = _load_json_artifact(source_path)
                 if digest != snapshot.get("sha256"):
                     artifact_errors.append("capture artifact changed while it was read")
-                if http_replay:
+                if plan.action == _HTTP2_REPLAY:
+                    source = _http2_replay_source(payload)
+                    selected = [dict(_mapping(source.get("request")))]
+                elif http_replay:
                     transactions, http_errors = _http_replay_transactions(
                         payload,
                         _mapping(plan.parameters.get("limits")),
@@ -1408,7 +1461,7 @@ class ProtocolRuntimeProvider:
                                 _mapping(plan.parameters.get("tls")),
                             )
                         )
-            except (OSError, ValueError, json.JSONDecodeError) as exc:
+            except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
                 artifact_errors.append(str(exc) or exc.__class__.__name__)
         else:
             artifact_errors.append("capture artifact is not available for frame validation")
@@ -1645,6 +1698,246 @@ class ProtocolRuntimeProvider:
         )
         return {
             "status": status,
+            "after_snapshot": _prune(after),
+            "errors": _deduplicate(errors),
+        }
+
+    def _execute_http2_capture(self, plan: CapabilityPlan) -> dict[str, Any]:
+        return self._execute_http2_session(plan, replay_source=None)
+
+    def _execute_http2_replay(self, plan: CapabilityPlan) -> dict[str, Any]:
+        source_path = Path(str(plan.parameters.get("capture_artifact") or ""))
+        errors: list[str] = []
+        source: Optional[dict[str, Any]] = None
+        try:
+            payload, digest = _load_json_artifact(source_path)
+            if digest != plan.parameters.get("capture_artifact_sha256"):
+                raise RuntimeError("capture artifact changed before HTTP/2 replay")
+            source = _http2_replay_source(payload)
+        except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+            errors.append(str(exc) or exc.__class__.__name__)
+        if source is None:
+            return {
+                "status": "failed",
+                "after_snapshot": _prune(
+                    {
+                        "session_state": "closed",
+                        "application_protocol": "http/2",
+                        "capture_artifact": _file_snapshot(source_path),
+                        "network_transmit": False,
+                        "real_socket_evidence": False,
+                        "errors": errors,
+                    }
+                ),
+                "errors": errors,
+            }
+        outcome = self._execute_http2_session(plan, replay_source=source)
+        after = dict(_mapping(outcome.get("after_snapshot")))
+        replay_errors = list(outcome.get("errors") or [])
+        expected = _mapping(source.get("response"))
+        actual = _mapping(after.get("response"))
+        response_verified = (
+            outcome.get("status") == "ok"
+            and actual.get("headers") == expected.get("headers")
+            and actual.get("body_sha256") == expected.get("body_sha256")
+        )
+        if not response_verified:
+            replay_errors.append("HTTP/2 replay response did not match capture evidence")
+        after.update(
+            {
+                "capture_artifact": _file_snapshot(source_path),
+                "source_stream_id": source.get("stream_id"),
+                "response_verified": response_verified,
+                "replay_verified": response_verified,
+                "capture_supported": True,
+                "replay_supported": True,
+                "errors": _deduplicate(replay_errors),
+            }
+        )
+        return {
+            "status": "ok" if response_verified else "failed",
+            "after_snapshot": _prune(after),
+            "errors": _deduplicate(replay_errors),
+        }
+
+    def _execute_http2_session(
+        self,
+        plan: CapabilityPlan,
+        *,
+        replay_source: Optional[Mapping[str, Any]],
+    ) -> dict[str, Any]:
+        started = time.monotonic()
+        limits = _mapping(plan.parameters.get("limits"))
+        destination = _mapping(
+            plan.parameters.get("destination_endpoint")
+            if replay_source is not None
+            else plan.parameters.get("upstream_endpoint")
+        )
+        request = dict(
+            _mapping(replay_source.get("request"))
+            if replay_source is not None
+            else _mapping(plan.parameters.get("http2_request"))
+        )
+        deadline = started + int(limits.get("duration_ms") or 0) / 1_000.0
+        sock: Optional[socket.socket] = None
+        sent_wire = bytearray()
+        received_wire = bytearray()
+        events: list[dict[str, Any]] = []
+        response_headers: list[list[str]] = []
+        response_body = bytearray()
+        stream_id = 0
+        errors: list[str] = []
+        socket_identity: dict[str, Any] = {}
+        try:
+            from h2.config import H2Configuration
+            from h2.connection import H2Connection
+            from h2.events import DataReceived, ResponseReceived, StreamEnded
+
+            sock = _connect_loopback(
+                destination,
+                deadline=deadline,
+                timeout_ms=int(limits.get("socket_timeout_ms") or 0),
+                allow_remote=False,
+                tls={},
+            )
+            real_socket_errors = _real_loopback_socket_errors(
+                sock, expected_peer=destination
+            )
+            if real_socket_errors:
+                raise RuntimeError("; ".join(real_socket_errors))
+            socket_identity = _socket_connection_identity(sock)
+            connection = H2Connection(
+                config=H2Configuration(client_side=True, header_encoding="utf-8")
+            )
+            connection.initiate_connection()
+            stream_id = connection.get_next_available_stream_id()
+            headers = [(str(k), str(v)) for k, v in request.get("headers") or []]
+            body = base64.b64decode(str(request.get("body_base64") or ""), validate=True)
+            connection.send_headers(stream_id, headers, end_stream=not body)
+            if body:
+                connection.send_data(stream_id, body, end_stream=True)
+            outbound = connection.data_to_send()
+            if len(outbound) > int(limits.get("max_bytes") or 0):
+                raise RuntimeError("HTTP/2 request exceeds max_bytes")
+            _send_with_deadline(
+                sock,
+                outbound,
+                deadline=deadline,
+                timeout_ms=int(limits.get("socket_timeout_ms") or 0),
+            )
+            sent_wire.extend(outbound)
+            ended = False
+            while not ended:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("HTTP/2 response exceeded duration_ms")
+                sock.settimeout(
+                    min(
+                        max(deadline - time.monotonic(), 0.001),
+                        int(limits.get("socket_timeout_ms") or 0) / 1_000.0,
+                    )
+                )
+                try:
+                    chunk = sock.recv(_RECV_BYTES)
+                except socket.timeout:
+                    continue
+                if not chunk:
+                    raise RuntimeError("HTTP/2 peer closed before StreamEnded")
+                if len(sent_wire) + len(received_wire) + len(chunk) > int(
+                    limits.get("max_bytes") or 0
+                ):
+                    raise RuntimeError("HTTP/2 session exceeds max_bytes")
+                received_wire.extend(chunk)
+                for event in connection.receive_data(chunk):
+                    event_record = _http2_event_record(event)
+                    if event_record:
+                        events.append(event_record)
+                    if isinstance(event, ResponseReceived) and event.stream_id == stream_id:
+                        response_headers = [[str(k), str(v)] for k, v in event.headers]
+                    elif isinstance(event, DataReceived) and event.stream_id == stream_id:
+                        response_body.extend(event.data)
+                        connection.acknowledge_received_data(
+                            event.flow_controlled_length, event.stream_id
+                        )
+                    elif isinstance(event, StreamEnded) and event.stream_id == stream_id:
+                        ended = True
+                acknowledgement = connection.data_to_send()
+                if acknowledgement:
+                    _send_with_deadline(
+                        sock,
+                        acknowledgement,
+                        deadline=deadline,
+                        timeout_ms=int(limits.get("socket_timeout_ms") or 0),
+                    )
+                    sent_wire.extend(acknowledgement)
+            if not response_headers:
+                raise RuntimeError("HTTP/2 response headers were not observed")
+        except (OSError, RuntimeError, ValueError, ImportError) as exc:
+            errors.append(str(exc) or exc.__class__.__name__)
+        finally:
+            _close_socket(sock)
+
+        client_frames = _http2_wire_frames(bytes(sent_wire), client_preface=True)
+        server_frames = _http2_wire_frames(bytes(received_wire), client_preface=False)
+        frame_count = len(client_frames) + len(server_frames)
+        if frame_count > int(limits.get("max_frames") or 0):
+            errors.append("HTTP/2 session exceeds max_frames")
+        real_socket_evidence = _socket_identity_is_real_loopback(socket_identity)
+        if not real_socket_evidence and not errors:
+            errors.append("HTTP/2 session lacks real loopback socket evidence")
+        complete = not errors and bool(response_headers) and frame_count > 0
+        action_kind = "replay" if replay_source is not None else "capture"
+        request_record = {
+            "stream_id": stream_id,
+            "headers": request.get("headers") or [],
+            "body_base64": request.get("body_base64") or "",
+            "body_sha256": hashlib.sha256(
+                base64.b64decode(str(request.get("body_base64") or ""))
+            ).hexdigest(),
+        }
+        response_record = {
+            "stream_id": stream_id,
+            "headers": response_headers,
+            "body_base64": base64.b64encode(response_body).decode("ascii"),
+            "body_sha256": hashlib.sha256(response_body).hexdigest(),
+        }
+        after = {
+            "session_state": "closed",
+            "session": _session_snapshot(
+                plan.session_id,
+                action=plan.action,
+                mode=f"real_loopback_http2_{action_kind}",
+                state="closed",
+            ),
+            "side_effects": True,
+            "network_transmit": bool(sent_wire),
+            "network_boundary": "explicit_loopback_ip_only",
+            "application_protocol": "http/2",
+            "protocol_adapter": "hyper-h2",
+            "adapter_version": _distribution_version("h2"),
+            "capture_kind": f"real_loopback_http2_{action_kind}",
+            "destination_endpoint": dict(destination),
+            "socket_identity": socket_identity,
+            "real_socket_evidence": real_socket_evidence,
+            "stream_id": stream_id,
+            "stream_count": 1 if stream_id else 0,
+            "request": request_record,
+            "response": response_record,
+            "events": events,
+            "event_count": len(events),
+            "client_wire": _wire_evidence(bytes(sent_wire)),
+            "server_wire": _wire_evidence(bytes(received_wire)),
+            "client_frames": client_frames,
+            "server_frames": server_frames,
+            "frame_count": frame_count,
+            "capture_supported": True,
+            "replay_supported": True,
+            "live_verified": complete,
+            "real_capture_success": complete if replay_source is None else None,
+            "elapsed_ms": round((time.monotonic() - started) * 1_000, 3),
+            "errors": _deduplicate(errors),
+        }
+        return {
+            "status": "ok" if complete else "failed",
             "after_snapshot": _prune(after),
             "errors": _deduplicate(errors),
         }
@@ -3400,18 +3693,25 @@ def _normalize_parameters(
         params.get("application_protocol")
         or params.get("protocol")
         or params.get("protocol_version"),
-        http_default=action in {_HTTP_CAPTURE, _HTTP_REPLAY},
+        http_default=action in {_HTTP_CAPTURE, _HTTP_REPLAY, _HTTP2_CAPTURE, _HTTP2_REPLAY},
     )
+    if action in {_HTTP2_CAPTURE, _HTTP2_REPLAY}:
+        application_protocol = "http/2"
     if action in _CAPTURE_ACTIONS:
         listen_endpoint = {
-            "host": str(params.get("listen_host") or ""),
-            "port": _int_value(params.get("listen_port"), -1),
+            "host": str(
+                params.get("listen_host")
+                or ("127.0.0.1" if action == _HTTP2_CAPTURE else "")
+            ),
+            "port": _int_value(
+                params.get("listen_port"), 0 if action == _HTTP2_CAPTURE else -1
+            ),
         }
         upstream_endpoint = {
             "host": str(params.get("upstream_host") or ""),
             "port": _int_value(params.get("upstream_port"), -1),
         }
-        return {
+        normalized = {
             "listen_endpoint": listen_endpoint,
             "upstream_endpoint": upstream_endpoint,
             "limits": limits,
@@ -3429,6 +3729,13 @@ def _normalize_parameters(
                 else "explicit_loopback_ip_only"
             ),
         }
+        if action == _HTTP2_CAPTURE:
+            normalized["http2_request"] = _normalize_http2_request(
+                params.get("http2_request") or params.get("request"),
+                authority=f"{upstream_endpoint['host']}:{upstream_endpoint['port']}",
+            )
+            normalized["protocol_adapter"] = "hyper-h2"
+        return normalized
 
     source_value = (
         params.get("capture_artifact")
@@ -3447,7 +3754,7 @@ def _normalize_parameters(
         or requested_target_mode in {"offline", "fixture", "offline_fixture"}
         else "loopback"
     )
-    if action == _HTTP_REPLAY:
+    if action in {_HTTP_REPLAY, _HTTP2_REPLAY}:
         replay_target_mode = "loopback"
     if replay_target_mode == "offline_fixture" and not offline_fixture:
         offline_fixture = {"enabled": True, "kind": "explicit"}
@@ -3477,8 +3784,8 @@ def _normalize_parameters(
         "destination_endpoint": destination_endpoint,
         "replay_target_mode": replay_target_mode,
         "offline_fixture": offline_fixture,
-        "frame_direction": "session" if action == _HTTP_REPLAY else frame_direction,
-        "replay_mode": "session" if action == _HTTP_REPLAY else replay_mode,
+        "frame_direction": "session" if action in {_HTTP_REPLAY, _HTTP2_REPLAY} else frame_direction,
+        "replay_mode": "session" if action in {_HTTP_REPLAY, _HTTP2_REPLAY} else replay_mode,
         "timing_scale": _float_value(params.get("timing_scale"), 0.0),
         "verify_echo": _bool_value(params.get("verify_echo"), False),
         "transport": transport,
@@ -3494,6 +3801,7 @@ def _normalize_parameters(
             or params.get("controlled_fixture")
             or params.get("fixture")
         ),
+        "protocol_adapter": "hyper-h2" if action == _HTTP2_REPLAY else None,
         "network_boundary": (
             "offline_fixture_only"
             if replay_target_mode == "offline_fixture"
@@ -3991,6 +4299,222 @@ def _probe_passive_capture_adapter(requested: str) -> dict[str, Any]:
         "mock_provider": False,
         "reason": f"passive capture dependency unavailable: {', '.join(checked)}",
     }
+
+
+def _normalize_http2_request(value: Any, *, authority: str) -> dict[str, Any]:
+    source = _mapping(value)
+    method = str(source.get("method") or "GET").upper()
+    path = str(source.get("path") or "/")
+    scheme = str(source.get("scheme") or "http")
+    extra_headers = [
+        [str(item[0]).lower(), str(item[1])]
+        for item in source.get("headers") or []
+        if isinstance(item, Sequence)
+        and not isinstance(item, (str, bytes, bytearray))
+        and len(item) == 2
+        and not str(item[0]).startswith(":")
+    ]
+    body_value = source.get("body_base64")
+    if body_value not in (None, ""):
+        body_base64 = str(body_value)
+    else:
+        body = source.get("body")
+        body_bytes = body if isinstance(body, bytes) else str(body or "").encode("utf-8")
+        body_base64 = base64.b64encode(body_bytes).decode("ascii")
+    return {
+        "headers": [
+            [":method", method],
+            [":scheme", scheme],
+            [":authority", str(source.get("authority") or authority)],
+            [":path", path],
+            *extra_headers,
+        ],
+        "body_base64": body_base64,
+    }
+
+
+def _http2_request_errors(value: Any) -> list[str]:
+    request = _mapping(value)
+    headers = request.get("headers")
+    errors: list[str] = []
+    if not isinstance(headers, list):
+        return ["HTTP/2 request headers must be a list"]
+    normalized: dict[str, str] = {}
+    regular_seen = False
+    for item in headers:
+        if not isinstance(item, list) or len(item) != 2:
+            errors.append("HTTP/2 headers must contain name/value pairs")
+            continue
+        name, header_value = str(item[0]), str(item[1])
+        if name != name.lower():
+            errors.append("HTTP/2 header names must be lowercase")
+        if name.startswith(":"):
+            if regular_seen:
+                errors.append("HTTP/2 pseudo-headers must precede regular headers")
+            normalized[name] = header_value
+        else:
+            regular_seen = True
+    for required in (":method", ":scheme", ":authority", ":path"):
+        if not normalized.get(required):
+            errors.append(f"HTTP/2 request is missing {required}")
+    try:
+        base64.b64decode(str(request.get("body_base64") or ""), validate=True)
+    except ValueError:
+        errors.append("HTTP/2 request body_base64 is invalid")
+    return _deduplicate(errors)
+
+
+def _public_http2_request(value: Any) -> dict[str, Any]:
+    request = _mapping(value)
+    body = base64.b64decode(str(request.get("body_base64") or ""))
+    return {
+        "headers": list(request.get("headers") or []),
+        "body_size": len(body),
+        "body_sha256": hashlib.sha256(body).hexdigest(),
+    }
+
+
+def _http2_event_record(event: Any) -> dict[str, Any]:
+    name = event.__class__.__name__
+    supported = {
+        "RemoteSettingsChanged",
+        "SettingsAcknowledged",
+        "ResponseReceived",
+        "InformationalResponseReceived",
+        "DataReceived",
+        "TrailersReceived",
+        "StreamEnded",
+        "StreamReset",
+        "WindowUpdated",
+    }
+    if name not in supported:
+        return {}
+    return _prune(
+        {
+            "event": name,
+            "stream_id": getattr(event, "stream_id", None),
+            "flow_controlled_length": getattr(event, "flow_controlled_length", None),
+            "data_size": len(getattr(event, "data", b"")),
+            "data_sha256": (
+                hashlib.sha256(getattr(event, "data", b"")).hexdigest()
+                if getattr(event, "data", b"")
+                else None
+            ),
+        }
+    )
+
+
+def _http2_wire_frames(value: bytes, *, client_preface: bool) -> list[dict[str, Any]]:
+    offset = 0
+    if client_preface:
+        preface = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+        if not value.startswith(preface):
+            return []
+        offset = len(preface)
+    result: list[dict[str, Any]] = []
+    frame_types = {
+        0: "DATA", 1: "HEADERS", 2: "PRIORITY", 3: "RST_STREAM",
+        4: "SETTINGS", 5: "PUSH_PROMISE", 6: "PING", 7: "GOAWAY",
+        8: "WINDOW_UPDATE", 9: "CONTINUATION",
+    }
+    while offset + 9 <= len(value):
+        length = int.from_bytes(value[offset:offset + 3], "big")
+        end = offset + 9 + length
+        if end > len(value):
+            break
+        frame_type = value[offset + 3]
+        flags = value[offset + 4]
+        stream_id = int.from_bytes(value[offset + 5:offset + 9], "big") & 0x7FFFFFFF
+        wire = value[offset:end]
+        result.append(
+            {
+                "sequence": len(result) + 1,
+                "type": frame_types.get(frame_type, f"UNKNOWN_{frame_type}"),
+                "flags": flags,
+                "stream_id": stream_id,
+                "payload_size": length,
+                "wire_size": len(wire),
+                "wire_sha256": hashlib.sha256(wire).hexdigest(),
+            }
+        )
+        offset = end
+    return result
+
+
+def _wire_evidence(value: bytes) -> dict[str, Any]:
+    return {
+        "size": len(value),
+        "sha256": hashlib.sha256(value).hexdigest(),
+        "base64": base64.b64encode(value).decode("ascii"),
+    }
+
+
+def _distribution_version(name: str) -> Optional[str]:
+    try:
+        return importlib.metadata.version(name)
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
+def _http2_replay_source(payload: Mapping[str, Any]) -> dict[str, Any]:
+    if payload.get("action") != _HTTP2_CAPTURE:
+        raise RuntimeError("HTTP/2 replay source is not a loopback_http2_capture artifact")
+    after = _mapping(payload.get("after_snapshot"))
+    if not after.get("live_verified") or not after.get("real_socket_evidence"):
+        raise RuntimeError("HTTP/2 replay source lacks verified live socket evidence")
+    request = _mapping(after.get("request"))
+    response = _mapping(after.get("response"))
+    if _http2_request_errors(request):
+        raise RuntimeError("HTTP/2 replay source request evidence is invalid")
+    if not response.get("headers") or not response.get("body_sha256"):
+        raise RuntimeError("HTTP/2 replay source response evidence is incomplete")
+    request_body = _verified_base64_payload(request, label="HTTP/2 request body")
+    response_body = _verified_base64_payload(response, label="HTTP/2 response body")
+    if hashlib.sha256(request_body).hexdigest() != request.get("body_sha256"):
+        raise RuntimeError("HTTP/2 replay source request body hash is invalid")
+    if hashlib.sha256(response_body).hexdigest() != response.get("body_sha256"):
+        raise RuntimeError("HTTP/2 replay source response body hash is invalid")
+    client_wire = _verified_wire_evidence(
+        after.get("client_wire"), label="HTTP/2 client wire"
+    )
+    server_wire = _verified_wire_evidence(
+        after.get("server_wire"), label="HTTP/2 server wire"
+    )
+    expected_client_frames = list(after.get("client_frames") or [])
+    expected_server_frames = list(after.get("server_frames") or [])
+    if _http2_wire_frames(client_wire, client_preface=True) != expected_client_frames:
+        raise RuntimeError("HTTP/2 replay source client frame evidence is invalid")
+    if _http2_wire_frames(server_wire, client_preface=False) != expected_server_frames:
+        raise RuntimeError("HTTP/2 replay source server frame evidence is invalid")
+    if int(after.get("frame_count") or -1) != len(expected_client_frames) + len(
+        expected_server_frames
+    ):
+        raise RuntimeError("HTTP/2 replay source frame count is inconsistent")
+    return {
+        "stream_id": after.get("stream_id"),
+        "request": dict(request),
+        "response": dict(response),
+    }
+
+
+def _verified_base64_payload(value: Mapping[str, Any], *, label: str) -> bytes:
+    try:
+        return base64.b64decode(str(value.get("body_base64") or ""), validate=True)
+    except ValueError as exc:
+        raise RuntimeError(f"{label} is not valid base64") from exc
+
+
+def _verified_wire_evidence(value: Any, *, label: str) -> bytes:
+    evidence = _mapping(value)
+    try:
+        wire = base64.b64decode(str(evidence.get("base64") or ""), validate=True)
+    except ValueError as exc:
+        raise RuntimeError(f"{label} is not valid base64") from exc
+    if int(evidence.get("size") or -1) != len(wire):
+        raise RuntimeError(f"{label} size is invalid")
+    if str(evidence.get("sha256") or "") != hashlib.sha256(wire).hexdigest():
+        raise RuntimeError(f"{label} hash is invalid")
+    return wire
 
 
 def _http2_adapter_contract() -> dict[str, Any]:
@@ -4551,6 +5075,8 @@ def _execution_kind(action: str, parameters: Mapping[str, Any]) -> str:
             if parameters.get("capture_mode") == "adapter"
             else "passive_evidence_import"
         )
+    if action == _HTTP2_REPLAY:
+        return "controlled_loopback_http2_fixture_replay"
     if action == _HTTP_REPLAY:
         return "controlled_loopback_http_fixture_replay"
     if action in _REPLAY_ACTIONS:
@@ -4559,6 +5085,8 @@ def _execution_kind(action: str, parameters: Mapping[str, Any]) -> str:
             if parameters.get("replay_target_mode") == "offline_fixture"
             else "loopback_controlled_replay"
         )
+    if action == _HTTP2_CAPTURE:
+        return "real_loopback_http2_capture"
     if action == _HTTP_CAPTURE:
         return "real_loopback_http_capture"
     return "loopback_proxy_capture"
@@ -4595,12 +5123,31 @@ def _plan_steps(action: str, parameters: Mapping[str, Any]) -> list[dict[str, st
             "normalize_with_protocol_tools",
             "collect_protocol_evidence",
         ]
+    elif action == _HTTP2_CAPTURE:
+        names = [
+            "validate_real_loopback_http2_boundary",
+            "verify_hyper_h2_runtime",
+            "open_h2c_connection",
+            "capture_http2_frames_stream_and_events",
+            "close_ephemeral_sockets",
+            "collect_protocol_evidence",
+        ]
     elif action == _HTTP_CAPTURE:
         names = [
             "validate_real_loopback_http_boundary",
             "verify_precondition",
             "capture_http1_request_response_bytes",
             "verify_http_framing_and_integrity",
+            "close_ephemeral_sockets",
+            "collect_protocol_evidence",
+        ]
+    elif action == _HTTP2_REPLAY:
+        names = [
+            "validate_controlled_loopback_http2_fixture",
+            "verify_capture_precondition",
+            "restore_http2_request_stream",
+            "replay_with_hyper_h2",
+            "verify_stream_response_and_wire_evidence",
             "close_ephemeral_sockets",
             "collect_protocol_evidence",
         ]

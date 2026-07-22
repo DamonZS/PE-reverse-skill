@@ -241,7 +241,11 @@ class AndroidP5AcceptanceContractTests(unittest.TestCase):
                 {
                     "status": "passed",
                     "provider": "jadx",
-                    "dependency": {"state": "available"},
+                    "dependency": {
+                        "state": "available",
+                        "probe": {"status": "passed", "version": "jadx 1.0"},
+                    },
+                    "output": {"source_file_count": 1},
                     "target": {"unchanged": True},
                 },
             )

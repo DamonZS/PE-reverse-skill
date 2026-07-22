@@ -369,6 +369,82 @@ def _fixture_proof_ok(
     return result
 
 
+def _p5_android_contract_errors(run_dir: Path, fixture_id: str) -> list[str]:
+    """Validate semantic evidence for P5 Android live fixtures.
+
+    Registered artifact patterns prove that files were retained, but they do
+    not prove that the external tool produced usable output or that a patched
+    package was actually deployed and launched.  Keep these checks deterministic
+    and re-computable from the retained JSON so promotion cannot rely on a
+    user-supplied boolean in the acceptance record.
+    """
+
+    errors: list[str] = []
+
+    def load(relative: str) -> Mapping[str, Any] | None:
+        path = run_dir / relative
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            errors.append(f"P5 contract artifact is missing or invalid JSON: {relative}")
+            return None
+        if not isinstance(value, Mapping):
+            errors.append(f"P5 contract artifact must be a JSON object: {relative}")
+            return None
+        return value
+
+    if fixture_id == "p5-android-jadx-live":
+        result = load("android/java_decompilation.json")
+        if result is not None:
+            if str(result.get("status") or "").lower() != "passed":
+                errors.append("Jadx decompilation result is not passed")
+            dependency = result.get("dependency")
+            probe = dependency.get("probe") if isinstance(dependency, Mapping) else None
+            if not isinstance(dependency, Mapping) or dependency.get("state") != "available":
+                errors.append("Jadx dependency was not available")
+            if not isinstance(probe, Mapping) or str(probe.get("status") or "").lower() != "passed":
+                errors.append("Jadx version probe was not passed")
+            output = result.get("output")
+            if not isinstance(output, Mapping) or not isinstance(output.get("source_file_count"), int):
+                errors.append("Jadx result is missing source_file_count")
+            elif output.get("source_file_count", 0) <= 0:
+                errors.append("Jadx produced no source files")
+            target = result.get("target")
+            if not isinstance(target, Mapping) or target.get("unchanged") is not True:
+                errors.append("Jadx input APK integrity was not verified")
+        source_files = [
+            path for path in (run_dir / "android" / "jadx").rglob("*")
+            if path.is_file() and path.suffix.lower() in {".java", ".kt", ".kts"}
+        ] if (run_dir / "android" / "jadx").is_dir() else []
+        if not source_files:
+            errors.append("Jadx output directory contains no generated source files")
+
+    elif fixture_id == "p5-android-native-patch-live":
+        deployment = load("android-native-patch/deployment.json")
+        if deployment is not None:
+            if str(deployment.get("status") or "").lower() not in _SUCCESS_VALUES:
+                errors.append("native APK deployment was not successful")
+            operations = deployment.get("operations")
+            operation_status: dict[str, bool] = {}
+            if isinstance(operations, list):
+                operation_status = {
+                    str(item.get("step")): item.get("ok") is True
+                    for item in operations
+                    if isinstance(item, Mapping)
+                }
+            for key, step in (("install_verified", "install_patched"), ("launch_verified", "launch_patched")):
+                verified = deployment.get(key) is True or operation_status.get(step) is True
+                if not verified:
+                    errors.append(f"native APK deployment missing {key}")
+        proof = load("android-native-patch/execution-proof.json")
+        if proof is not None:
+            for key in ("signature_verified", "install_verified", "launch_verified", "rollback_verified"):
+                if proof.get(key) is not True:
+                    errors.append(f"native APK execution proof missing {key}")
+
+    return errors
+
+
 def _environment_fixture_state(run_dir: Path, fixture_id: str) -> dict[str, Any] | None:
     """Read the retained environment report for one registered fixture."""
     report_path = run_dir / "environment-validation.json"
@@ -1041,6 +1117,8 @@ def run_acceptance_fixture(
         if fixture_id == "p7-vlm-openai-live"
         else _uia_contract_errors(run_dir)
         if fixture_id == "p7-windows-uia-live"
+        else _p5_android_contract_errors(run_dir, fixture_id)
+        if fixture_id in {"p5-android-jadx-live", "p5-android-native-patch-live"}
         else []
     )
     target_valid = _fixture_target_identity_valid(
@@ -1251,6 +1329,8 @@ def verify_acceptance_record(record_file: str | Path) -> dict[str, Any]:
                 errors.extend(_vlm_contract_errors(run_dir))
             if fixture_id == "p7-windows-uia-live":
                 errors.extend(_uia_contract_errors(run_dir))
+            if fixture_id in {"p5-android-jadx-live", "p5-android-native-patch-live"}:
+                errors.extend(_p5_android_contract_errors(run_dir, fixture_id))
         constraints = record.get("verification_constraints")
         if not isinstance(constraints, Mapping) or not constraints or not all(value is True for value in constraints.values()):
             errors.append("live_verified claim lacks complete verification constraints")
@@ -1343,6 +1423,8 @@ def verify_acceptance_record(record_file: str | Path) -> dict[str, Any]:
                         if fixture_id == "p7-vlm-openai-live"
                         else _uia_contract_errors(run_dir)
                         if fixture_id == "p7-windows-uia-live"
+                        else _p5_android_contract_errors(run_dir, fixture_id)
+                        if fixture_id in {"p5-android-jadx-live", "p5-android-native-patch-live"}
                         else []
                     )
                 ),

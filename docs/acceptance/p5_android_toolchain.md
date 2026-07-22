@@ -28,6 +28,11 @@ and generated source hashes. The production path first runs a bounded offline
 version and return code. A failed probe stops before the output directory or
 decompilation command is created.
 
+Independent verification also rechecks the decompilation JSON: the result must
+be `passed`, the dependency and version probe must be `available`/`passed`, the
+source-file count must be positive, the input APK must remain unchanged, and
+the retained output must contain a `.java`, `.kt`, or `.kts` source file.
+
 ## APK Rebuild And Signing
 
 Configure a real APK, keystore, alias and passwords. Put `apktool` and
@@ -135,6 +140,11 @@ installs and launches the restored copy, and performs final device cleanup. It
 retains the signed patched APK, provider evidence, deployment transcript,
 rollback proof, target identity, and structured execution proof. Passwords are
 read from environment variables and scanned out of retained JSON.
+
+Promotion additionally requires the deployment transcript to mark installation
+and launch as verified, and the execution proof to mark signature,
+installation, launch, and rollback verification as true. The verifier
+recomputes these fields instead of trusting the record's boolean summary.
 
 Before the first install, the fixture records the ADB-reported serial and fails
 closed unless the device is online and the fixture package is absent. This
