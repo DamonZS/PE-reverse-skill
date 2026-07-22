@@ -13,6 +13,19 @@ For an offline or air-gapped builder with `setuptools` already installed, add
 ./scripts/build_reverse_jailbreak.ps1 -Clean -NoBuildIsolation
 ```
 
+On Linux or macOS, the equivalent POSIX builder uses the same manifest, SBOM,
+and reproducibility checks:
+
+```bash
+bash scripts/build_reverse_jailbreak.sh --clean
+bash scripts/build_reverse_jailbreak.sh --clean --no-build-isolation \
+  --output dist/reverse-jailbreak
+```
+
+Both builders reject a missing version-matched release note and finish by
+building and verifying `release-manifest.json`; the shell builder also honors
+`SOURCE_DATE_EPOCH` or the latest Git commit timestamp.
+
 Install the wheel, then use the standalone entry point:
 
 ```powershell

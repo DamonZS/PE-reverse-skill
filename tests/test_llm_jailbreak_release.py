@@ -82,6 +82,20 @@ class ReleaseCliTests(unittest.TestCase):
         self.assertIn("[switch]$NoBuildIsolation", script)
         self.assertIn('"--no-build-isolation"', script)
 
+    def test_posix_build_script_matches_portable_release_contract(self):
+        script = (Path(__file__).parents[1] / "scripts/build_reverse_jailbreak.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertTrue(script.startswith("#!/usr/bin/env bash"))
+        for fragment in (
+            "--no-build-isolation",
+            "SOURCE_DATE_EPOCH",
+            "reverse_analyzer.llm_jailbreak.release build",
+            "reverse_analyzer.llm_jailbreak.release sbom",
+            "reverse_analyzer.llm_jailbreak.release verify",
+        ):
+            self.assertIn(fragment, script)
+
     def test_release_sbom_is_deterministic_and_lists_direct_dependencies(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
