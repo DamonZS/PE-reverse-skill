@@ -114,7 +114,9 @@ class ProjectBuilderTests(unittest.TestCase):
             self.assertEqual(result["status"], "passed")
             self.assertEqual([stage["name"] for stage in result["stages"]], ["configure", "build", "apktool-mobile"])
             self.assertEqual(runner.calls[2][0][:2], ["apktool", "build"])
-            self.assertEqual(Path(runner.calls[2][0][2]), decoded)
+            self.assertIn("--frame-path", runner.calls[2][0])
+            self.assertEqual(Path(runner.calls[2][0][runner.calls[2][0].index("--frame-path") + 1]), project / ".reconstruction-build" / "android" / "framework")
+            self.assertIn(str(decoded), runner.calls[2][0])
 
     def test_readiness_and_model_gates_prevent_execution(self) -> None:
         for readiness, model_state, reason in (

@@ -2026,7 +2026,14 @@ def _write_ios(project_dir: Path, *, swiftui: bool = False) -> Dict[str, str]:
 
 def _write_pyside(project_dir: Path) -> Dict[str, str]:
     return {
-        "requirements.txt": _write(project_dir / "requirements.txt", "PySide6>=6.6\n"),
+        "requirements.txt": _write(
+            project_dir / "requirements.txt",
+            "PySide6==6.6.3 \\\n"
+            "    --hash=sha256:0fece198904351fa39293b55de7f2392e9f9e7cfee061de88a77172e1013ea2c \\\n"
+            "    --hash=sha256:2b1970afa9aa2d04afa8c77e277494216d915771dc8bc5b1d4e80f553e473f7b \\\n"
+            "    --hash=sha256:1218d3511c6ead373035688db7ad5fe1b84da30d3b3d252f7043ba5b60571fdd \\\n"
+            "    --hash=sha256:98ac4ad46a351198ce9cdc08eec261148859c1386e149497c80c75fd1e2fc1a7\n",
+        ),
         "src/main.py": _write(project_dir / "src" / "main.py", "from PySide6.QtWidgets import QApplication, QLabel, QMainWindow\napp=QApplication([])\nwin=QMainWindow(); win.setWindowTitle('Reconstructed GUI'); win.resize(900,640); win.setCentralWidget(QLabel('GUI reconstructed from evidence')); win.show(); app.exec()\n"),
     }
 

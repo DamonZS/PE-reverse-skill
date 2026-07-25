@@ -1764,6 +1764,8 @@ class AndroidRebuildProvider:
                         str(source_path),
                         "-o",
                         str(temporary_unpack),
+                        "--frame-path",
+                        str(_plan_path(plan, "work_dir") / "framework"),
                     ],
                     cwd=_plan_path(plan, "work_dir"),
                     timeout=_bounded_timeout(plan.parameters.get("timeout"), self.timeout),
@@ -2156,6 +2158,8 @@ class AndroidRebuildProvider:
                 str(source_path),
                 "-o",
                 str(decoded_dir),
+                "--frame-path",
+                str(work_dir / "framework"),
             ]
             _run_recorded(
                 records,
@@ -2171,6 +2175,8 @@ class AndroidRebuildProvider:
             str(decoded_dir),
             "-o",
             str(unsigned_path),
+            "--frame-path",
+            str(work_dir / "framework"),
         ]
         _run_recorded(
             records,

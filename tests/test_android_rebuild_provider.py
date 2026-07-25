@@ -669,6 +669,8 @@ class AndroidRebuildProviderTests(unittest.TestCase):
         steps = [call[1] for call in runner.calls]
         self.assertEqual(steps.count("d"), 2)
         self.assertIn("b", steps)
+        for call in (call for call in runner.calls if call[1] in {"d", "b"}):
+            self.assertIn("--frame-path", call)
         self.assertIn("sign", steps)
         self.assertEqual(steps.count("verify"), 2)
         sign_call = next(call for call in runner.calls if call[1] == "sign")

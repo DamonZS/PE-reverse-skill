@@ -98,13 +98,15 @@ def build_project(
         ),
     ]
     android_output = build_directory / "android"
+    android_framework = android_output / "framework"
     for descriptor in sorted(root.glob("targets/**/apktool.yml")):
         target_root = descriptor.parent
         target_id = target_root.relative_to(root / "targets").parts[0]
         android_output.mkdir(parents=True, exist_ok=True)
+        android_framework.mkdir(parents=True, exist_ok=True)
         commands.append((
             f"apktool-{target_id}",
-            ["apktool", "build", str(target_root), "--output", str(android_output / f"{target_id}.apk")],
+            ["apktool", "build", "--frame-path", str(android_framework), str(target_root), "--output", str(android_output / f"{target_id}.apk")],
             BUILD_TIMEOUT_SECONDS,
         ))
     result["status"] = "running"
