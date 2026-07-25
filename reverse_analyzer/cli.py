@@ -3884,7 +3884,7 @@ def _materialize_capability_artifacts(
         }
         metadata = payload.get("metadata") if isinstance(payload.get("metadata"), Mapping) else {}
         provider_materialized = bool(metadata.get("materialized"))
-        if provider_materialized and not destination.is_file():
+        if provider_materialized and not destination.exists():
             raise FileNotFoundError(f"provider artifact was not materialized: {destination}")
         if not destination.exists():
             destination.write_text(
@@ -5024,12 +5024,13 @@ def build_parser() -> argparse.ArgumentParser:
     android_unpack = android_commands.add_parser("unpack", help="Unpack an APK through the audited rebuild provider.")
     _add_capability_alias_options(android_unpack, target="sample", rollback=False)
     android_unpack.add_argument("--destination", default=None)
+    android_unpack.add_argument("--strategy", choices=("zip_copy", "apktool_rebuild"), default=None)
     android_unpack.add_argument("--apktool", default=None)
     android_unpack.set_defaults(
         func=_dedicated_capability_command,
         capability="android_rebuild",
         action="unpack",
-        capability_param_fields=(("destination", "unpack_dir"), ("apktool", "apktool_path")),
+        capability_param_fields=(("destination", "unpack_dir"), ("strategy", "strategy"), ("apktool", "apktool_path")),
     )
 
     android_rebuild = android_commands.add_parser("rebuild", help="Rebuild an APK or decoded Android project into a new APK.")

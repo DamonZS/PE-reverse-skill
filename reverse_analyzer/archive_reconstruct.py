@@ -83,7 +83,7 @@ def _capability_commands(source: Path, analysis_dir: Path) -> list[dict[str, Any
             {
                 "capability": "android-resource-smali-unpack",
                 "provider": "CapabilityRegistry:android_rebuild (Apktool)",
-                "command": [*base, "android", "unpack", str(source), "--out", str(analysis_dir / "apktool-session"), "--destination", str(analysis_dir / "android" / "apktool")],
+                "command": [*base, "android", "unpack", str(source), "--out", str(analysis_dir / "apktool-session"), "--destination", str(analysis_dir / "android" / "apktool"), "--strategy", "apktool_rebuild"],
                 "artifacts": ["android/apktool"],
                 "dependency": "apktool",
             },
@@ -256,7 +256,14 @@ def _find_project(root: Path) -> Path | None:
 
 
 def _default_runner(command: Sequence[str]) -> int:
-    return subprocess.run(command, check=False).returncode
+    environment = os.environ.copy()
+    if "--out" in command:
+        output = Path(command[command.index("--out") + 1]).resolve()
+        runtime = output / ".runtime"
+        environment.setdefault("REVERSE_ANALYZER_KNOWLEDGE_DIR", str(runtime / "knowledge"))
+        environment.setdefault("REVERSE_ANALYZER_SESSIONS_DIR", str(runtime / "sessions"))
+        environment.setdefault("REVERSE_ANALYZER_REPORTS_DIR", str(runtime / "reports"))
+    return subprocess.run(command, check=False, env=environment).returncode
 
 
 def reconstruct_archive(

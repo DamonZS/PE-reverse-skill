@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 from reverse_analyzer.archive_reconstruct import (
     _artifact_evidence,
+    _default_runner,
     _repair_behavior_with_model,
     _member_name,
     _model_context,
@@ -58,6 +59,21 @@ class _OpenAIChatFixtureHandler(BaseHTTPRequestHandler):
 
 
 class ArchiveReconstructTests(unittest.TestCase):
+    def test_default_runner_isolates_runtime_directories_beside_stage_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "analysis"
+            command = ["reverse-analyzer", "android", "analyze", "fixture.apk", "--out", str(output)]
+            with patch("reverse_analyzer.archive_reconstruct.subprocess.run") as run:
+                run.return_value.returncode = 0
+
+                self.assertEqual(_default_runner(command), 0)
+
+            environment = run.call_args.kwargs["env"]
+            runtime = output.resolve() / ".runtime"
+            self.assertEqual(environment["REVERSE_ANALYZER_KNOWLEDGE_DIR"], str(runtime / "knowledge"))
+            self.assertEqual(environment["REVERSE_ANALYZER_SESSIONS_DIR"], str(runtime / "sessions"))
+            self.assertEqual(environment["REVERSE_ANALYZER_REPORTS_DIR"], str(runtime / "reports"))
+
     def test_legacy_gb18030_zip_name_is_recovered_from_cp437(self):
         original = "风灵月影【控制端】30.15内部版/说明.txt"
         mojibake = original.encode("gb18030").decode("cp437")
@@ -665,7 +681,8 @@ class ArchiveReconstructTests(unittest.TestCase):
             self.assertIn("--reconstruct-gui", exe)
             self.assertNotIn("--gui", dll)
             self.assertTrue(any(command[3:5] == ["android", "decompile"] for command in commands))
-            self.assertTrue(any(command[3:5] == ["android", "unpack"] for command in commands))
+            unpack_command = next(command for command in commands if command[3:5] == ["android", "unpack"])
+            self.assertEqual(unpack_command[unpack_command.index("--strategy") + 1], "apktool_rebuild")
             self.assertTrue((project / "package/app/client.exe").is_file())
             self.assertTrue((project / "package/assets/theme.json").is_file())
             self.assertTrue((project / "targets/client/CMakeLists.txt").is_file())
