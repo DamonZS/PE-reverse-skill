@@ -113,6 +113,9 @@ class ProjectBuilderTests(unittest.TestCase):
 
             self.assertEqual(result["status"], "passed")
             self.assertEqual([stage["name"] for stage in result["stages"]], ["configure", "build", "apktool-mobile"])
+            build_environment = runner.calls[2][1]["env"]
+            self.assertEqual(build_environment["HOME"], str(project / ".reconstruction-build" / ".runtime-home"))
+            self.assertEqual(build_environment["XDG_DATA_HOME"], str(project / ".reconstruction-build" / ".runtime-home" / ".local" / "share"))
             self.assertEqual(runner.calls[2][0][:2], ["apktool", "build"])
             self.assertIn("--frame-path", runner.calls[2][0])
             self.assertEqual(Path(runner.calls[2][0][runner.calls[2][0].index("--frame-path") + 1]), project / ".reconstruction-build" / "android" / "framework")

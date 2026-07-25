@@ -263,7 +263,13 @@ def _default_runner(command: Sequence[str]) -> int:
         environment["REVERSE_ANALYZER_KNOWLEDGE_DIR"] = str(runtime / "knowledge")
         environment["REVERSE_ANALYZER_SESSIONS_DIR"] = str(runtime / "sessions")
         environment["REVERSE_ANALYZER_REPORTS_DIR"] = str(runtime / "reports")
-    return subprocess.run(command, check=False, env=environment).returncode
+    return subprocess.run(
+        command,
+        check=False,
+        env=environment,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    ).returncode
 
 
 def reconstruct_archive(

@@ -88,6 +88,11 @@ def build_project(
         result["error"] = "; ".join(result["blocking_reasons"])
         return _finish_and_write(result, result_path, started)
 
+    runtime_home = build_directory / ".runtime-home"
+    runtime_home.mkdir(parents=True, exist_ok=True)
+    environment["HOME"] = str(runtime_home)
+    environment["XDG_DATA_HOME"] = str(runtime_home / ".local" / "share")
+
     command_runner = runner or subprocess.run
     commands: list[tuple[str, list[str], float]] = [
         (

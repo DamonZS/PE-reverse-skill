@@ -75,6 +75,8 @@ class ArchiveReconstructTests(unittest.TestCase):
 
             environment = run.call_args.kwargs["env"]
             runtime = output.resolve() / ".runtime"
+            self.assertIs(run.call_args.kwargs["stdout"], subprocess.DEVNULL)
+            self.assertIs(run.call_args.kwargs["stderr"], subprocess.DEVNULL)
             self.assertEqual(environment["REVERSE_ANALYZER_KNOWLEDGE_DIR"], str(runtime / "knowledge"))
             self.assertEqual(environment["REVERSE_ANALYZER_SESSIONS_DIR"], str(runtime / "sessions"))
             self.assertEqual(environment["REVERSE_ANALYZER_REPORTS_DIR"], str(runtime / "reports"))
