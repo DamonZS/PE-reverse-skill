@@ -30,6 +30,15 @@ test("修改工作台默认使用中文指令并保留工程导出和高级模�
   assert.match(app, /高级十六进制/);
 });
 
+test("源码保存按钮可点击并在没有修改时给出原因", () => {
+  assert.doesNotMatch(
+    app,
+    /disabled=\{!canWrite \|\| !!busy \|\| !selectedFile\?\.editable \|\| !dirty\}/,
+  );
+  assert.match(app, /当前文件没有需要保存的修改。请先在编辑器中修改内容。/);
+  assert.match(app, /当前无修改，点击可查看提示/);
+});
+
 test("模型服务和权限管理视图只向管理员渲染", () => {
   assert.match(app, /view === "providers" && identity\?\.role === "admin"/);
   assert.match(app, /当前账号无权访问管理功能/);

@@ -3293,6 +3293,15 @@ function SourceWorkspace({
       setMessage("只读角色不能保存源码。");
       return;
     }
+    const currentFile = files.find((file) => file.path === selected);
+    if (!selected || !currentFile?.editable) {
+      setMessage("请先在左侧选择一个可编辑的源码文件。");
+      return;
+    }
+    if (content === savedContent) {
+      setMessage("当前文件没有需要保存的修改。请先在编辑器中修改内容。");
+      return;
+    }
     setBusy("save");
     const r = await fetch(`/api/experiments/${experiment.id}/source/file`, {
       method: "PUT",
@@ -3370,7 +3379,14 @@ function SourceWorkspace({
             </button>
             <button
               className="primaryBtn"
-              disabled={!canWrite || !!busy || !selectedFile?.editable || !dirty}
+              disabled={!canWrite || !!busy || !selectedFile?.editable}
+              title={
+                !selectedFile?.editable
+                  ? "请先选择可编辑源码文件"
+                  : dirty
+                    ? "保存当前修改"
+                    : "当前无修改，点击可查看提示"
+              }
               onClick={() => void save()}
             >
               <Save size={15} />
