@@ -115,7 +115,8 @@ type Provider = {
   kind: string;
   model?: string;
   base_url?: string;
-  api_key_env?: string;
+  api_keys?: string[];
+  key_count?: number;
   enabled: boolean;
   priority: number;
   models?: Array<{
@@ -820,6 +821,7 @@ function ProvidersView({
   onChanged: () => Promise<void>;
 }) {
   const [selected, setSelected] = useState<Provider | null>(null);
+  const [apiKeys, setApiKeys] = useState("");
   const [message, setMessage] = useState("");
   useEffect(() => {
     if (!selected && data.length) setSelected(data[0]);
@@ -827,10 +829,13 @@ function ProvidersView({
   const save = async () => {
     if (!selected) return;
     setMessage("保存中");
+    const profile = apiKeys.trim()
+      ? { ...selected, api_keys: apiKeys.split(/\r?\n/).map((key) => key.trim()).filter(Boolean) }
+      : selected;
     const r = await fetch("/api/providers", {
       method: "PUT",
       headers: headers({ "Content-Type": "application/json" }),
-      body: JSON.stringify(selected),
+      body: JSON.stringify(profile),
     });
     const p = await r.json();
     setMessage(r.ok ? "配置已保存" : p.error || "保存失败");
@@ -868,6 +873,7 @@ function ProvidersView({
                 key={x.name}
                 onClick={() => {
                   setSelected({ ...x });
+                  setApiKeys("");
                   setMessage("");
                 }}
               >
@@ -975,13 +981,14 @@ function ProvidersView({
               />
             </label>
             <label>
-              密钥环境变量
-              <input
-                value={selected.api_key_env || ""}
+              API Key（每行一个，第一行优先）
+              <textarea
+                value={apiKeys}
                 disabled={selected.kind === "local"}
                 onChange={(e) =>
-                  setSelected({ ...selected, api_key_env: e.target.value })
+                  setApiKeys(e.target.value)
                 }
+                placeholder={selected.key_count ? `已配置 ${selected.key_count} 个 Key；粘贴完整列表以更新` : "每行粘贴一个 API Key"}
               />
             </label>
             <label>

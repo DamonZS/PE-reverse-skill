@@ -59,7 +59,7 @@ services:
     volumes:
       - workspace:/workspace
       - /var/run/docker.sock:/var/run/docker.sock
-      - /opt/pe-reverse-analyzer/config/provider.local.json:/run/config/provider.local.json:ro
+      - /opt/pe-reverse-analyzer/config/provider.local.json:/run/config/provider.local.json
     tmpfs:
       - /tmp:size=192m,mode=1777
     ports:

@@ -93,7 +93,8 @@ jobs:
             cp "$RELEASE/deploy/compose.aliyun.yml" "$ROOT/compose.yml"
             cp "$RELEASE/deploy/nginx.aliyun.conf" "$ROOT/nginx.conf"
             chown root:10001 "$ROOT/secrets/postgres_password" "$ROOT/secrets/web_token" "$ROOT/config/provider.local.json"
-            chmod 0640 "$ROOT/secrets/postgres_password" "$ROOT/secrets/web_token" "$ROOT/config/provider.local.json"
+            chmod 0640 "$ROOT/secrets/postgres_password" "$ROOT/secrets/web_token"
+            chmod 0660 "$ROOT/config/provider.local.json"
             . "$ROOT/deploy.env"
             export REVERSE_ANALYZER_IMAGE="reverse-analyzer:${{ github.sha }}"
             docker compose --project-name pe-reverse-analyzer --env-file "$ROOT/deploy.env" -f "$ROOT/compose.yml" up -d --remove-orphans

@@ -26,6 +26,8 @@ type providerProfile struct {
 	Kind      string          `json:"kind"`
 	Model     string          `json:"model,omitempty"`
 	BaseURL   string          `json:"base_url,omitempty"`
+	APIKeys   []string        `json:"api_keys,omitempty"`
+	KeyCount  int             `json:"key_count,omitempty"`
 	APIKeyEnv string          `json:"api_key_env,omitempty"`
 	Enabled   bool            `json:"enabled"`
 	Priority  int             `json:"priority"`
@@ -49,13 +51,17 @@ type localProviderConfig struct {
 }
 
 func readLocalProviderConfig() localProviderConfig {
-	path := strings.TrimSpace(os.Getenv("REVERSE_ANALYZER_PROVIDER_CONFIG"))
-	if path == "" {
-		path = filepath.Join("config", "provider.local.json")
-	}
+	path := localProviderConfigPath()
 	var cfg localProviderConfig
 	_ = readFileJSON(path, &cfg)
 	return cfg
+}
+
+func localProviderConfigPath() string {
+	if path := strings.TrimSpace(os.Getenv("REVERSE_ANALYZER_PROVIDER_CONFIG")); path != "" {
+		return path
+	}
+	return filepath.Join("config", "provider.local.json")
 }
 
 func providerAPIKeys(profile providerProfile) []string {
@@ -68,6 +74,7 @@ func providerAPIKeys(profile providerProfile) []string {
 			values = append(values, key)
 		}
 	}
+	values = append(values, profile.APIKeys...)
 	if len(values) == 0 {
 		values = append(values, readLocalProviderConfig().APIKeys...)
 	}
@@ -94,7 +101,7 @@ func defaultProviderProfiles() []providerProfile {
 	}
 	return []providerProfile{
 		{Name: "rule_based", Kind: "local", Enabled: true, Priority: 0},
-		{Name: "openai_compatible", Kind: "openai-compatible", Model: model, Models: normalizeProviderModels(local.Models, model), BaseURL: baseURL, APIKeyEnv: "OPENAI_API_KEY", Enabled: os.Getenv("REVERSE_ANALYZER_OPENAI_ENABLED") != "" || len(local.APIKeys) > 0, Priority: 10},
+		{Name: "openai_compatible", Kind: "openai-compatible", Model: model, Models: normalizeProviderModels(local.Models, model), BaseURL: baseURL, KeyCount: len(local.APIKeys), Enabled: os.Getenv("REVERSE_ANALYZER_OPENAI_ENABLED") != "" || len(local.APIKeys) > 0, Priority: 10},
 	}
 }
 
@@ -212,9 +219,6 @@ func validateProvider(profile providerProfile) error {
 		if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" {
 			return errors.New("openai-compatible provider requires a valid HTTP(S) base_url")
 		}
-		if profile.APIKeyEnv == "" || strings.ContainsAny(profile.APIKeyEnv, " =\t\r\n") {
-			return errors.New("api_key_env must name one environment variable")
-		}
 	}
 	return nil
 }
@@ -224,6 +228,17 @@ func (s *Server) saveProvider(profile providerProfile) error {
 	if err := validateProvider(profile); err != nil {
 		return err
 	}
+	if profile.Name == "openai_compatible" && len(profile.APIKeys) > 0 {
+		local := readLocalProviderConfig()
+		local.BaseURL, local.Model, local.Models = profile.BaseURL, profile.Model, profile.Models
+		local.DisplayName = profile.Model
+		local.APIKeys = providerAPIKeys(profile)
+		if err := writeFileJSON(localProviderConfigPath(), local); err != nil {
+			return err
+		}
+		profile.KeyCount = len(local.APIKeys)
+	}
+	profile.APIKeys = nil
 	profile.Usage = providerUsage{}
 	if s.dbErr != nil {
 		return s.dbErr
