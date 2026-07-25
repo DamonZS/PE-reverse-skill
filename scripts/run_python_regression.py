@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import sys
 import unittest
 
@@ -17,8 +16,6 @@ WINDOWS_UIA_TEST_ID = (
 
 def dependency_gated_test_ids() -> set[str]:
     if os.name == "nt":
-        return set()
-    if any(shutil.which(name) for name in ("powershell.exe", "powershell", "pwsh")):
         return set()
     return {WINDOWS_UIA_TEST_ID}
 

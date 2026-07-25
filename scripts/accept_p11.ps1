@@ -204,7 +204,7 @@ raise SystemExit(3)
 
   if (-not $SkipRegression) {
     $unittestWrapper = @'
-import json, os, shutil, sys, unittest
+import json, os, sys, unittest
 path=os.environ["P11_SUMMARY_PATH"]
 def persist(value):
  encoded=json.dumps(value,separators=(",",":"),sort_keys=True)
@@ -222,7 +222,7 @@ try:
    except Exception: values.append(type(case).__name__)
   return values
  dependency_ids=set()
- if os.name != "nt" and not any(shutil.which(name) for name in ("powershell.exe","powershell","pwsh")):
+ if os.name != "nt":
   dependency_ids.add("tests.test_acceptance_records.AcceptanceRecordTests.test_windows_uia_fixture_contract_retains_hash_backed_live_proof")
  def partition(records):
   gated=[]; blocking=[]
