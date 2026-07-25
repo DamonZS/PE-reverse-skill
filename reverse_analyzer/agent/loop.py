@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Mapping, Optional
 
 from reverse_analyzer.providers import ProviderMessage, RuleBasedProvider
+from .tool_catalog import DESCRIBE_TOOL, shallow_catalog, tool_details
 
 
 @dataclass
@@ -92,6 +93,8 @@ class AgentLoop:
         if self.session is not None:
             base_context.setdefault("session", self.session)
             base_context.setdefault("target", getattr(self.session, "target", None))
+        if self.tool_executor is not None:
+            base_context.setdefault("tool_catalog", shallow_catalog(self.tool_executor))
 
         final_answer: Optional[str] = None
         stopped_reason = "max_iterations"
@@ -148,6 +151,16 @@ class AgentLoop:
         if self.tool_executor is None:
             return ToolObservation(tool_name, dict(tool_args), error="No tool executor configured", iteration=iteration)
         try:
+            if tool_name == DESCRIBE_TOOL:
+                requested = tool_args.get("tool_ids") or tool_args.get("tools") or []
+                if not isinstance(requested, list):
+                    raise ValueError("tool_ids must be a list")
+                return ToolObservation(
+                    tool_name,
+                    dict(tool_args),
+                    result={"status": "ok", "tools": tool_details(self.tool_executor, requested)},
+                    iteration=iteration,
+                )
             result = _call_executor(self.tool_executor, tool_name, dict(tool_args))
             return ToolObservation(tool_name, dict(tool_args), result=result, iteration=iteration)
         except Exception as exc:  # pragma: no cover - exact executor failures vary by integration

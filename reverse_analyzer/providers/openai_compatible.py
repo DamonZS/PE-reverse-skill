@@ -19,6 +19,13 @@ from urllib import error, request
 from .base import ProviderMessage
 
 
+_AGENT_SYSTEM_PROMPT = """You are the workflow planning agent for an authorized reverse-analysis platform.
+The initial tool_catalog contains only ids and short summaries. First choose relevant ids and return JSON:
+{"tool_name":"__describe_tools__","tool_args":{"tool_ids":["id"]},"content":"reason"}.
+After receiving detailed tool contracts in observations, select exactly one registered tool with valid JSON arguments, or return a final_answer.
+Use evidence from observations; if a tool is unavailable or its result does not meet the stage goal, select another candidate. Never invent tool ids or arguments. Return one JSON object only."""
+
+
 class OpenAICompatibleProvider:
     name = "openai_compatible"
 
@@ -121,7 +128,7 @@ class OpenAICompatibleProvider:
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are an authorized defensive reverse-analysis assistant. Return concise, evidence-grounded analysis and do not invent observations.",
+                    "content": _AGENT_SYSTEM_PROMPT,
                 },
                 {"role": "user", "content": json.dumps(dict(context), ensure_ascii=False, default=str)},
             ],
@@ -179,9 +186,12 @@ class OpenAICompatibleProvider:
             raise RuntimeError("OpenAI-compatible response did not contain choices")
         message = choices[0].get("message") or {}
         content = str(message.get("content") or "")
+        decision = _parse_agent_decision(content)
         return {
-            "content": content,
-            "final_answer": content,
+            "content": str(decision.get("content") or content),
+            "tool_name": decision.get("tool_name"),
+            "tool_args": decision.get("tool_args") or {},
+            "final_answer": decision.get("final_answer"),
             "confidence": 0.7,
             "metadata": {
                 "model": decoded.get("model") or self.model,
@@ -239,3 +249,20 @@ def _deduplicate_secrets(values: list[Any]) -> list[str]:
         if text and text not in result:
             result.append(text)
     return result
+
+
+def _parse_agent_decision(content: str) -> dict[str, Any]:
+    try:
+        value = json.loads(content)
+    except (TypeError, ValueError):
+        return {"content": content, "final_answer": content}
+    if not isinstance(value, Mapping):
+        return {"content": content, "final_answer": content}
+    tool_name = value.get("tool_name")
+    tool_args = value.get("tool_args")
+    return {
+        "content": str(value.get("content") or ""),
+        "tool_name": str(tool_name) if isinstance(tool_name, str) and tool_name else None,
+        "tool_args": dict(tool_args) if isinstance(tool_args, Mapping) else {},
+        "final_answer": str(value["final_answer"]) if value.get("final_answer") is not None else None,
+    }

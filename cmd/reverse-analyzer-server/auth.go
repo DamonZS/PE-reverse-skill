@@ -15,7 +15,12 @@ import (
 	"time"
 )
 
-type identity struct{ Subject, Role, Workspace, Source string }
+type identity struct {
+	Subject   string `json:"subject"`
+	Role      string `json:"role"`
+	Workspace string `json:"workspace"`
+	Source    string `json:"source"`
+}
 type tokenRecord struct {
 	ID        string `json:"id,omitempty"`
 	Subject   string `json:"subject"`

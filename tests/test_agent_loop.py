@@ -20,6 +20,19 @@ class RepeatingProvider:
         return ProviderMessage(content="repeat", tool_name="same", tool_args={"a": 1})
 
 
+class DescribeThenCallProvider:
+    def __init__(self):
+        self.contexts = []
+
+    def analyze(self, context):
+        self.contexts.append(context)
+        if len(self.contexts) == 1:
+            return ProviderMessage(content="inspect candidates", tool_name="__describe_tools__", tool_args={"tool_ids": ["identify"]})
+        if len(self.contexts) == 2:
+            return ProviderMessage(content="run selected", tool_name="identify", tool_args={"target": "x.exe"})
+        return ProviderMessage(content="done", final_answer="finished")
+
+
 class AgentLoopTests(unittest.TestCase):
     def test_agent_loop_executes_tool_and_stops_on_final_answer(self):
         calls = []
@@ -45,6 +58,18 @@ class AgentLoopTests(unittest.TestCase):
         self.assertEqual(result.stopped_reason, "repeated_tool")
         self.assertTrue(result.barrier)
         self.assertEqual(len(result.tool_results), 1)
+
+    def test_agent_reads_tool_contract_before_calling_selected_tool(self):
+        provider = DescribeThenCallProvider()
+        loop = AgentLoop(provider, {"identify": lambda target: {"target": target}}, max_iterations=4)
+
+        result = loop.run({"target": "x.exe"})
+
+        self.assertEqual(result.final_answer, "finished")
+        self.assertEqual(result.tool_results[0]["tool_name"], "__describe_tools__")
+        self.assertTrue(result.tool_results[0]["result"]["tools"][0]["available"])
+        self.assertEqual(result.tool_results[1]["tool_name"], "identify")
+        self.assertEqual(provider.contexts[0]["tool_catalog"][0]["id"], "identify")
 
 
 if __name__ == "__main__":
