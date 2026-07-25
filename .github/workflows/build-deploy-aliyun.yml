@@ -53,7 +53,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: 打包镜像
-        run: docker save reverse-analyzer:${{ github.sha }} | gzip -1 > reverse-analyzer-image.tar.gz
+        run: |
+          docker pull postgres:15-bookworm
+          docker save reverse-analyzer:${{ github.sha }} postgres:15-bookworm | gzip -1 > reverse-analyzer-image.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: reverse-analyzer-${{ github.sha }}
@@ -82,7 +84,6 @@ jobs:
           key: ${{ secrets.ALIYUN_SSH_KEY }}
           port: ${{ secrets.ALIYUN_PORT }}
           command_timeout: 20m
-          script_stop: true
           script: |
             set -eu
             ROOT=/opt/pe-reverse-analyzer
