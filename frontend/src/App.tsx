@@ -991,6 +991,29 @@ function ProvidersView({
                 placeholder={selected.key_count ? `已配置 ${selected.key_count} 个 Key；粘贴完整列表以更新` : "每行粘贴一个 API Key"}
               />
             </label>
+            {selected.kind !== "local" && (
+              <div className="modelPriorityEditor">
+                <div className="fieldHeader">
+                  <span>API Key 优先级</span>
+                  <small>{apiKeys.trim() ? "待保存" : `已配置 ${selected.key_count || 0} 个`}</small>
+                </div>
+                {Array.from({
+                  length: apiKeys.trim()
+                    ? apiKeys.split(/\r?\n/).map((key) => key.trim()).filter(Boolean).length
+                    : selected.key_count || 0,
+                }).map((_, index) => (
+                  <div className="modelPriorityRow" key={`key-slot-${index + 1}`}>
+                    <span className="priorityIndex">{index + 1}</span>
+                    <input
+                      aria-label={`API Key 槽位 ${index + 1}`}
+                      value={`密钥槽位 ${index + 1}`}
+                      readOnly
+                    />
+                    <span className="pill done">已配置</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <label>
               优先级
               <input
