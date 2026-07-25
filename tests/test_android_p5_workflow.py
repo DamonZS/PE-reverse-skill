@@ -38,6 +38,22 @@ class AndroidP5WorkflowTests(unittest.TestCase):
             "ANDROID_P5_KS_PASS: ${{ secrets.ANDROID_P5_KS_PASS }}", ""
         ))
 
+    def test_prerequisites_are_scoped_to_selected_fixture(self) -> None:
+        self.assertIn('case "$P5_FIXTURE" in', self.workflow)
+        self.assertIn('test -n "${ANDROID_JADX_LIVE_APK:-}"', self.workflow)
+        self.assertIn('test -n "${ANDROID_REBUILD_LIVE_KEYSTORE:-}"', self.workflow)
+        self.assertIn('test -n "${ANDROID_FRIDA_LIVE_PACKAGE:-}"', self.workflow)
+        self.assertIn('test -n "${ANDROID_NATIVE_PATCH_LIVE_SPEC:-}"', self.workflow)
+
+        native_patch = self.workflow.split("p5-android-native-patch-live)", 1)[1]
+        native_patch = native_patch.split(";;", 1)[0]
+        self.assertIn("adb version", native_patch)
+        self.assertIn("adb devices", native_patch)
+
+        before_case = self.workflow.split('case "$P5_FIXTURE" in', 1)[0]
+        self.assertNotIn("adb version", before_case)
+        self.assertNotIn("adb devices", before_case)
+
 
 if __name__ == "__main__":
     unittest.main()

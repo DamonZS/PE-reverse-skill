@@ -33,13 +33,14 @@ from .reconstruction_verify import verify_reconstruction
 from .gui_state import build_gui_state_machine
 from .gui_xaml import extract_xaml_ui_evidence, parse_xaml_file
 from .pe_deep import pe_deep_scan
+from .debugger_import import debugger_session_import
 from .engine import engine_analyze
 from .android import android_analyze
 from .ios import ios_analyze, ipa_analyze
 from .protocol import protocol_analyze, protocol_capture, protocol_infer, protocol_summarize
 from .memory import memory_address_map, memory_diff, memory_snapshot
 from .reconstruct import reconstruct_project
-from .static_tools import register_builtin_tools
+from .static_tools import anti_detection_analyze, register_builtin_tools
 from .yara_tools import DEFAULT_RULES_DIR, yara_scan
 
 
@@ -72,6 +73,7 @@ __all__ = [
     "DEFAULT_RULES_DIR",
     "ToolExecutor",
     "ToolResult",
+    "anti_detection_analyze",
     "frida_check",
     "frida_hook_profiles",
     "frida_hooks_for_profile",
@@ -105,6 +107,7 @@ __all__ = [
     "extract_xaml_ui_evidence",
     "parse_xaml_file",
     "pe_deep_scan",
+    "debugger_session_import",
     "engine_analyze",
     "android_analyze",
     "android_native_patch_apk",

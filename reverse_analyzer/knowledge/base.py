@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import math
+import re
+import uuid
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -57,6 +59,7 @@ class KnowledgeBase(CapabilityOutcomeKnowledgeMixin):
         self.source_restoration_path = self.root / "source_restoration.json"
         self.llm_jailbreak_strategies_path = self.root / "llm_jailbreak_strategies.json"
         self.sessions_path = self.root / "sessions.json"
+        self.documents_path = self.root / "knowledge_documents.json"
         self._strategy_namespace_paths = {
             "gui": self.gui_strategies_path,
             "patch": self.patch_strategies_path,
@@ -65,6 +68,126 @@ class KnowledgeBase(CapabilityOutcomeKnowledgeMixin):
             "source": self.source_restoration_path,
         }
         self._ensure_files()
+
+    def add_document(
+        self,
+        content: str,
+        *,
+        document_type: str = "memory",
+        title: Optional[str] = None,
+        scope: str = "global",
+        tags: Optional[Iterable[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        document_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Persist reusable analysis knowledge using PentAGI-style typed documents."""
+
+        normalized_content = str(content or "").strip()
+        if not normalized_content:
+            raise ValueError("knowledge document content must not be empty")
+        normalized_type = str(document_type or "memory").strip().lower()
+        if normalized_type not in {"memory", "guide", "answer", "code"}:
+            raise ValueError("knowledge document type must be one of: memory, guide, answer, code")
+        normalized_scope = str(scope or "global").strip() or "global"
+        normalized_tags = sorted(
+            {str(tag).strip().lower() for tag in (tags or []) if str(tag).strip()}
+        )
+        data = self.load_documents()
+        documents = data.setdefault("documents", {})
+        identifier = str(document_id or uuid.uuid4().hex).strip()
+        existing = documents.get(identifier)
+        created_at = existing.get("created_at") if isinstance(existing, dict) else None
+        timestamp = utc_now()
+        record = {
+            "id": identifier,
+            "type": normalized_type,
+            "title": str(title or "").strip(),
+            "content": normalized_content,
+            "scope": normalized_scope,
+            "tags": normalized_tags,
+            "metadata": dict(metadata or {}),
+            "created_at": created_at or timestamp,
+            "updated_at": timestamp,
+        }
+        documents[identifier] = record
+        data["last_updated"] = timestamp
+        self.save_documents(data)
+        return record
+
+    def load_documents(self) -> Dict[str, Any]:
+        default = {"version": 1, "documents": {}}
+        data = self._read_json(self.documents_path, default=default)
+        if not isinstance(data, dict):
+            return default
+        data.setdefault("version", 1)
+        if not isinstance(data.get("documents"), dict):
+            data["documents"] = {}
+        return data
+
+    def save_documents(self, data: Dict[str, Any]) -> None:
+        self._write_json(self.documents_path, data)
+
+    def list_documents(
+        self,
+        *,
+        document_type: Optional[str] = None,
+        scope: Optional[str] = None,
+        tags: Optional[Iterable[str]] = None,
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        required_tags = {str(tag).strip().lower() for tag in (tags or []) if str(tag).strip()}
+        records = []
+        for document in self.load_documents()["documents"].values():
+            if not isinstance(document, dict):
+                continue
+            if document_type and document.get("type") != str(document_type).strip().lower():
+                continue
+            if scope and document.get("scope") != str(scope).strip():
+                continue
+            if required_tags - set(document.get("tags") or []):
+                continue
+            records.append(dict(document))
+        records.sort(key=lambda item: (str(item.get("updated_at") or ""), str(item.get("id") or "")), reverse=True)
+        return records[:limit] if limit is not None else records
+
+    def search_documents(
+        self,
+        query: str,
+        *,
+        document_type: Optional[str] = None,
+        scope: Optional[str] = None,
+        tags: Optional[Iterable[str]] = None,
+        limit: int = 5,
+        min_score: float = 0.0,
+    ) -> List[Dict[str, Any]]:
+        """Rank typed documents using dependency-free weighted token overlap."""
+
+        query_tokens = self._knowledge_tokens(query)
+        if not query_tokens:
+            return []
+        matches = []
+        for document in self.list_documents(document_type=document_type, scope=scope, tags=tags):
+            title_tokens = self._knowledge_tokens(document.get("title"))
+            tag_tokens = self._knowledge_tokens(" ".join(document.get("tags") or []))
+            content_tokens = self._knowledge_tokens(document.get("content"))
+            weighted_overlap = (
+                3.0 * len(query_tokens & title_tokens)
+                + 2.0 * len(query_tokens & tag_tokens)
+                + len(query_tokens & content_tokens)
+            )
+            score = weighted_overlap / (6.0 * len(query_tokens))
+            if score <= min_score:
+                continue
+            matches.append({"score": round(score, 4), "document": document})
+        matches.sort(key=lambda item: float(item["score"]), reverse=True)
+        return matches[:max(0, limit)]
+
+    @staticmethod
+    def _knowledge_tokens(value: Any) -> set[str]:
+        return {
+            token.lower()
+            for token in re.findall(r"[A-Za-z0-9_]{2,}|[\u4e00-\u9fff]", str(value or ""))
+        }
 
     def upsert_sample(
         self,
@@ -1110,6 +1233,11 @@ class KnowledgeBase(CapabilityOutcomeKnowledgeMixin):
                 self._write_json(path, default_strategy_store())
         if not self.sessions_path.exists():
             self._write_json(self.sessions_path, [])
+        if not self.documents_path.exists():
+            self._write_json(
+                self.documents_path,
+                {"version": 1, "documents": {}, "last_updated": utc_now()},
+            )
 
     def _mirror_features_to_detection_db(self, sample_id: str, features: Dict[str, Any]) -> None:
         detection = self.load_detection_db()

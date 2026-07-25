@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import hashlib
 import socket
+import ssl
 import tempfile
 import threading
 import unittest
@@ -21,11 +22,21 @@ except ImportError:  # pragma: no cover - dependency-gated environments
 
 from reverse_analyzer.core.capabilities.models import CapabilityRequest, TargetIdentity
 from reverse_analyzer.providers.protocol_runtime import ProtocolRuntimeProvider
+try:
+    from tests.test_protocol_runtime_tls import _CA_CERT, _SERVER_CERT, _SERVER_KEY
+except ModuleNotFoundError:  # pragma: no cover - direct-file test invocation
+    from test_protocol_runtime_tls import _CA_CERT, _SERVER_CERT, _SERVER_KEY
 
 
 class Http2FixtureServer:
-    def __init__(self, response_body: bytes) -> None:
+    def __init__(
+        self,
+        response_body: bytes,
+        *,
+        tls_context: ssl.SSLContext | None = None,
+    ) -> None:
         self.response_body = response_body
+        self.tls_context = tls_context
         self.listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.listener.bind(("127.0.0.1", 0))
@@ -34,6 +45,7 @@ class Http2FixtureServer:
         self.port = int(self.listener.getsockname()[1])
         self.requests: list[dict[str, Any]] = []
         self.errors: list[str] = []
+        self.negotiated_alpn: list[str | None] = []
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._serve, daemon=True)
         self._thread.start()
@@ -55,6 +67,17 @@ class Http2FixtureServer:
                     continue
                 except OSError:
                     return
+                if self.tls_context is not None:
+                    try:
+                        connection = self.tls_context.wrap_socket(
+                            connection,
+                            server_side=True,
+                        )
+                    except (OSError, ssl.SSLError) as exc:
+                        connection.close()
+                        self.errors.append(str(exc) or exc.__class__.__name__)
+                        return
+                    self.negotiated_alpn.append(connection.selected_alpn_protocol())
                 with connection:
                     connection.settimeout(0.2)
                     h2 = H2Connection(
@@ -220,6 +243,125 @@ class ProtocolRuntimeHttp2Tests(unittest.TestCase):
         self.assertTrue(replay.after_snapshot["live_verified"])
         self.assertTrue(replay.after_snapshot["real_socket_evidence"])
         self.assertTrue(self.provider.rollback(replay).ok)
+
+    def test_real_http2_tls_alpn_capture_and_replay(self) -> None:
+        ca_file = self.root / "ca.pem"
+        cert_file = self.root / "server.pem"
+        key_file = self.root / "server-key.pem"
+        ca_file.write_text(_CA_CERT, encoding="ascii")
+        cert_file.write_text(_SERVER_CERT, encoding="ascii")
+        key_file.write_text(_SERVER_KEY, encoding="ascii")
+
+        def server_context() -> ssl.SSLContext:
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            context.load_cert_chain(str(cert_file), str(key_file))
+            context.set_alpn_protocols(["h2"])
+            return context
+
+        def tls_params() -> dict[str, Any]:
+            return {
+                "enabled": True,
+                "verify": True,
+                "server_hostname": "localhost",
+                "ca_file": str(ca_file),
+            }
+
+        response = b"bounded-http2-tls-response"
+        source_server = Http2FixtureServer(
+            response,
+            tls_context=server_context(),
+        )
+        try:
+            capture_request = CapabilityRequest(
+                capability="protocol_runtime",
+                action="loopback_http2_capture",
+                target=TargetIdentity(
+                    kind="http2-fixture",
+                    display_name=f"h2://localhost:{source_server.port}",
+                ),
+                params={
+                    "upstream_host": "127.0.0.1",
+                    "upstream_port": source_server.port,
+                    "tls": tls_params(),
+                    **self._limits(),
+                },
+                session_id="http2-tls-capture",
+            )
+            capture_plan = self.provider.plan(capture_request)
+            self.assertEqual(capture_plan.parameters["tls"]["alpn_protocols"], ["h2"])
+            capture_validation = self.provider.validate(capture_plan)
+            self.assertTrue(capture_validation.ok, capture_validation.errors)
+            capture = self.provider.execute(capture_plan)
+        finally:
+            source_server.close()
+
+        self.assertEqual(capture.status, "ok", capture.report_section["errors"])
+        self.assertEqual(source_server.negotiated_alpn, ["h2"])
+        self.assertEqual(capture.after_snapshot["http2_transport"], "h2_tls_alpn")
+        self.assertEqual(capture.after_snapshot["tls"]["alpn_protocol"], "h2")
+        self.assertTrue(capture.after_snapshot["tls"]["handshake"]["completed"])
+        self.assertEqual(
+            len(capture.after_snapshot["tls"]["peer_certificate_sha256"]),
+            64,
+        )
+
+        bundle = self.provider.collect_artifacts(capture, str(self.root / "tls-capture"))
+        artifact = self.root / "tls-capture" / bundle.artifacts[0].path
+        self.assertNotIn(str(ca_file), artifact.read_text(encoding="utf-8"))
+
+        plaintext_replay = CapabilityRequest(
+            capability="protocol_runtime",
+            action="http2_fixture_replay",
+            target=TargetIdentity(kind="artifact", path=str(artifact)),
+            params={
+                "capture_artifact": str(artifact),
+                "destination_host": "127.0.0.1",
+                "destination_port": 1,
+                **self._limits(),
+            },
+            session_id="http2-tls-plaintext-replay",
+        )
+        plaintext_validation = self.provider.validate(
+            self.provider.plan(plaintext_replay)
+        )
+        self.assertFalse(plaintext_validation.ok)
+        self.assertIn(
+            "replay source used TLS; replay TLS is required",
+            " ".join(plaintext_validation.errors),
+        )
+
+        replay_server = Http2FixtureServer(
+            response,
+            tls_context=server_context(),
+        )
+        try:
+            replay_request = CapabilityRequest(
+                capability="protocol_runtime",
+                action="http2_fixture_replay",
+                target=TargetIdentity(kind="artifact", path=str(artifact)),
+                params={
+                    "capture_artifact": str(artifact),
+                    "destination_host": "127.0.0.1",
+                    "destination_port": replay_server.port,
+                    "tls": tls_params(),
+                    **self._limits(),
+                },
+                session_id="http2-tls-replay",
+            )
+            replay_plan = self.provider.plan(replay_request)
+            replay_validation = self.provider.validate(replay_plan)
+            self.assertTrue(replay_validation.ok, replay_validation.errors)
+            replay = self.provider.execute(replay_plan)
+        finally:
+            replay_server.close()
+
+        self.assertEqual(replay.status, "ok", replay.report_section["errors"])
+        self.assertEqual(replay_server.negotiated_alpn, ["h2"])
+        binding = replay.after_snapshot["tls_identity_binding"]
+        self.assertTrue(binding["certificate_pin_matched"])
+        self.assertTrue(binding["identity_check_completed"])
+        self.assertTrue(replay.after_snapshot["response_verified"])
 
     def test_http2_capture_rejects_remote_endpoint_before_socket(self) -> None:
         request = CapabilityRequest(

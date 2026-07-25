@@ -588,7 +588,9 @@ def _recover_function_bodies(
     *,
     stack: str,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    parsed_artifacts = [_parse_body_artifact(item, stack=stack) for item in artifacts]
+    parsed_artifacts: list[dict[str, Any]] = []
+    for item in artifacts:
+        parsed_artifacts.extend(_parse_body_artifacts(item, stack=stack))
     recovered_symbols: list[dict[str, Any]] = []
     function_reports: list[dict[str, Any]] = []
 
@@ -697,7 +699,7 @@ def _matching_body_artifacts(
     return None, []
 
 
-def _parse_body_artifact(raw: Mapping[str, Any], *, stack: str) -> dict[str, Any]:
+def _parse_body_artifacts(raw: Mapping[str, Any], *, stack: str) -> list[dict[str, Any]]:
     path = raw.get("path")
     logical_path = str(raw.get("logical_path") or "pseudocode/unknown")
     artifact = {
@@ -716,13 +718,13 @@ def _parse_body_artifact(raw: Mapping[str, Any], *, stack: str) -> dict[str, Any
     }
     if not isinstance(path, Path):
         result["reason"] = "artifact path is invalid"
-        return result
+        return [result]
 
     try:
         payload = _read_body_artifact(path)
     except (OSError, RuntimeError, ValueError) as error:
         result["reason"] = f"artifact read failed: {type(error).__name__}"
-        return result
+        return [result]
     artifact["sha256"] = hashlib.sha256(payload).hexdigest()
     artifact["size_bytes"] = len(payload)
 
@@ -734,27 +736,50 @@ def _parse_body_artifact(raw: Mapping[str, Any], *, stack: str) -> dict[str, Any
     }
     if suffix not in compatible.get(stack, set()):
         result["reason"] = f"artifact language is incompatible with {stack}"
-        return result
+        return [result]
     try:
         text = payload.decode("utf-8-sig", errors="strict")
     except UnicodeDecodeError:
         result["reason"] = "artifact is not valid UTF-8"
-        return result
-    parsed, reason = _parse_c_like_definition(text)
-    if parsed is None:
+        return [result]
+    parsed_definitions, reason = _parse_c_like_definitions(text)
+    if not parsed_definitions:
         result["reason"] = reason
-        return result
+        return [result]
 
-    result.update(
-        {
-            "status": "parsed",
-            "name_key": _symbol_name_key(parsed["name"]),
-            "signature_key": _signature_key(parsed["signature"]),
-            "definition": parsed["definition"],
-            "declaration": parsed["declaration"],
-            "line_provenance": parsed["line_provenance"],
-        }
-    )
+    variants: list[dict[str, Any]] = []
+    for index, parsed in enumerate(parsed_definitions, start=1):
+        variant = dict(result)
+        variant_artifact = dict(artifact)
+        if len(parsed_definitions) > 1:
+            variant_artifact["function_index"] = index
+            variant_artifact["function_name"] = parsed["name"]
+        variant.update(
+            {
+                "status": "parsed",
+                "artifact": variant_artifact,
+                "address": result.get("address") if len(parsed_definitions) == 1 else None,
+                "name_key": _symbol_name_key(parsed["name"]),
+                "signature_key": _signature_key(parsed["signature"]),
+                "definition": parsed["definition"],
+                "declaration": parsed["declaration"],
+                "line_provenance": parsed["line_provenance"],
+            }
+        )
+        variants.append(variant)
+    return variants
+
+
+def _parse_body_artifact(raw: Mapping[str, Any], *, stack: str) -> dict[str, Any]:
+    parsed = _parse_body_artifacts(raw, stack=stack)
+    if len(parsed) == 1:
+        return parsed[0]
+    result = dict(parsed[0])
+    result["status"] = "parse_failed"
+    result["reason"] = "artifact contains multiple top-level function definitions"
+    result.pop("definition", None)
+    result.pop("declaration", None)
+    result.pop("line_provenance", None)
     return result
 
 
@@ -781,8 +806,17 @@ def _read_body_artifact(path: Path) -> bytes:
 
 
 def _parse_c_like_definition(text: str) -> tuple[dict[str, Any] | None, str]:
+    definitions, reason = _parse_c_like_definitions(text)
+    if len(definitions) == 1:
+        return definitions[0], ""
+    if definitions:
+        return None, "artifact contains multiple top-level function definitions"
+    return None, reason
+
+
+def _parse_c_like_definitions(text: str) -> tuple[list[dict[str, Any]], str]:
     if "\x00" in text:
-        return None, "artifact contains NUL bytes"
+        return [], "artifact contains NUL bytes"
     normalized = text.replace("\r\n", "\n").replace("\r", "\n")
     normalized = "\n".join(line.rstrip(" \t") for line in normalized.split("\n"))
     if re.search(
@@ -790,11 +824,11 @@ def _parse_c_like_definition(text: str) -> tuple[dict[str, Any] | None, str]:
         normalized,
         flags=re.IGNORECASE,
     ):
-        return None, "decompiler reported a failed body"
+        return [], "decompiler reported a failed body"
 
     masked, lexical_error = _mask_c_like_noncode(normalized)
     if lexical_error:
-        return None, lexical_error
+        return [], lexical_error
     brace_pairs: dict[int, int] = {}
     brace_stack: list[int] = []
     top_level_opens: list[int] = []
@@ -805,11 +839,11 @@ def _parse_c_like_definition(text: str) -> tuple[dict[str, Any] | None, str]:
             brace_stack.append(index)
         elif character == "}":
             if not brace_stack:
-                return None, "unbalanced closing brace"
+                return [], "unbalanced closing brace"
             opening = brace_stack.pop()
             brace_pairs[opening] = index
     if brace_stack:
-        return None, "unbalanced opening brace"
+        return [], "unbalanced opening brace"
 
     candidates: list[dict[str, Any]] = []
     for opening in top_level_opens:
@@ -819,11 +853,22 @@ def _parse_c_like_definition(text: str) -> tuple[dict[str, Any] | None, str]:
         closing = brace_pairs[opening]
         candidates.append({**signature, "body_start": opening, "function_end": closing + 1})
     if not candidates:
-        return None, "artifact does not contain a top-level function definition"
-    if len(candidates) != 1:
-        return None, "artifact contains multiple top-level function definitions"
+        return [], "artifact does not contain a top-level function definition"
 
-    candidate = candidates[0]
+    definitions: list[dict[str, Any]] = []
+    for candidate in candidates:
+        parsed, reason = _definition_from_candidate(normalized, masked, candidate)
+        if parsed is None:
+            return [], reason
+        definitions.append(parsed)
+    return definitions, ""
+
+
+def _definition_from_candidate(
+    normalized: str,
+    masked: str,
+    candidate: Mapping[str, Any],
+) -> tuple[dict[str, Any] | None, str]:
     signature_text = re.sub(
         r"\s+",
         " ",
@@ -837,19 +882,16 @@ def _parse_c_like_definition(text: str) -> tuple[dict[str, Any] | None, str]:
     function_end_line = normalized.count("\n", 0, candidate["function_end"] - 1) + 1
     body_start_line = normalized.count("\n", 0, candidate["body_start"]) + 1
     body_end_line = normalized.count("\n", 0, candidate["function_end"] - 1) + 1
-    return (
-        {
-            "name": candidate["name"],
-            "signature": signature_text,
-            "declaration": f"{signature_text};",
-            "definition": definition,
-            "line_provenance": {
-                "function": {"start": function_start_line, "end": function_end_line},
-                "body": {"start": body_start_line, "end": body_end_line},
-            },
+    return {
+        "name": candidate["name"],
+        "signature": signature_text,
+        "declaration": f"{signature_text};",
+        "definition": definition,
+        "line_provenance": {
+            "function": {"start": function_start_line, "end": function_end_line},
+            "body": {"start": body_start_line, "end": body_end_line},
         },
-        "",
-    )
+    }, ""
 
 
 def _function_signature_before(masked: str, body_start: int) -> dict[str, Any] | None:

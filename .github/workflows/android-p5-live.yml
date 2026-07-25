@@ -35,8 +35,8 @@ concurrency:
 
 jobs:
   acceptance:
-    # The label must identify a runner with the Android SDK, adb, and the
-    # selected external toolchain. This workflow is never run implicitly.
+    # The label identifies the managed P5 runner pool. Each dispatch validates
+    # only the external tools and inputs required by the selected fixture.
     runs-on: [self-hosted, linux, android-p5]
     timeout-minutes: 30
     environment: android-p5-live
@@ -69,13 +69,33 @@ jobs:
           persist-credentials: false
       - name: Check runner prerequisites
         shell: bash
+        env:
+          P5_FIXTURE: ${{ inputs.fixture }}
         run: |
           set -euo pipefail
           python3 --version
-          adb version
-          adb devices
-          test -n "${ANDROID_FRIDA_LIVE_PACKAGE:-}" || test "${{ inputs.fixture }}" = "p5-android-jadx-live"
           mkdir -p "${REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR}"
+          case "$P5_FIXTURE" in
+            p5-android-jadx-live)
+              test -n "${ANDROID_JADX_LIVE_APK:-}" ;;
+            p5-android-rebuild-sign-live)
+              test -n "${ANDROID_REBUILD_LIVE_APK:-}"
+              test -n "${ANDROID_REBUILD_LIVE_KEYSTORE:-}"
+              test -n "${ANDROID_REBUILD_LIVE_KEY_ALIAS:-}"
+              test -n "${ANDROID_REBUILD_LIVE_KS_PASS:-}" ;;
+            p5-android-frida-live)
+              test -n "${ANDROID_FRIDA_LIVE_PACKAGE:-}" ;;
+            p5-android-native-patch-live)
+              test -n "${ANDROID_NATIVE_PATCH_LIVE_APK:-}"
+              test -n "${ANDROID_NATIVE_PATCH_LIVE_SPEC:-}"
+              test -n "${ANDROID_NATIVE_PATCH_LIVE_PACKAGE:-}"
+              test -n "${ANDROID_NATIVE_PATCH_LIVE_KEYSTORE:-}"
+              test -n "${ANDROID_NATIVE_PATCH_LIVE_KEY_ALIAS:-}"
+              test -n "${ANDROID_NATIVE_PATCH_LIVE_KS_PASS:-}"
+              adb version
+              adb devices ;;
+            *) echo "unknown fixture" >&2; exit 2 ;;
+          esac
       - name: Install package and test dependencies
         shell: bash
         run: |

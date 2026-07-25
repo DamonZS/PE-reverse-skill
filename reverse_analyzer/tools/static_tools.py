@@ -52,6 +52,7 @@ from .android import android_analyze
 from .ios import ios_analyze, ipa_analyze
 from .protocol import protocol_analyze, protocol_capture, protocol_infer, protocol_summarize
 from .pe_deep import pe_deep_scan
+from .debugger_import import debugger_session_import
 from ..source_reconstruction import attach_source_validation, reconstruct_source_project
 from .yara_tools import yara_scan
 
@@ -65,6 +66,13 @@ PACKER_IMPORT_HINTS = {
     "VirtualAlloc",
     "VirtualProtect",
     "WriteProcessMemory",
+}
+ANTI_ANALYSIS_INDICATORS = {
+    "debugger": ("isdebuggerpresent", "checkremotedebuggerpresent", "ntqueryinformationprocess", "outputdebugstring"),
+    "timing": ("queryperformancecounter", "gettickcount", "rdtsc"),
+    "virtualization": ("vbox", "virtualbox", "vmware", "qemu", "sandboxie", "wine_get_version"),
+    "process_or_window_probe": ("findwindow", "createtoolhelp32snapshot", "process32first", "process32next"),
+    "exception_or_guard": ("setunhandledexceptionfilter", "vectoredexceptionhandler", "guard_page"),
 }
 
 
@@ -188,6 +196,8 @@ def register_builtin_tools(executor: ToolExecutor | None = None) -> ToolExecutor
     executor.register("section_entropy_scan", section_entropy_scan)
     executor.register("capstone_disassemble_stub", capstone_disassemble_stub)
     executor.register("packer_detect", packer_detect)
+    executor.register("anti_detection_analyze", anti_detection_analyze)
+    executor.register("debugger_session_import", debugger_session_import)
     executor.register("yara_scan", yara_scan)
     executor.register("yara_scan_stub", yara_scan_stub)
     executor.register("reconstruct_project", reconstruct_project)
@@ -368,6 +378,41 @@ def packer_detect(path: str | os.PathLike[str]) -> Dict[str, Any]:
         "packed_likely": score >= 50,
         "score": score,
         "indicators": indicators,
+    }
+
+
+def anti_detection_analyze(path: str | os.PathLike[str]) -> Dict[str, Any]:
+    """Identify anti-analysis behavior without generating bypass or concealment steps."""
+
+    p = _require_file(path)
+    raw_strings = strings_extract(p, limit=20000)["strings"]
+    normalized = {str(value).lower() for value in raw_strings}
+    findings: list[Dict[str, Any]] = []
+    category_counts: Counter[str] = Counter()
+    for category, indicators in ANTI_ANALYSIS_INDICATORS.items():
+        for indicator in indicators:
+            matches = sorted(value for value in normalized if indicator in value)[:10]
+            if not matches:
+                continue
+            category_counts[category] += 1
+            findings.append(
+                {
+                    "category": category,
+                    "indicator": indicator,
+                    "evidence": matches,
+                    "interpretation": "The sample may inspect or disrupt analysis conditions; validate dynamically in an isolated lab.",
+                }
+            )
+    score = min(100, sum(category_counts.values()) * 15 + len(category_counts) * 10)
+    return {
+        "status": "ok",
+        "path": str(p),
+        "analysis_scope": "defensive_detection_only",
+        "risk_score": score,
+        "anti_analysis_likely": score >= 35,
+        "category_counts": dict(sorted(category_counts.items())),
+        "findings": findings,
+        "safety_boundary": "No evasion, hiding, bypass, unhooking, or security-control suppression instructions are produced.",
     }
 
 

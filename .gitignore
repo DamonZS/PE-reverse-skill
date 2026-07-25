@@ -12,3 +12,11 @@ dist/
 tmp/
 .reverse_analyzer/
 reports/
+node_modules/
+frontend/dist/
+frontend/*.log
+/config/provider.local.json
+/experiments/
+/uploads/
+/output/
+/.playwright-cli/

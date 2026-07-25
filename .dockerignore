@@ -1,0 +1,14 @@
+.git
+.github
+.reverse_analyzer
+.playwright
+experiments
+output
+reports
+config/provider.local.json
+samples
+frontend/node_modules
+frontend/dist
+**/__pycache__
+**/*.pyc
+tests

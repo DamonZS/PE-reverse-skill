@@ -296,6 +296,57 @@ class SourceBodyRecoveryTests(unittest.TestCase):
                     relative_path,
                 )
 
+    def test_recovers_functions_from_batched_decompiler_artifact_by_signature(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output_dir = root / "decompiler"
+            pseudocode = output_dir / "pseudocode"
+            pseudocode.mkdir(parents=True)
+            batch = pseudocode / "batch.c"
+            batch.write_text(
+                "int alpha(int value)\n"
+                "{\n"
+                "    return value + 10;\n"
+                "}\n\n"
+                "int beta(int value)\n"
+                "{\n"
+                "    return value - 3;\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            sample = root / "batch.exe"
+            sample.write_bytes(b"MZ batched pseudocode fixture")
+            analysis = {
+                "decompiler": {
+                    "status": "ok",
+                    "output_dir": str(output_dir),
+                    "functions": [
+                        {"name": "alpha", "signature": "int alpha(int value)", "confidence": 0.9},
+                        {"name": "beta", "signature": "int beta(int value)", "confidence": 0.9},
+                    ],
+                    "artifacts": [{"name": "batch.c", "path": str(batch), "kind": "pseudocode"}],
+                },
+                "semantic_ir": {
+                    "entities": [
+                        {"id": "fn:alpha", "kind": "function", "name": "alpha", "attributes": {"signature": "int alpha(int value)"}},
+                        {"id": "fn:beta", "kind": "function", "name": "beta", "attributes": {"signature": "int beta(int value)"}},
+                    ]
+                },
+            }
+
+            result = reconstruct_source_project(sample, root / "out", analysis, strategy="c")
+
+            project_dir = Path(result["project_dir"])
+            source = (project_dir / "src/reconstructed.c").read_text(encoding="utf-8")
+            report = json.loads((project_dir / "analysis/body_recovery.json").read_text(encoding="utf-8"))
+            self.assertIn("return value + 10;", source)
+            self.assertIn("return value - 3;", source)
+            self.assertEqual(report["status"], "recovered")
+            self.assertEqual(report["recovered_count"], 2)
+            self.assertEqual(report["placeholder_count"], 0)
+            self.assertEqual({item["match_basis"] for item in report["functions"]}, {"signature"})
+            self.assertEqual({item["artifact"].get("function_index") for item in report["functions"]}, {1, 2})
+
     @unittest.skipUnless(shutil.which("gcc"), "gcc is not available")
     def test_recovered_c_fixture_builds_with_gcc(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

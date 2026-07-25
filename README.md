@@ -6,6 +6,36 @@
 
 > 中文版是 GitHub 默认展示文档。本文只描述当前 CLI 与 provider 已实现的行为；命令行接受但尚未接通真实 provider 的选项会明确标出。
 
+## 当前平台
+
+项目现已包含纯中文 Web 工作台、Go 生产控制面、PostgreSQL 持久化、隔离 Docker worker、Provider broker、工具与 Skill 目录，以及完整源码重构闭环：
+
+```text
+ZIP/二进制上传
+  -> 解包、反编译与资源提取
+  -> 知识图谱建立模块关系
+  -> 外部大模型逐模块理解并补全源码
+  -> 生成工程结构与依赖锁
+  -> 隔离真实构建
+  -> 编译错误反馈与模型修复
+  -> 原程序/重构程序真实行为比较
+  -> 全部门禁通过后 complete_buildable=true
+```
+
+2026-07-25 的 P11 全新隔离验收使用 `gpt-5.6-terra` 完成真实模型调用、源码修改、重新构建和四项行为比较，最终 `complete_buildable=true`。机器证据与适用边界见 [P11 验收说明](docs/acceptance/p11_complete_reconstruction.md)；这表示产出完整可构建、行为等价的重构工程，不表示逐字恢复编译前原始源码。
+
+Web 本地启动：
+
+```powershell
+npm --prefix frontend ci
+npm --prefix frontend run build
+$env:REVERSE_ANALYZER_WORKSPACE = (Get-Location).Path
+$env:REVERSE_ANALYZER_FRONTEND_DIR = (Resolve-Path frontend/dist).Path
+go run ./cmd/reverse-analyzer-server
+```
+
+访问 `http://127.0.0.1:8090`。生产部署由 [GitHub Actions](.github/workflows/build-deploy-aliyun.yml) 自动完成，服务器配置见 [阿里云部署清单](deploy/compose.aliyun.yml)，线上域名为 `https://pe.toporeduce.cn`。详细变更见 [中文发布摘要](docs/releases/2026-07-25-完整源码重构平台.md)。
+
 ## 能力总览
 
 | 入口 | 当前实现 |

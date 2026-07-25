@@ -7,6 +7,7 @@ import hashlib
 import importlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -22,6 +23,7 @@ try:
         verify_acceptance_record,
     )
     from .config import AnalyzerConfig, ensure_runtime_dirs, load_config, write_default_knowledge
+    from .coverage import audit_capability_coverage
     from .core.audit import CapabilityAuditBuilder, summarize_audit_records
     from .core.capabilities.knowledge import record_capability_lifecycle_outcome
     from .core.capabilities.models import (
@@ -38,13 +40,17 @@ try:
     from .dashboard import build_dashboard, serve_dashboard
     from .environment_validation import validate_external_environment, write_environment_report
     from .knowledge import KnowledgeBase
+    from .skills import SkillCatalog
     from .providers import RuleBasedProvider, build_default_registry
+    from .platform_catalog import build_platform_catalog
     from .runtime import ExperimentStore, SessionStore, TraceLogger
     from .tools import frida_install_guide, ghidra_install_guide, procmon_install_guide, register_builtin_tools
+    from .tools.android import android_java_decompile
 except ImportError:  # Allows direct script execution while package-level migration is incomplete.
     from config import AnalyzerConfig, ensure_runtime_dirs, load_config, write_default_knowledge
 
     CapabilityAuditBuilder = None  # type: ignore[assignment]
+    audit_capability_coverage = None  # type: ignore[assignment]
     record_capability_lifecycle_outcome = None  # type: ignore[assignment]
     CapabilityArtifact = None  # type: ignore[assignment]
     CapabilityArtifactBundle = None  # type: ignore[assignment]
@@ -56,9 +62,11 @@ except ImportError:  # Allows direct script execution while package-level migrat
     TargetIdentity = None  # type: ignore[assignment]
     summarize_audit_records = None  # type: ignore[assignment]
     KnowledgeBase = None  # type: ignore[assignment]
+    SkillCatalog = None  # type: ignore[assignment]
     finalize_platform_core = None  # type: ignore[assignment]
     RuleBasedProvider = None  # type: ignore[assignment]
     build_default_registry = None  # type: ignore[assignment]
+    build_platform_catalog = None  # type: ignore[assignment]
     ExperimentStore = None  # type: ignore[assignment]
     SessionStore = None  # type: ignore[assignment]
     TraceLogger = None  # type: ignore[assignment]
@@ -76,6 +84,24 @@ except ImportError:  # Allows direct script execution while package-level migrat
     ghidra_install_guide = None  # type: ignore[assignment]
     procmon_install_guide = None  # type: ignore[assignment]
     register_builtin_tools = None  # type: ignore[assignment]
+    android_java_decompile = None  # type: ignore[assignment]
+
+
+def android_decompile_command(args: argparse.Namespace) -> int:
+    """Expose the existing bounded JADX implementation through the platform CLI."""
+
+    if not callable(android_java_decompile):
+        print("Android JADX runtime is unavailable.", file=sys.stderr)
+        return 3
+    options = {
+        "executable": args.jadx,
+        "output_dir": args.destination,
+        "timeout_seconds": args.timeout,
+        "threads": args.threads,
+    }
+    payload = android_java_decompile(args.sample, args.out, config=options)
+    _print_json_payload(payload)
+    return 0 if payload.get("status") == "passed" else 3 if payload.get("status") == "unavailable" else 2
 
 
 _BUILTIN_TOOLS = [
@@ -143,6 +169,16 @@ _BUILTIN_TOOLS = [
         "name": "validate_patch_plan",
         "status": "available",
         "description": "Validate a binary patch plan, including hashes and payload references, without writing files.",
+    },
+    {
+        "name": "anti_detection_analyze",
+        "status": "available",
+        "description": "Identify debugger, timing, virtualization, process-probe, and exception-based anti-analysis indicators without producing evasion steps.",
+    },
+    {
+        "name": "debugger_session_import",
+        "status": "available",
+        "description": "Normalize bounded x64dbg/IDA JSON, WinDbg text, and Windows minidump directories into offline diagnostic evidence.",
     },
     {
         "name": "android_elf_patch_plan",
@@ -4279,6 +4315,165 @@ def dashboard_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def web_command(args: argparse.Namespace) -> int:
+    config = load_config(args.workspace)
+    workspace = config.workspace
+    frontend = Path(args.frontend_dir).resolve() if args.frontend_dir else workspace / "frontend" / "dist"
+    configured = os.environ.get("REVERSE_ANALYZER_GO_SERVER")
+    candidates = [
+        Path(configured).expanduser() if configured else None,
+        workspace / "build" / ("reverse-analyzer-server.exe" if os.name == "nt" else "reverse-analyzer-server"),
+    ]
+    binary = next((candidate for candidate in candidates if candidate and candidate.is_file()), None)
+    if binary is not None:
+        command = [str(binary)]
+    elif installed := shutil.which("reverse-analyzer-server"):
+        command = [installed]
+    elif go := shutil.which("go"):
+        command = [go, "run", "./cmd/reverse-analyzer-server"]
+    else:
+        print("Go control-plane binary is unavailable; build ./cmd/reverse-analyzer-server or set REVERSE_ANALYZER_GO_SERVER.", file=sys.stderr)
+        return 3
+    if not frontend.is_dir():
+        print(f"Frontend build not found: {frontend}. Run npm run build --prefix frontend.", file=sys.stderr)
+        return 3
+    process_env = os.environ.copy()
+    process_env.update(
+        {
+            "REVERSE_ANALYZER_WORKSPACE": str(workspace),
+            "REVERSE_ANALYZER_FRONTEND_DIR": str(frontend),
+            "REVERSE_ANALYZER_WEB_ADDR": f"{args.host}:{args.port}",
+        }
+    )
+    _print_json_payload(
+        {
+            "url": f"http://{args.host}:{args.port}/",
+            "workspace": str(workspace),
+            "mode": "go-control-plane",
+            "command": command,
+            "execution_boundary": "Experiment creation is plan-only by default; local execution requires explicit Web confirmation.",
+        }
+    )
+    process: subprocess.Popen[Any] | None = None
+    try:
+        process = subprocess.Popen(command, cwd=workspace, env=process_env)
+        return int(process.wait())
+    except OSError as exc:
+        print(f"Unable to start Go control plane: {exc}", file=sys.stderr)
+        return 3
+    except KeyboardInterrupt:
+        if process is not None:
+            process.terminate()
+            process.wait(timeout=15)
+        return 0
+
+
+def knowledge_command(args: argparse.Namespace) -> int:
+    if KnowledgeBase is None:
+        print("Knowledge runtime is unavailable.", file=sys.stderr)
+        return 3
+    config = load_config(args.workspace)
+    knowledge = KnowledgeBase(config.knowledge_dir)
+    tags = [tag for value in (getattr(args, "tag", None) or []) for tag in value.split(",")]
+    try:
+        if args.knowledge_command == "add":
+            content = Path(args.file).read_text(encoding="utf-8") if args.file else args.content
+            metadata = json.loads(args.metadata) if args.metadata else {}
+            if not isinstance(metadata, dict):
+                raise ValueError("--metadata must decode to a JSON object")
+            payload = knowledge.add_document(
+                content,
+                document_type=args.type,
+                title=args.title,
+                scope=args.scope,
+                tags=tags,
+                metadata=metadata,
+            )
+        elif args.knowledge_command == "list":
+            documents = knowledge.list_documents(
+                document_type=args.type,
+                scope=args.scope,
+                tags=tags,
+                limit=args.limit,
+            )
+            payload = {"count": len(documents), "documents": documents}
+        else:
+            matches = knowledge.search_documents(
+                args.query,
+                document_type=args.type,
+                scope=args.scope,
+                tags=tags,
+                limit=args.limit,
+                min_score=args.min_score,
+            )
+            payload = {"query": args.query, "count": len(matches), "matches": matches}
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"Knowledge operation failed: {exc}", file=sys.stderr)
+        return 2
+    _print_json_payload(payload)
+    return 0
+
+
+def skills_command(args: argparse.Namespace) -> int:
+    if SkillCatalog is None:
+        print("Skill catalog runtime is unavailable.", file=sys.stderr)
+        return 3
+    catalog = SkillCatalog(Path(__file__).resolve().parents[1] / "reverse-skills")
+    if args.skills_command == "audit":
+        _print_json_payload(catalog.audit())
+        return 0
+    if args.skills_command == "show":
+        record = catalog.get(args.skill_id)
+        if record is None:
+            print(f"Skill not found: {args.skill_id}", file=sys.stderr)
+            return 2
+        _print_json_payload(record.to_dict())
+        return 0
+    records = catalog.discover()
+    if args.route:
+        records = [record for record in records if args.route in record.routes]
+    _print_json_payload({"count": len(records), "skills": [record.to_dict() for record in records]})
+    return 0
+
+
+def coverage_command(args: argparse.Namespace) -> int:
+    if not callable(audit_capability_coverage):
+        print("Capability coverage runtime is unavailable.", file=sys.stderr)
+        return 3
+    matrix = Path(__file__).resolve().parents[1] / "docs" / "skill_parity_matrix.md"
+    payload = audit_capability_coverage(matrix)
+    if args.only_unresolved:
+        payload = {**payload, "capabilities": payload.pop("unresolved")}
+    _print_json_payload(payload)
+    return 0
+
+
+def platform_command(args: argparse.Namespace) -> int:
+    if not callable(build_platform_catalog):
+        print("Platform catalog runtime is unavailable.", file=sys.stderr)
+        return 3
+    payload = build_platform_catalog(Path(__file__).resolve().parents[1])
+    if args.platform_command == "audit":
+        payload = {
+            "summary": payload["summary"],
+            "integration": payload.get("integration", {}),
+            "execution_boundary": payload["execution_boundary"],
+        }
+    _print_json_payload(payload)
+    return 0
+
+
+def debugger_import_command(args: argparse.Namespace) -> int:
+    try:
+        from .tools.debugger_import import debugger_session_import
+        payload = debugger_session_import(args.input, source=args.source, out=args.out)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"Debugger import failed: {exc}", file=sys.stderr)
+        return 2
+    _print_json_payload(payload)
+    return 0
+
+
 def _add_experiment_analysis_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--dynamic", action="store_true", help="Include optional dynamic tracing in the planned analysis command.")
     parser.add_argument("--dynamic-backend", choices=("frida", "procmon", "all"), default="frida")
@@ -4414,6 +4609,75 @@ def build_parser() -> argparse.ArgumentParser:
     dashboard.add_argument("--host", default="127.0.0.1", help="Dashboard server host when --serve is used.")
     dashboard.add_argument("--port", type=int, default=None, help="Dashboard server port; defaults to configuration or 8088.")
     dashboard.set_defaults(func=dashboard_command)
+
+    web = subparsers.add_parser(
+        "web",
+        help="Serve the React Web console and loopback workspace API.",
+    )
+    web.add_argument("--workspace", default=None, help="Workspace root; defaults to current directory.")
+    web.add_argument(
+        "--frontend-dir",
+        default=None,
+        help="Built frontend directory; defaults to frontend/dist.",
+    )
+    web.add_argument("--host", default="127.0.0.1", help="Web console bind host.")
+    web.add_argument("--port", type=int, default=8090, help="Web console port.")
+    web.set_defaults(func=web_command)
+
+    knowledge = subparsers.add_parser("knowledge", help="Store and retrieve reusable typed analysis knowledge.")
+    knowledge_commands = knowledge.add_subparsers(dest="knowledge_command", required=True)
+
+    knowledge_add = knowledge_commands.add_parser("add", help="Store a reusable guide, answer, code sample, or memory.")
+    content_source = knowledge_add.add_mutually_exclusive_group(required=True)
+    content_source.add_argument("--content", help="Knowledge document content.")
+    content_source.add_argument("--file", help="UTF-8 file containing the knowledge document.")
+    knowledge_add.add_argument("--type", choices=("memory", "guide", "answer", "code"), default="memory")
+    knowledge_add.add_argument("--title", default=None)
+    knowledge_add.add_argument("--scope", default="global", help="Logical engagement or project scope.")
+    knowledge_add.add_argument("--tag", action="append", default=None, help="Tag or comma-separated tags; repeatable.")
+    knowledge_add.add_argument("--metadata", default=None, help="JSON object with source-specific metadata.")
+    knowledge_add.add_argument("--workspace", default=None)
+    knowledge_add.set_defaults(func=knowledge_command)
+
+    for command_name in ("list", "search"):
+        command = knowledge_commands.add_parser(command_name, help=f"{command_name.title()} reusable knowledge documents.")
+        if command_name == "search":
+            command.add_argument("query")
+            command.add_argument("--min-score", type=float, default=0.0)
+        command.add_argument("--type", choices=("memory", "guide", "answer", "code"), default=None)
+        command.add_argument("--scope", default=None)
+        command.add_argument("--tag", action="append", default=None)
+        command.add_argument("--limit", type=int, default=5 if command_name == "search" else None)
+        command.add_argument("--workspace", default=None)
+        command.set_defaults(func=knowledge_command)
+
+    skills = subparsers.add_parser("skills", help="Discover, route, and audit repository-backed skill instructions.")
+    skills_commands = skills.add_subparsers(dest="skills_command", required=True)
+    skills_list = skills_commands.add_parser("list", help="List all discovered skill instructions.")
+    skills_list.add_argument("--route", choices=("android", "ios", "protocol", "source", "memory", "patch", "jailbreak", "capability"), default=None)
+    skills_list.set_defaults(func=skills_command)
+    skills_show = skills_commands.add_parser("show", help="Show one discovered skill and its platform routes.")
+    skills_show.add_argument("skill_id")
+    skills_show.set_defaults(func=skills_command)
+    skills_audit = skills_commands.add_parser("audit", help="Audit metadata and platform routing coverage for all skills.")
+    skills_audit.set_defaults(func=skills_command)
+
+    coverage = subparsers.add_parser("coverage", help="Audit executable capability parity and remaining acceptance gates.")
+    coverage.add_argument("--only-unresolved", action="store_true", help="Return unresolved capabilities as the primary capability list.")
+    coverage.set_defaults(func=coverage_command)
+
+    platform = subparsers.add_parser("platform", help="Inspect the unified read-only platform asset catalog.")
+    platform_commands = platform.add_subparsers(dest="platform_command", required=True)
+    platform_catalog = platform_commands.add_parser("catalog", help="List skills, tools, providers, scripts, and external dependency manifests.")
+    platform_catalog.set_defaults(func=platform_command)
+    platform_audit = platform_commands.add_parser("audit", help="Report platform integration coverage without claiming live acceptance.")
+    platform_audit.set_defaults(func=platform_command)
+
+    debugger_import = subparsers.add_parser("debugger-import", help="Import x64dbg, WinDbg, IDA, or minidump evidence without executing a target.")
+    debugger_import.add_argument("input")
+    debugger_import.add_argument("--source", choices=("auto", "x64dbg", "windbg", "ida", "minidump"), default="auto")
+    debugger_import.add_argument("--out", default=None, help="Optional normalized diagnostic JSON artifact.")
+    debugger_import.set_defaults(func=debugger_import_command)
 
     jailbreak = subparsers.add_parser(
         "jailbreak",
@@ -4733,6 +4997,18 @@ def build_parser() -> argparse.ArgumentParser:
     android_analyze.add_argument("sample")
     android_analyze.add_argument("--out", required=True)
     android_analyze.set_defaults(func=_analysis_alias_command, analysis_options=())
+
+    android_decompile = android_commands.add_parser(
+        "decompile",
+        help="Decompile Java/Kotlin sources through the existing bounded JADX tool.",
+    )
+    android_decompile.add_argument("sample")
+    android_decompile.add_argument("--out", required=True)
+    android_decompile.add_argument("--destination", default="jadx")
+    android_decompile.add_argument("--jadx", default=None)
+    android_decompile.add_argument("--timeout", type=float, default=300.0)
+    android_decompile.add_argument("--threads", type=int, default=2)
+    android_decompile.set_defaults(func=android_decompile_command)
 
     ios = subparsers.add_parser("ios", help="Analyze iOS IPA application packages without executing or extracting them.")
     ios_commands = ios.add_subparsers(dest="ios_command", required=True)
@@ -6593,6 +6869,16 @@ def _persist_knowledge(
     evidence_integrity = _evidence_integrity_summary(report_data)
     if evidence_integrity.get("manifest_id"):
         metadata["manifest_id"] = evidence_integrity["manifest_id"]
+    reverse_knowledge = _integrate_reverse_knowledge(
+        knowledge,
+        sample,
+        session,
+        features,
+        report_data,
+        evidence_integrity,
+    )
+    if isinstance(report_data, dict):
+        report_data["knowledge_context"] = reverse_knowledge
     try:
         knowledge.upsert_sample(str(sample), features=features, metadata=metadata, observations=observations)
     except Exception as exc:
@@ -6677,6 +6963,7 @@ def _persist_knowledge(
                 "reconstruction_verification": _reconstruction_verification_summary(report_data),
                 "evidence_integrity": evidence_integrity,
                 "platform_core": report_data.get("platform_core", {}),
+                "knowledge_context": reverse_knowledge,
             }
         )
     except Exception as exc:
@@ -6687,6 +6974,143 @@ def _knowledge_base_warning(stage: str, exc: Exception) -> None:
     """Keep optional knowledge persistence observable without failing analysis."""
 
     print(f"knowledge_base.{stage}_failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+
+
+def _integrate_reverse_knowledge(
+    knowledge: Any,
+    sample: Path,
+    session: Any,
+    features: Mapping[str, Any],
+    report_data: Mapping[str, Any],
+    evidence_integrity: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Recall prior reverse knowledge and persist a compact evidence-backed memory."""
+
+    query = _reverse_knowledge_query(features)
+    try:
+        matches = knowledge.search_documents(query, limit=5) if query else []
+    except Exception as exc:
+        _knowledge_base_warning("reverse_knowledge_search", exc)
+        matches = []
+
+    recalled = [
+        {
+            "score": item.get("score"),
+            "id": (item.get("document") or {}).get("id"),
+            "type": (item.get("document") or {}).get("type"),
+            "title": (item.get("document") or {}).get("title"),
+            "scope": (item.get("document") or {}).get("scope"),
+            "tags": (item.get("document") or {}).get("tags") or [],
+        }
+        for item in matches
+        if isinstance(item, Mapping) and isinstance(item.get("document"), Mapping)
+    ]
+    result: Dict[str, Any] = {
+        "status": "recalled" if recalled else "no_match",
+        "query": query,
+        "match_count": len(recalled),
+        "matches": recalled,
+        "stored_document_id": None,
+    }
+
+    document = _reverse_knowledge_document(sample, session, features, report_data, evidence_integrity)
+    if document is None:
+        result["storage_status"] = "skipped_no_verified_evidence"
+        return result
+    try:
+        stored = knowledge.add_document(**document)
+    except Exception as exc:
+        _knowledge_base_warning("reverse_knowledge_store", exc)
+        result["storage_status"] = "failed"
+        return result
+    result["storage_status"] = "stored"
+    result["stored_document_id"] = stored.get("id")
+    return result
+
+
+def _reverse_knowledge_query(features: Mapping[str, Any]) -> str:
+    terms: list[str] = []
+    for namespace in ("sample", "pe", "yara", "dynamic", "semantic", "decompiler", "reconstruction"):
+        values = features.get(namespace)
+        if not isinstance(values, Mapping):
+            continue
+        for key, value in values.items():
+            if value in (None, "", [], {}, False, 0):
+                continue
+            if isinstance(value, Mapping):
+                terms.extend(str(item) for item in value.keys())
+            elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+                terms.extend(str(item) for item in value[:12])
+            else:
+                terms.extend((str(key), str(value)))
+    return " ".join(dict.fromkeys(term.strip().lower() for term in terms if term.strip()))[:2000]
+
+
+def _reverse_knowledge_document(
+    sample: Path,
+    session: Any,
+    features: Mapping[str, Any],
+    report_data: Mapping[str, Any],
+    evidence_integrity: Mapping[str, Any],
+) -> Optional[Dict[str, Any]]:
+    evidence: Dict[str, Any] = {}
+    for namespace in ("pe", "yara", "dynamic", "semantic", "decompiler", "reconstruction"):
+        values = features.get(namespace)
+        if not isinstance(values, Mapping):
+            continue
+        compact = {
+            key: value
+            for key, value in values.items()
+            if value not in (None, "", [], {}, False, 0, "unknown", "unavailable")
+        }
+        if compact:
+            evidence[namespace] = compact
+    raw_findings = report_data.get("findings")
+    findings_source = raw_findings if isinstance(raw_findings, Sequence) and not isinstance(raw_findings, (str, bytes, bytearray)) else []
+    findings = [
+        {
+            "title": item.get("title") or item.get("name") or item.get("kind"),
+            "severity": item.get("severity"),
+        }
+        for item in findings_source[:20]
+        if isinstance(item, Mapping)
+    ]
+    if findings:
+        evidence["findings"] = findings
+    if not evidence:
+        return None
+
+    suffix = sample.suffix.lower().lstrip(".") or "binary"
+    tags = {"reverse", suffix}
+    for namespace in ("dynamic", "semantic", "reconstruction"):
+        values = evidence.get(namespace)
+        if not isinstance(values, Mapping):
+            continue
+        for key in ("backend", "hook_profile"):
+            if values.get(key):
+                tags.add(str(values[key]).lower())
+        for key in ("capabilities", "prioritized_modules", "top_api_names"):
+            for value in values.get(key) or []:
+                tags.add(str(value).lower())
+    payload = {
+        "target_name": sample.name,
+        "target_type": suffix,
+        "evidence": evidence,
+        "evidence_integrity": dict(evidence_integrity),
+    }
+    return {
+        "content": json.dumps(payload, ensure_ascii=False, sort_keys=True),
+        "document_type": "memory",
+        "title": f"Reverse analysis: {sample.name}",
+        "scope": f"reverse:{suffix}",
+        "tags": sorted(tags),
+        "metadata": {
+            "session_id": getattr(session, "session_id", None),
+            "target": str(sample),
+            "manifest_id": evidence_integrity.get("manifest_id"),
+            "evidence_backed": True,
+        },
+    }
 
 
 def _evidence_integrity_summary(report_data: Mapping[str, Any]) -> dict[str, Any]:

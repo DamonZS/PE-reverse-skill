@@ -28,7 +28,7 @@ from .transport import OpenAICompatibleTransport, TransportError
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m reverse_analyzer.llm_jailbreak",
+        prog="reverse-jailbreak",
         description="Run adaptive model-jailbreak campaigns against OpenAI-compatible chat endpoints.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")

@@ -41,14 +41,18 @@ the protocol rather than continuing the HTTP/1.1 response sequence.
 
 The `protocol_adapter_preflight` action remains a local, non-transmitting
 HTTP/2 adapter readiness check. In addition, `loopback_http2_capture` and
-`http2_fixture_replay` execute a bounded h2c prior-knowledge session through
-the production provider and `hyper-h2` (`h2>=4.1,<5`). Capture records the real
-loopback socket identity, stream id, state-machine event sequence, ordered
-HTTP/2 frame metadata, and SHA-256-bound client/server wire bytes. Replay reads
-the materialized and hash-bound capture artifact, restores the captured request
-on a second real loopback session, and verifies response headers and body hash.
-The focused test uses independent capture and replay servers, so dependency
-probing alone cannot satisfy the runtime assertions.
+`http2_fixture_replay` execute bounded h2c prior-knowledge or verified TLS
+sessions through the production provider and `hyper-h2` (`h2>=4.1,<5`). The TLS
+path offers only `h2`, requires the server to select it through ALPN, and records
+the handshake, certificate identity and traffic-visibility boundary. Capture
+also records the real loopback socket identity, stream id, state-machine event
+sequence, ordered HTTP/2 frame metadata, and SHA-256-bound client/server
+application wire bytes. Replay reads the materialized and hash-bound capture
+artifact, requires TLS when the source used TLS, verifies the source certificate
+pin before releasing application data, restores the captured request on a
+second real loopback session, and verifies response headers and body hash. The
+focused tests use independent capture and replay servers, so dependency probing
+alone cannot satisfy the runtime assertions.
 
 Run the opt-in fixture through the acceptance registry:
 
@@ -70,10 +74,11 @@ non-synthetic provenance, target identity, and execution proof validation.
 This acceptance covers controlled IPv4 loopback TLS capture and ordered session
 replay. Bounded loopback opaque CONNECT capture and replay, including transcript
 and half-close verification, exact informational-response sequence replay, and
-cleartext prior-knowledge HTTP/2 request/response capture and replay are complete
-for their declared scopes. The HTTP/2 test is deterministic repository evidence;
-a retained environment acceptance record is still pending. Generalized CONNECT
-replay, arbitrary-interface capture, unmanaged TLS decryption, HTTP/2 over TLS
-with ALPN, HTTP/3, and unrestricted remote endpoint/session replay remain outside
-the accepted scope. Passive adapter execution also remains dependent on an
-installed local capture tool and is limited to a loopback interface.
+HTTP/2 request/response capture and replay over cleartext prior knowledge or
+verified TLS+ALPN are complete for their declared scopes. These HTTP/2 tests are
+deterministic repository evidence; a retained HTTP/2 environment acceptance
+record is still pending. Generalized CONNECT replay, arbitrary-interface
+capture, unmanaged TLS decryption, HTTP/3, and unrestricted remote
+endpoint/session replay remain outside the accepted scope. Passive adapter
+execution also remains dependent on an installed local capture tool and is
+limited to a loopback interface.

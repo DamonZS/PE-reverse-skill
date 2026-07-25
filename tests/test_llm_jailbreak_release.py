@@ -158,6 +158,8 @@ class ReleaseCliTests(unittest.TestCase):
         workflow = (Path(__file__).parents[1] / ".github/workflows/reverse-jailbreak-release.yml").read_text(
             encoding="utf-8"
         )
+        self.assertIn("tests.test_llm_jailbreak_templates", workflow)
+        self.assertIn("tests.test_llm_jailbreak_live_workflow", workflow)
         self.assertIn("tests.test_llm_jailbreak_benchmark", workflow)
         self.assertIn("tests.test_llm_jailbreak_dashboard", workflow)
 
@@ -259,7 +261,7 @@ class ReleaseCliTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 0)
         self.assertEqual(
             output.getvalue().strip(),
-            f"python -m reverse_analyzer.llm_jailbreak {__version__}",
+            f"reverse-jailbreak {__version__}",
         )
 
     def test_report_reads_directory_report(self):

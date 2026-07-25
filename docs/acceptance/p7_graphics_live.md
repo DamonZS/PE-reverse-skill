@@ -49,6 +49,13 @@ Verify the resulting immutable record:
 python -m reverse_analyzer environment accept verify --record <record.json>
 ```
 
+The manual `P7 live acceptance` workflow selects the `p7-graphics` self-hosted
+Windows runner for this fixture. It isolates every dispatch attempt in a
+`<run-id>-<run-attempt>` workspace, requires exactly one fixture-specific record
+before verification, and uploads only that attempt's evidence. The configured
+PID and HWND must refer to the same controlled interactive target for the full
+run; the workflow does not start or substitute a graphics target.
+
 ## Separate Present and ImGui fixtures
 
 `p4-native-graphics-bridge` gates on both the controlled PID and configured

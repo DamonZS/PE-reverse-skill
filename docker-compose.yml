@@ -1,25 +1,39 @@
-﻿services:
-  reverse-analyzer:
+services:
+  reverse-analyzer-web:
     build: .
-    image: reverse-analyzer:pentagi-scaffold
+    image: reverse-analyzer:web
     working_dir: /workspace
     environment:
       REVERSE_ANALYZER_WORKSPACE: /workspace
       REVERSE_ANALYZER_KNOWLEDGE_DIR: /workspace/.reverse_analyzer/knowledge
       REVERSE_ANALYZER_SESSIONS_DIR: /workspace/.reverse_analyzer/sessions
       REVERSE_ANALYZER_REPORTS_DIR: /workspace/reports
-      REVERSE_ANALYZER_DASHBOARD_PORT: "8088"
+      REVERSE_ANALYZER_WEB_ADDR: 0.0.0.0:8090
+      REVERSE_ANALYZER_FRONTEND_DIR: /app/frontend/dist
+      REVERSE_ANALYZER_DATABASE_URL: ${REVERSE_ANALYZER_DATABASE_URL:-}
+      REVERSE_ANALYZER_WEB_TOKEN: ${REVERSE_ANALYZER_WEB_TOKEN:-}
+      REVERSE_ANALYZER_SANDBOX_RUNTIME: ${REVERSE_ANALYZER_SANDBOX_RUNTIME:-}
+      REVERSE_ANALYZER_SANDBOX_IMAGE: ${REVERSE_ANALYZER_SANDBOX_IMAGE:-reverse-analyzer:web}
     volumes:
       - ./:/workspace
       - ./samples:/workspace/samples
       - ./reports:/workspace/reports
       - ./.reverse_analyzer:/workspace/.reverse_analyzer
     ports:
-      - "8088:8088"
-    command: ["--help"]
+      - "127.0.0.1:8090:8090"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import json,urllib.request; json.load(urllib.request.urlopen('http://127.0.0.1:8090/api/health', timeout=3))"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
   reverse-analyzer-cli:
-    image: reverse-analyzer:pentagi-scaffold
+    image: reverse-analyzer:web
     profiles: ["cli"]
     working_dir: /workspace
     environment:
@@ -28,3 +42,24 @@
       - ./:/workspace
     entrypoint: ["python", "-m", "reverse_analyzer"]
     command: ["list-tools"]
+
+  reverse-analyzer-postgres:
+    image: pgvector/pgvector:pg16
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: ${REVERSE_ANALYZER_POSTGRES_DB:-reverse_analyzer}
+      POSTGRES_USER: ${REVERSE_ANALYZER_POSTGRES_USER:-reverse_analyzer}
+      POSTGRES_PASSWORD: ${REVERSE_ANALYZER_POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - reverse_analyzer_postgres:/var/lib/postgresql/data
+      - ./deploy/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  reverse_analyzer_postgres:

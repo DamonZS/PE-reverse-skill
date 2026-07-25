@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "policy": "official-source-only",
+  "installation_policy": "manual-reviewed-only",
+  "provider_path_policy": "repository-relative-python-files",
+  "note": "This manifest supplies optional external tools for existing reverse_analyzer providers. Installation never changes acceptance status; environment probes and retained live records remain required.",
+  "tools": [
+    {
+      "id": "ghidra",
+      "classification": "static-analysis",
+      "distribution": "release-archive",
+      "provider_modules": ["reverse_analyzer/tools/ghidra.py", "reverse_analyzer/providers/native_debugger.py"],
+      "source": "https://github.com/NationalSecurityAgency/ghidra/releases",
+      "download": "https://github.com/NationalSecurityAgency/ghidra/releases/latest",
+      "version": "operator-selected",
+      "platforms": ["windows", "linux", "macos"],
+      "environment": ["GHIDRA_HOME", "GHIDRA_HEADLESS"],
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "jadx",
+      "classification": "android-static-analysis",
+      "distribution": "release-archive",
+      "provider_modules": ["reverse_analyzer/tools/android.py"],
+      "source": "https://github.com/skylot/jadx/releases",
+      "download": "https://github.com/skylot/jadx/releases/latest",
+      "version": "operator-selected",
+      "platforms": ["windows", "linux", "macos"],
+      "environment": ["JADX_PATH"],
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "apktool",
+      "classification": "android-rebuild",
+      "distribution": "release-archive",
+      "provider_modules": ["reverse_analyzer/providers/android_rebuild.py", "reverse_analyzer/tools/android.py"],
+      "source": "https://github.com/iBotPeaches/Apktool/releases",
+      "download": "https://github.com/iBotPeaches/Apktool/releases/latest",
+      "version": "operator-selected",
+      "platforms": ["windows", "linux", "macos"],
+      "environment": ["APKTOOL_PATH"],
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "frida",
+      "classification": "authorized-dynamic-instrumentation",
+      "distribution": "release-archive",
+      "provider_modules": ["reverse_analyzer/tools/frida.py", "reverse_analyzer/providers/android_instrumentation.py"],
+      "source": "https://github.com/frida/frida/releases",
+      "download": "https://github.com/frida/frida/releases/latest",
+      "version": "operator-selected",
+      "platforms": ["windows", "linux", "macos", "android"],
+      "environment": ["FRIDA_CLI", "FRIDA_DEVICE"],
+      "license": "wxWindows Library Licence"
+    },
+    {
+      "id": "presentmon",
+      "classification": "graphics-observation",
+      "distribution": "release-archive",
+      "provider_modules": ["reverse_analyzer/providers/graphics_runtime.py"],
+      "source": "https://github.com/GameTechDev/PresentMon/releases",
+      "download": "https://github.com/GameTechDev/PresentMon/releases/latest",
+      "version": "operator-selected",
+      "platforms": ["windows"],
+      "environment": ["PRESENTMON_PATH"],
+      "license": "MIT"
+    },
+    {
+      "id": "tesseract",
+      "classification": "ocr-analysis",
+      "distribution": "source-release",
+      "provider_modules": ["reverse_analyzer/tools/gui.py"],
+      "source": "https://github.com/tesseract-ocr/tesseract",
+      "download": "https://github.com/tesseract-ocr/tesseract/releases/latest",
+      "version": "operator-selected",
+      "platforms": ["windows", "linux", "macos"],
+      "environment": ["TESSERACT_PATH"],
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "memprocfs",
+      "classification": "authorized-memory-forensics",
+      "distribution": "release-archive",
+      "provider_modules": ["reverse_analyzer/providers/dma_memory.py"],
+      "source": "https://github.com/ufrisk/MemProcFS",
+      "download": "https://github.com/ufrisk/MemProcFS/releases/latest",
+      "version": "operator-selected",
+      "platforms": ["windows", "linux"],
+      "environment": ["MEMPROCFS_PATH"],
+      "license": "AGPL-3.0"
+    },
+    {
+      "id": "leechcore",
+      "classification": "authorized-memory-transport",
+      "distribution": "source-release",
+      "provider_modules": ["reverse_analyzer/providers/dma_memory.py"],
+      "source": "https://github.com/ufrisk/LeechCore",
+      "download": "https://github.com/ufrisk/LeechCore/releases/latest",
+      "version": "operator-selected",
+      "platforms": ["windows", "linux"],
+      "environment": ["LEECHCORE_PATH"],
+      "license": "AGPL-3.0"
+    },
+    {
+      "id": "imgui",
+      "classification": "ui-source-dependency",
+      "distribution": "source-release",
+      "provider_modules": ["reverse_analyzer/providers/imgui_renderer.py"],
+      "source": "https://github.com/ocornut/imgui",
+      "download": "https://github.com/ocornut/imgui/releases/latest",
+      "version": "operator-selected",
+      "platforms": ["windows", "linux", "macos"],
+      "environment": ["IMGUI_SOURCE_DIR"],
+      "license": "MIT"
+    }
+  ]
+}

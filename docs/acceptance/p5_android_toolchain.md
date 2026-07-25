@@ -9,8 +9,11 @@ verify`.
 
 The repository includes a manual workflow at
 `.github/workflows/android-p5-live.yml`. It targets a self-hosted runner with
-labels `self-hosted`, `linux`, and `android-p5`; the runner must have `adb`,
-Python, and the selected external toolchain installed. The workflow performs
+labels `self-hosted`, `linux`, and `android-p5`; the runner must have Python
+and the selected external toolchain installed. `adb` is required only
+for the native-patch/device fixture; Jadx, rebuild/sign, and Frida dispatches
+validate only their own inputs and therefore do not fail solely because `adb`
+is absent. The workflow performs
 the same registered `environment accept run` and independent `verify` steps as
 the local commands above, then uploads the complete acceptance workspace. It
 does not run on push or schedule and it never promotes a capability row.

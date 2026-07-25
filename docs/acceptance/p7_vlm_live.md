@@ -46,4 +46,7 @@ the `p7-vlm-live` environment variables `P7_VLM_BASE_URL`, `P7_VLM_MODEL`,
 dispatch `.github/workflows/p7-live.yml` with fixture `p7-vlm-openai-live`.
 The `p7-vlm` self-hosted Linux runner must have the configured image path and
 network access to the endpoint. The workflow uploads the run directory after
-independent record verification; it does not modify the capability matrix.
+independent record verification. Each dispatch attempt writes to a distinct
+`<run-id>-<run-attempt>` workspace, verifies only the single
+`p7-vlm-openai-live--*.json` record from that workspace, and uploads only that
+attempt's evidence directory. It does not modify the capability matrix.

@@ -1,0 +1,105 @@
+name: 构建并部署阿里云
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: aliyun-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Python 回归
+        run: python -m unittest discover -s tests -t .
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Go 回归
+        run: go test ./... -count=1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: 前端测试与构建
+        run: npm ci --prefix frontend && npm test --prefix frontend && npm run build --prefix frontend
+
+  package:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: 构建生产镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: reverse-analyzer:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: 打包镜像
+        run: docker save reverse-analyzer:${{ github.sha }} | gzip -1 > reverse-analyzer-image.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reverse-analyzer-${{ github.sha }}
+          path: reverse-analyzer-image.tar.gz
+          retention-days: 7
+      - name: 上传发布文件
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.ALIYUN_HOST }}
+          username: ${{ secrets.ALIYUN_USER }}
+          key: ${{ secrets.ALIYUN_SSH_KEY }}
+          port: ${{ secrets.ALIYUN_PORT }}
+          source: "reverse-analyzer-image.tar.gz,deploy/compose.aliyun.yml,deploy/nginx.aliyun.conf"
+          target: "/opt/pe-reverse-analyzer/releases/${{ github.sha }}"
+
+  deploy:
+    needs: package
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: 原子更新并健康检查
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.ALIYUN_HOST }}
+          username: ${{ secrets.ALIYUN_USER }}
+          key: ${{ secrets.ALIYUN_SSH_KEY }}
+          port: ${{ secrets.ALIYUN_PORT }}
+          command_timeout: 20m
+          script_stop: true
+          script: |
+            set -eu
+            ROOT=/opt/pe-reverse-analyzer
+            RELEASE="$ROOT/releases/${{ github.sha }}"
+            test -s "$RELEASE/reverse-analyzer-image.tar.gz"
+            gzip -dc "$RELEASE/reverse-analyzer-image.tar.gz" | docker load
+            cp "$RELEASE/deploy/compose.aliyun.yml" "$ROOT/compose.yml"
+            cp "$RELEASE/deploy/nginx.aliyun.conf" "$ROOT/nginx.conf"
+            . "$ROOT/deploy.env"
+            export REVERSE_ANALYZER_IMAGE="reverse-analyzer:${{ github.sha }}"
+            docker compose --project-name pe-reverse-analyzer --env-file "$ROOT/deploy.env" -f "$ROOT/compose.yml" up -d --remove-orphans
+            docker image prune -f --filter "until=168h"
+            for i in $(seq 1 60); do
+              curl -fsS http://127.0.0.1:8090/readyz >/dev/null && break
+              test "$i" -lt 60
+              sleep 2
+            done
+            nginx -t
+            systemctl reload nginx
+            curl -fsS https://pe.toporeduce.cn/readyz >/dev/null

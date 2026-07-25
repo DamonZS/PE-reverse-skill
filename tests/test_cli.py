@@ -19,6 +19,7 @@ from reverse_analyzer.cli import (
     _record_dynamic_profile_stats,
     _record_gui_strategy_stats,
     _run_behavior_graph,
+    web_command,
 )
 from reverse_analyzer.config import AnalyzerConfig
 from reverse_analyzer.knowledge import KnowledgeBase
@@ -39,6 +40,22 @@ def run_cli(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 class CliTests(unittest.TestCase):
+    def test_web_command_delegates_to_go_control_plane(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            (workspace / "frontend" / "dist").mkdir(parents=True)
+            binary = workspace / "build" / ("reverse-analyzer-server.exe" if sys.platform == "win32" else "reverse-analyzer-server")
+            binary.parent.mkdir()
+            binary.write_bytes(b"go-server")
+            args = SimpleNamespace(workspace=str(workspace), frontend_dir=None, host="127.0.0.1", port=8190)
+            process = SimpleNamespace(wait=lambda: 0, terminate=lambda: None)
+            with patch("reverse_analyzer.cli.subprocess.Popen", return_value=process) as popen:
+                self.assertEqual(web_command(args), 0)
+            command = popen.call_args.args[0]
+            environment = popen.call_args.kwargs["env"]
+            self.assertEqual(command, [str(binary)])
+            self.assertEqual(environment["REVERSE_ANALYZER_WEB_ADDR"], "127.0.0.1:8190")
+
     def test_cli_help_lists_commands(self) -> None:
         result = run_cli("--help")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -515,6 +532,60 @@ class CliTests(unittest.TestCase):
                     "module_coverage": 1.0,
                 },
             )
+
+    def test_persist_knowledge_recalls_guidance_and_stores_reverse_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sample = root / "packed.exe"
+            sample.write_bytes(b"MZ")
+            config = AnalyzerConfig(
+                workspace=root,
+                knowledge_dir=root / "knowledge",
+                sessions_dir=root / "sessions",
+                reports_dir=root / "reports",
+            )
+            knowledge = KnowledgeBase(config.knowledge_dir)
+            guide = knowledge.add_document(
+                "Use the unpacking Frida profile when shell verdict is suspicious.",
+                document_type="guide",
+                title="Suspicious PE unpacking",
+                tags=["pe", "unpacking", "suspicious"],
+            )
+            report_data = {
+                "sample": {"status": "ok"},
+                "pe_analysis": {"shell_verdict": "suspicious", "shell_score": 8},
+                "yara": {},
+                "dynamic_analysis": {
+                    "status": "ok",
+                    "backend": "frida",
+                    "hook_profile": "unpacking",
+                    "event_count": 4,
+                    "api_counts": {"VirtualAlloc": 2},
+                },
+                "decompiler": {},
+                "reconstruction": {"status": "ok", "prioritized_modules": [{"module": "loader"}]},
+                "semantic_ir": {"status": "ok", "capabilities": [{"name": "unpacking"}]},
+                "findings": [],
+                "gui_analysis": {},
+                "behavior_graph": {},
+            }
+
+            _persist_knowledge(
+                config,
+                sample,
+                SimpleNamespace(session_id="reverse-memory"),
+                root / "out",
+                report_data,
+                [],
+            )
+
+            context = report_data["knowledge_context"]
+            self.assertEqual(context["storage_status"], "stored")
+            self.assertEqual(context["matches"][0]["id"], guide["id"])
+            documents = KnowledgeBase(config.knowledge_dir).list_documents()
+            memories = [item for item in documents if item["type"] == "memory"]
+            self.assertEqual(len(memories), 1)
+            self.assertTrue(memories[0]["metadata"]["evidence_backed"])
 
     def test_persist_knowledge_reports_session_summary_failure_without_losing_sample(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

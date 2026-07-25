@@ -1,0 +1,84 @@
+services:
+  postgres:
+    image: postgres:15-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${REVERSE_ANALYZER_POSTGRES_DB:-reverse_analyzer}
+      POSTGRES_USER: ${REVERSE_ANALYZER_POSTGRES_USER:-reverse_analyzer}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    volumes:
+      - reverse_analyzer_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - postgres_password
+
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: reverse-analyzer:web
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      REVERSE_ANALYZER_ENV: production
+      REVERSE_ANALYZER_WORKSPACE: /workspace
+      REVERSE_ANALYZER_FRONTEND_DIR: /app/frontend/dist
+      REVERSE_ANALYZER_WEB_ADDR: 0.0.0.0:8090
+      REVERSE_ANALYZER_WEB_TOKEN_FILE: /run/secrets/web_token
+      REVERSE_ANALYZER_GITHUB_CLIENT_SECRET_FILE: /run/secrets/github_oauth_secret
+      REVERSE_ANALYZER_GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_oauth_secret
+      REVERSE_ANALYZER_POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      REVERSE_ANALYZER_POSTGRES_HOST: postgres
+      REVERSE_ANALYZER_POSTGRES_PORT: "5432"
+      REVERSE_ANALYZER_POSTGRES_DB: ${REVERSE_ANALYZER_POSTGRES_DB:-reverse_analyzer}
+      REVERSE_ANALYZER_POSTGRES_USER: ${REVERSE_ANALYZER_POSTGRES_USER:-reverse_analyzer}
+      REVERSE_ANALYZER_CORS_ALLOWED_ORIGINS: ${REVERSE_ANALYZER_CORS_ALLOWED_ORIGINS:-}
+      REVERSE_ANALYZER_TRUSTED_PROXY_CIDRS: ${REVERSE_ANALYZER_TRUSTED_PROXY_CIDRS:-}
+    volumes:
+      - reverse_analyzer_workspace:/workspace
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    ports:
+      - "127.0.0.1:${REVERSE_ANALYZER_PORT:-8090}:8090"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/readyz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    secrets:
+      - postgres_password
+      - web_token
+      - github_oauth_secret
+      - google_oauth_secret
+
+volumes:
+  reverse_analyzer_postgres:
+  reverse_analyzer_workspace:
+
+secrets:
+  postgres_password:
+    file: ${REVERSE_ANALYZER_POSTGRES_PASSWORD_FILE:?set REVERSE_ANALYZER_POSTGRES_PASSWORD_FILE}
+  web_token:
+    file: ${REVERSE_ANALYZER_WEB_TOKEN_FILE:?set REVERSE_ANALYZER_WEB_TOKEN_FILE}
+  github_oauth_secret:
+    file: ${REVERSE_ANALYZER_GITHUB_CLIENT_SECRET_FILE:?set REVERSE_ANALYZER_GITHUB_CLIENT_SECRET_FILE}
+  google_oauth_secret:
+    file: ${REVERSE_ANALYZER_GOOGLE_CLIENT_SECRET_FILE:?set REVERSE_ANALYZER_GOOGLE_CLIENT_SECRET_FILE}

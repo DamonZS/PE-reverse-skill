@@ -1201,6 +1201,8 @@ class ProtocolRuntimeProvider:
             tls,
             transport=str(plan.parameters.get("transport") or "tcp"),
         )
+        if plan.action == _HTTP2_CAPTURE and tls.get("enabled") and tls.get("alpn_protocols") != ["h2"]:
+            tls_errors.append("HTTP/2 over TLS requires ALPN protocol h2")
         check(
             "tls_configuration",
             not tls_errors,
@@ -1322,6 +1324,8 @@ class ProtocolRuntimeProvider:
             tls,
             transport=str(plan.parameters.get("transport") or "tcp"),
         )
+        if plan.action == _HTTP2_REPLAY and tls.get("enabled") and tls.get("alpn_protocols") != ["h2"]:
+            tls_errors.append("HTTP/2 over TLS requires ALPN protocol h2")
         if replay_target_mode == "offline_fixture" and tls.get("enabled"):
             tls_errors.append("offline fixture replay cannot enable TLS sockets")
         check(
@@ -1419,6 +1423,16 @@ class ProtocolRuntimeProvider:
                 if plan.action == _HTTP2_REPLAY:
                     source = _http2_replay_source(payload)
                     selected = [dict(_mapping(source.get("request")))]
+                    source_tls = _mapping(source.get("tls"))
+                    configured_tls = _mapping(plan.parameters.get("tls"))
+                    if source_tls.get("enabled") and not configured_tls.get("enabled"):
+                        artifact_errors.append(
+                            "HTTP/2 replay source used TLS; replay TLS is required"
+                        )
+                    if source_tls.get("verify") and not configured_tls.get("verify"):
+                        artifact_errors.append(
+                            "HTTP/2 replay must preserve source TLS verification"
+                        )
                 elif http_replay:
                     transactions, http_errors = _http_replay_transactions(
                         payload,
@@ -1778,6 +1792,7 @@ class ProtocolRuntimeProvider:
             if replay_source is not None
             else _mapping(plan.parameters.get("http2_request"))
         )
+        tls = _mapping(plan.parameters.get("tls"))
         deadline = started + int(limits.get("duration_ms") or 0) / 1_000.0
         sock: Optional[socket.socket] = None
         sent_wire = bytearray()
@@ -1788,6 +1803,8 @@ class ProtocolRuntimeProvider:
         stream_id = 0
         errors: list[str] = []
         socket_identity: dict[str, Any] = {}
+        tls_evidence: dict[str, Any] = _tls_audit_config(tls)
+        tls_identity_binding: dict[str, Any] = {}
         try:
             from h2.config import H2Configuration
             from h2.connection import H2Connection
@@ -1798,7 +1815,7 @@ class ProtocolRuntimeProvider:
                 deadline=deadline,
                 timeout_ms=int(limits.get("socket_timeout_ms") or 0),
                 allow_remote=False,
-                tls={},
+                tls=tls,
             )
             real_socket_errors = _real_loopback_socket_errors(
                 sock, expected_peer=destination
@@ -1806,6 +1823,16 @@ class ProtocolRuntimeProvider:
             if real_socket_errors:
                 raise RuntimeError("; ".join(real_socket_errors))
             socket_identity = _socket_connection_identity(sock)
+            tls_evidence = _tls_connection_evidence(sock, tls)
+            if tls.get("enabled") and tls_evidence.get("alpn_protocol") != "h2":
+                raise RuntimeError("HTTP/2 TLS connection did not negotiate ALPN h2")
+            if replay_source is not None:
+                tls_identity_binding, binding_errors = _replay_tls_identity_binding(
+                    {"tls": replay_source.get("tls")},
+                    tls_evidence,
+                )
+                if binding_errors:
+                    raise RuntimeError("; ".join(binding_errors))
             connection = H2Connection(
                 config=H2Configuration(client_side=True, header_encoding="utf-8")
             )
@@ -1912,11 +1939,15 @@ class ProtocolRuntimeProvider:
             "network_transmit": bool(sent_wire),
             "network_boundary": "explicit_loopback_ip_only",
             "application_protocol": "http/2",
+            "http2_transport": "h2_tls_alpn" if tls.get("enabled") else "h2c_prior_knowledge",
             "protocol_adapter": "hyper-h2",
             "adapter_version": _distribution_version("h2"),
             "capture_kind": f"real_loopback_http2_{action_kind}",
             "destination_endpoint": dict(destination),
             "socket_identity": socket_identity,
+            "tls": tls_evidence,
+            "tls_identity_binding": tls_identity_binding,
+            "traffic_visibility": _tls_traffic_visibility(tls),
             "real_socket_evidence": real_socket_evidence,
             "stream_id": stream_id,
             "stream_count": 1 if stream_id else 0,
@@ -3730,6 +3761,8 @@ def _normalize_parameters(
             ),
         }
         if action == _HTTP2_CAPTURE:
+            if normalized["tls"].get("enabled"):
+                normalized["tls"]["alpn_protocols"] = ["h2"]
             normalized["http2_request"] = _normalize_http2_request(
                 params.get("http2_request") or params.get("request"),
                 authority=f"{upstream_endpoint['host']}:{upstream_endpoint['port']}",
@@ -3779,6 +3812,12 @@ def _normalize_parameters(
     else:
         replay_mode = replay_mode_value or "frames"
         frame_direction = requested_direction
+    tls_parameters = _normalize_tls_parameters(
+        params,
+        endpoint_host=str(destination_endpoint["host"]),
+    )
+    if action == _HTTP2_REPLAY and tls_parameters.get("enabled"):
+        tls_parameters["alpn_protocols"] = ["h2"]
     return {
         "capture_artifact": source_path,
         "destination_endpoint": destination_endpoint,
@@ -3792,10 +3831,7 @@ def _normalize_parameters(
         "application_protocol": application_protocol,
         "limits": limits,
         "allow_remote": allow_remote,
-        "tls": _normalize_tls_parameters(
-            params,
-            endpoint_host=str(destination_endpoint["host"]),
-        ),
+        "tls": tls_parameters,
         "http_fixture": _normalize_http_fixture(
             params.get("http_fixture")
             or params.get("controlled_fixture")
@@ -3905,6 +3941,16 @@ def _normalize_tls_parameters(
     )
     ca_snapshot = _file_snapshot(ca_file) if ca_file else {}
     server_hostname = str(server_hostname_value or (endpoint_host if enabled else ""))
+    alpn_value = nested.get(
+        "alpn_protocols",
+        params.get("tls_alpn_protocols", params.get("alpn_protocols", [])),
+    )
+    if isinstance(alpn_value, str):
+        alpn_protocols = [item.strip() for item in alpn_value.split(",") if item.strip()]
+    elif isinstance(alpn_value, Sequence) and not isinstance(alpn_value, (bytes, bytearray)):
+        alpn_protocols = [str(item).strip() for item in alpn_value if str(item).strip()]
+    else:
+        alpn_protocols = []
     return {
         "enabled": enabled,
         "mode": "client",
@@ -3914,6 +3960,7 @@ def _normalize_tls_parameters(
         "ca_file_sha256": ca_snapshot.get("sha256"),
         "ca_file_size": ca_snapshot.get("size"),
         "minimum_version": "TLSv1_2",
+        "alpn_protocols": alpn_protocols,
     }
 
 
@@ -4490,10 +4537,22 @@ def _http2_replay_source(payload: Mapping[str, Any]) -> dict[str, Any]:
         expected_server_frames
     ):
         raise RuntimeError("HTTP/2 replay source frame count is inconsistent")
+    tls = _mapping(after.get("tls"))
+    if tls.get("enabled"):
+        source_tls_errors = _source_tls_identity_errors(tls)
+        if source_tls_errors:
+            raise RuntimeError("; ".join(source_tls_errors))
+        if not _mapping(tls.get("handshake")).get("completed"):
+            raise RuntimeError("HTTP/2 replay source lacks a completed TLS handshake")
+        if tls.get("alpn_protocol") != "h2":
+            raise RuntimeError("HTTP/2 replay source lacks negotiated ALPN h2 evidence")
+        if not str(tls.get("peer_certificate_sha256") or ""):
+            raise RuntimeError("HTTP/2 replay source lacks a TLS certificate identity")
     return {
         "stream_id": after.get("stream_id"),
         "request": dict(request),
         "response": dict(response),
+        "tls": dict(tls),
     }
 
 
@@ -5363,6 +5422,7 @@ def _tls_audit_config(value: Any) -> dict[str, Any]:
             "ca_file_sha256": config.get("ca_file_sha256"),
             "ca_file_size": config.get("ca_file_size"),
             "minimum_version": config.get("minimum_version"),
+            "alpn_protocols": list(config.get("alpn_protocols") or []),
         }
     )
 
@@ -5400,6 +5460,12 @@ def _tls_config_errors(config: Mapping[str, Any], *, transport: str) -> list[str
         errors.append("only client-side TLS is supported")
     if config.get("minimum_version") != "TLSv1_2":
         errors.append("TLS minimum_version must be TLSv1_2")
+    alpn_protocols = config.get("alpn_protocols", [])
+    if not isinstance(alpn_protocols, list) or any(
+        not isinstance(item, str) or not item or len(item) > 255
+        for item in alpn_protocols
+    ):
+        errors.append("TLS alpn_protocols must be a list of non-empty protocol names")
     if not enabled:
         return errors
     if transport != "tcp":
@@ -8165,6 +8231,12 @@ def _client_ssl_context(config: Mapping[str, Any]) -> ssl.SSLContext:
     if not bool(config.get("verify")):
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
+    alpn_protocols = [str(item) for item in config.get("alpn_protocols") or []]
+    if alpn_protocols:
+        try:
+            context.set_alpn_protocols(alpn_protocols)
+        except (NotImplementedError, ssl.SSLError) as exc:
+            raise RuntimeError("TLS ALPN configuration is unavailable") from exc
     return context
 
 

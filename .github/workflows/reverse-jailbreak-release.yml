@@ -63,7 +63,11 @@ jobs:
       - name: Install test requirements
         run: python -m pip install -r requirements.txt
       - name: Run release tests
-        run: python -m unittest tests.test_llm_jailbreak_release
+        run: >-
+          python -m unittest
+          tests.test_llm_jailbreak_release
+          tests.test_llm_jailbreak_templates
+          tests.test_llm_jailbreak_live_workflow
       - name: Run offline benchmark regression
         run: python -m unittest tests.test_llm_jailbreak_benchmark tests.test_llm_jailbreak_dashboard
       - name: Build and verify portable package

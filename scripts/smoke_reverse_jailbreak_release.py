@@ -228,7 +228,7 @@ def main() -> int:
                 f"manifest version {expected_version!r}"
             )
         cli_version = _run([str(executable), "--version"]).strip()
-        if cli_version != f"python -m reverse_analyzer.llm_jailbreak {expected_version}":
+        if cli_version != f"reverse-jailbreak {expected_version}":
             raise RuntimeError(f"unexpected CLI version output: {cli_version!r}")
         profiles_payload = json.loads(
             _run([str(executable), "profiles", "--json"])

@@ -41,17 +41,17 @@ jobs:
         run: >-
           python -m reverse_analyzer environment accept run
           --fixture p7-vlm-openai-live
-          --workspace "$GITHUB_WORKSPACE/p7-vlm-evidence"
+          --workspace "$GITHUB_WORKSPACE/p7-vlm-evidence/${{ github.run_id }}-${{ github.run_attempt }}"
           --execute --timeout 180
       - name: Verify retained record
         run: >-
           python -m reverse_analyzer environment accept verify
-          --record p7-vlm-evidence/acceptance/records/p7-vlm-openai-live--*.json
+          --record p7-vlm-evidence/${{ github.run_id }}-${{ github.run_attempt }}/acceptance/records/p7-vlm-openai-live--*.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: p7-vlm-${{ github.run_id }}
-          path: p7-vlm-evidence
+          name: p7-vlm-${{ github.run_id }}-${{ github.run_attempt }}
+          path: p7-vlm-evidence/${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: error
           retention-days: 30
 
@@ -75,18 +75,19 @@ jobs:
         run: >-
           python -m reverse_analyzer environment accept run
           --fixture p7-windows-uia-live
-          --workspace "$env:GITHUB_WORKSPACE\p7-uia-evidence"
+          --workspace "$env:GITHUB_WORKSPACE\p7-uia-evidence\${{ github.run_id }}-${{ github.run_attempt }}"
           --execute --timeout 180
       - name: Verify retained record
         shell: pwsh
-        run: >-
-          python -m reverse_analyzer environment accept verify
-          --record (Get-ChildItem p7-uia-evidence\acceptance\records\*.json | Select-Object -First 1).FullName
+        run: |
+          $records = @(Get-ChildItem "p7-uia-evidence\${{ github.run_id }}-${{ github.run_attempt }}\acceptance\records\p7-windows-uia-live--*.json")
+          if ($records.Count -ne 1) { throw "expected exactly one UIA acceptance record, found $($records.Count)" }
+          python -m reverse_analyzer environment accept verify --record $records[0].FullName
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: p7-uia-${{ github.run_id }}
-          path: p7-uia-evidence
+          name: p7-uia-${{ github.run_id }}-${{ github.run_attempt }}
+          path: p7-uia-evidence/${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: error
           retention-days: 30
 
@@ -114,17 +115,18 @@ jobs:
         run: >-
           python -m reverse_analyzer environment accept run
           --fixture p7-graphics-combined-live
-          --workspace "$env:GITHUB_WORKSPACE\p7-graphics-evidence"
+          --workspace "$env:GITHUB_WORKSPACE\p7-graphics-evidence\${{ github.run_id }}-${{ github.run_attempt }}"
           --execute --timeout 300
       - name: Verify retained record
         shell: pwsh
-        run: >-
-          python -m reverse_analyzer environment accept verify
-          --record (Get-ChildItem p7-graphics-evidence\acceptance\records\*.json | Select-Object -First 1).FullName
+        run: |
+          $records = @(Get-ChildItem "p7-graphics-evidence\${{ github.run_id }}-${{ github.run_attempt }}\acceptance\records\p7-graphics-combined-live--*.json")
+          if ($records.Count -ne 1) { throw "expected exactly one graphics acceptance record, found $($records.Count)" }
+          python -m reverse_analyzer environment accept verify --record $records[0].FullName
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: p7-graphics-${{ github.run_id }}
-          path: p7-graphics-evidence
+          name: p7-graphics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: p7-graphics-evidence/${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: error
           retention-days: 30
