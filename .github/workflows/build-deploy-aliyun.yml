@@ -92,6 +92,8 @@ jobs:
             gzip -dc "$RELEASE/reverse-analyzer-image.tar.gz" | docker load
             cp "$RELEASE/deploy/compose.aliyun.yml" "$ROOT/compose.yml"
             cp "$RELEASE/deploy/nginx.aliyun.conf" "$ROOT/nginx.conf"
+            chown root:10001 "$ROOT/secrets/postgres_password" "$ROOT/secrets/web_token" "$ROOT/config/provider.local.json"
+            chmod 0640 "$ROOT/secrets/postgres_password" "$ROOT/secrets/web_token" "$ROOT/config/provider.local.json"
             . "$ROOT/deploy.env"
             export REVERSE_ANALYZER_IMAGE="reverse-analyzer:${{ github.sha }}"
             docker compose --project-name pe-reverse-analyzer --env-file "$ROOT/deploy.env" -f "$ROOT/compose.yml" up -d --remove-orphans
@@ -101,6 +103,7 @@ jobs:
               test "$i" -lt 60
               sleep 2
             done
+            install -o root -g root -m 0644 "$ROOT/nginx.conf" /etc/nginx/conf.d/pe.toporeduce.cn.conf
             nginx -t
             systemctl reload nginx
             curl -fsS https://pe.toporeduce.cn/readyz >/dev/null
