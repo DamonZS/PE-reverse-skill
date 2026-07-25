@@ -49,7 +49,7 @@ class ProjectBuilderTests(unittest.TestCase):
             result = build_project(
                 project,
                 {"build_ready": True},
-                {"status": "executed"},
+                {"status": "executed", "call_count": 1},
                 runner=runner,
             )
 
@@ -84,7 +84,7 @@ class ProjectBuilderTests(unittest.TestCase):
             result = build_project(
                 project,
                 {"build_ready": True},
-                {"status": "executed"},
+                {"status": "executed", "call_count": 1},
                 runner=runner,
             )
 
@@ -109,7 +109,7 @@ class ProjectBuilderTests(unittest.TestCase):
                 subprocess.CompletedProcess([], 0, "apk built", ""),
             ])
 
-            result = build_project(project, {"build_ready": True}, {"status": "executed"}, runner=runner)
+            result = build_project(project, {"build_ready": True}, {"status": "failed", "call_count": 3}, runner=runner)
 
             self.assertEqual(result["status"], "passed")
             self.assertEqual([stage["name"] for stage in result["stages"]], ["configure", "build", "apktool-mobile"])
@@ -120,7 +120,7 @@ class ProjectBuilderTests(unittest.TestCase):
 
     def test_readiness_and_model_gates_prevent_execution(self) -> None:
         for readiness, model_state, reason in (
-            ({"build_ready": False}, {"status": "executed"}, "readiness_not_build_ready"),
+            ({"build_ready": False}, {"status": "executed", "call_count": 1}, "readiness_not_build_ready"),
             ({"build_ready": True}, {"status": "failed"}, "model_reconstruction_not_executed"),
         ):
             with self.subTest(reason=reason), tempfile.TemporaryDirectory() as temporary:
@@ -140,7 +140,7 @@ class ProjectBuilderTests(unittest.TestCase):
             result = build_project(
                 temporary,
                 {"build_ready": True},
-                {"status": "executed"},
+                {"status": "executed", "call_count": 1},
                 _environment={},
                 _container_marker=Path(temporary) / "missing-dockerenv",
             )
@@ -163,7 +163,7 @@ class ProjectBuilderTests(unittest.TestCase):
                 result = build_project(
                     project,
                     {"build_ready": True},
-                    {"status": "executed"},
+                    {"status": "executed", "call_count": 1},
                     runner=_Runner([outcome]),
                 )
 

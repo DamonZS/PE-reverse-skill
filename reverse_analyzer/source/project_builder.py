@@ -76,7 +76,11 @@ def build_project(
 
     if not bool((readiness or {}).get("build_ready")):
         result["blocking_reasons"].append("readiness_not_build_ready")
-    if (model_state or {}).get("status") != "executed":
+    model_attempted = (
+        (model_state or {}).get("status") in {"executed", "partial", "failed"}
+        and int((model_state or {}).get("call_count") or 0) > 0
+    )
+    if not model_attempted:
         result["blocking_reasons"].append("model_reconstruction_not_executed")
     if not isolated:
         result["blocking_reasons"].append("isolated_build_environment_required")

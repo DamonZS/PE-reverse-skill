@@ -678,6 +678,8 @@ def run_model_reconstruction(
         "model": payload["model"],
         "artifact": artifact_path.relative_to(project_dir).as_posix(),
         "usage": payload["usage"],
+        "call_count": len(payload["calls"]),
+        "applied_change_count": payload["applied_change_count"],
         **({"error": payload["error"]} if payload.get("error") else {}),
     }
 
