@@ -23,7 +23,7 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - name: Python 回归
-        run: python -m unittest discover -s tests -t .
+        run: python scripts/run_python_regression.py
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
