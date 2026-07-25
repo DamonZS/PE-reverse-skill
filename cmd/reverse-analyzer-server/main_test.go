@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -1042,6 +1043,17 @@ func TestReconstructedSourceWorkspaceLifecycle(t *testing.T) {
 	if archive.Code != http.StatusOK || !bytes.HasPrefix(archive.Body.Bytes(), []byte("PK")) {
 		t.Fatal(archive.Code, archive.Body.Len())
 	}
+	zipReader, zipErr := zip.NewReader(bytes.NewReader(archive.Body.Bytes()), int64(archive.Body.Len()))
+	if zipErr != nil {
+		t.Fatal(zipErr)
+	}
+	archiveFiles := map[string]bool{}
+	for _, file := range zipReader.File {
+		archiveFiles[file.Name] = true
+	}
+	if !archiveFiles["SOURCE_TREE.json"] || !archiveFiles["BUILD_STATUS.json"] || !archiveFiles["src/main.c"] {
+		t.Fatalf("archive is missing source structure metadata: %#v", archiveFiles)
+	}
 	if _, err := exec.LookPath("cmake"); err == nil {
 		built := request(t, s, http.MethodPost, "/api/experiments/"+id+"/build", "", map[string]any{"confirmation": "BUILD_RECONSTRUCTED_SOURCE"})
 		if built.Code != http.StatusOK {
@@ -1340,21 +1352,23 @@ func TestTokenLifecycle(t *testing.T) {
 
 func TestAuditDescriptorCoversCriticalWrites(t *testing.T) {
 	tests := map[string]string{
-		http.MethodPost + " /api/experiments":                                                  "experiment.create",
-		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/execute":          "experiment.execute",
-		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/cancel":           "experiment.cancel",
-		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/retry":            "experiment.retry",
-		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/build":            "source.build",
-		http.MethodPut + " /api/experiments/" + strings.Repeat("a", 32) + "/source/file":       "source.save",
-		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/patches/apply":    "patch.apply",
-		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/patches/rollback": "patch.rollback",
-		http.MethodPut + " /api/providers":                                                     "provider.update",
-		http.MethodPost + " /api/providers/test":                                               "provider.test",
-		http.MethodPost + " /api/knowledge":                                                    "knowledge.create",
-		http.MethodPatch + " /api/knowledge/" + strings.Repeat("b", 32):                        "knowledge.update",
-		http.MethodDelete + " /api/knowledge/" + strings.Repeat("b", 32):                       "knowledge.delete",
-		http.MethodPost + " /api/auth/tokens":                                                  "token.create",
-		http.MethodDelete + " /api/auth/tokens/" + strings.Repeat("c", 32):                     "token.revoke",
+		http.MethodPost + " /api/experiments":                                                     "experiment.create",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/execute":             "experiment.execute",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/cancel":              "experiment.cancel",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/retry":               "experiment.retry",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/build":               "source.build",
+		http.MethodPut + " /api/experiments/" + strings.Repeat("a", 32) + "/source/file":          "source.save",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/patches/apply":       "patch.apply",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/patches/rollback":    "patch.rollback",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/patches/ai-apply":    "patch.apply",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/patches/ai-rollback": "patch.rollback",
+		http.MethodPut + " /api/providers":                                                        "provider.update",
+		http.MethodPost + " /api/providers/test":                                                  "provider.test",
+		http.MethodPost + " /api/knowledge":                                                       "knowledge.create",
+		http.MethodPatch + " /api/knowledge/" + strings.Repeat("b", 32):                           "knowledge.update",
+		http.MethodDelete + " /api/knowledge/" + strings.Repeat("b", 32):                          "knowledge.delete",
+		http.MethodPost + " /api/auth/tokens":                                                     "token.create",
+		http.MethodDelete + " /api/auth/tokens/" + strings.Repeat("c", 32):                        "token.revoke",
 	}
 	for input, expected := range tests {
 		parts := strings.SplitN(input, " ", 2)
@@ -1641,6 +1655,68 @@ func TestPatchWorkbenchPlansAppliesVerifiesAndRollsBackWithoutTouchingOriginal(t
 	restored, _ := s.safePath(rollbackPayload["restored"].(string))
 	if current, _ := os.ReadFile(restored); !bytes.Equal(current, original) {
 		t.Fatal("rollback output does not match original")
+	}
+}
+
+func TestAIPatchPlanAppliesHashBoundSourceAndRollsBack(t *testing.T) {
+	s, root := testServer(t, "")
+	_ = os.WriteFile(filepath.Join(root, "sample.bin"), []byte("MZ"), 0600)
+	created := request(t, s, http.MethodPost, "/api/experiments", "", map[string]any{"target": "sample.bin"})
+	var createdPayload map[string]any
+	_ = json.Unmarshal(created.Body.Bytes(), &createdPayload)
+	id := createdPayload["experiment"].(map[string]any)["id"].(string)
+	project := filepath.Join(root, "experiments", id, "analysis", "reconstructed_test")
+	_ = os.MkdirAll(filepath.Join(project, "src"), 0755)
+	_ = os.WriteFile(filepath.Join(project, "CMakeLists.txt"), []byte("project(reconstructed C)\n"), 0600)
+	before := []byte("int retry_count = 3;\n")
+	path := filepath.Join(project, "src", "config.c")
+	_ = os.WriteFile(path, before, 0600)
+	plan := aiPatchPlan{ID: newID(), ExperimentID: id, Status: "planned", Mode: "source_edit", Instruction: "重试次数改为 5", CreatedAt: now(), UpdatedAt: now(), Changes: []aiSourceChange{{Path: "src/config.c", BeforeSHA256: sha256Hex(before), Before: string(before), After: "int retry_count = 5;\n", Reason: "按指令修改默认值"}}}
+	planRoot := filepath.Join(s.patchRoot(id), "ai", plan.ID)
+	_ = os.MkdirAll(planRoot, 0700)
+	if err := writeFileJSON(filepath.Join(planRoot, "plan.json"), plan); err != nil {
+		t.Fatal(err)
+	}
+	denied := request(t, s, http.MethodPost, "/api/experiments/"+id+"/patches/ai-apply", "", map[string]any{"planID": plan.ID})
+	if denied.Code != http.StatusForbidden {
+		t.Fatalf("unconfirmed apply=%d", denied.Code)
+	}
+	applied := request(t, s, http.MethodPost, "/api/experiments/"+id+"/patches/ai-apply", "", map[string]any{"planID": plan.ID, "confirmation": aiPatchConfirmation})
+	if applied.Code != http.StatusOK {
+		t.Fatal(applied.Body.String())
+	}
+	if current, _ := os.ReadFile(path); string(current) != "int retry_count = 5;\n" {
+		t.Fatalf("not applied: %s", current)
+	}
+	rolledBack := request(t, s, http.MethodPost, "/api/experiments/"+id+"/patches/ai-rollback", "", map[string]any{"planID": plan.ID, "confirmation": aiPatchRollbackConfirmation})
+	if rolledBack.Code != http.StatusOK {
+		t.Fatal(rolledBack.Body.String())
+	}
+	if current, _ := os.ReadFile(path); !bytes.Equal(current, before) {
+		t.Fatalf("not restored: %s", current)
+	}
+}
+
+func TestAIPatchRejectsSourceChangedAfterPlan(t *testing.T) {
+	s, root := testServer(t, "")
+	_ = os.WriteFile(filepath.Join(root, "sample.bin"), []byte("MZ"), 0600)
+	created := request(t, s, http.MethodPost, "/api/experiments", "", map[string]any{"target": "sample.bin"})
+	var payload map[string]any
+	_ = json.Unmarshal(created.Body.Bytes(), &payload)
+	id := payload["experiment"].(map[string]any)["id"].(string)
+	project := filepath.Join(root, "experiments", id, "analysis", "reconstructed_test")
+	_ = os.MkdirAll(filepath.Join(project, "src"), 0755)
+	_ = os.WriteFile(filepath.Join(project, "CMakeLists.txt"), []byte("project(x)\n"), 0600)
+	path := filepath.Join(project, "src", "main.c")
+	_ = os.WriteFile(path, []byte("old\n"), 0600)
+	plan := aiPatchPlan{ID: newID(), ExperimentID: id, Status: "planned", Changes: []aiSourceChange{{Path: "src/main.c", BeforeSHA256: sha256Hex([]byte("old\n")), Before: "old\n", After: "new\n"}}}
+	planRoot := filepath.Join(s.patchRoot(id), "ai", plan.ID)
+	_ = os.MkdirAll(planRoot, 0700)
+	_ = writeFileJSON(filepath.Join(planRoot, "plan.json"), plan)
+	_ = os.WriteFile(path, []byte("user edit\n"), 0600)
+	response := request(t, s, http.MethodPost, "/api/experiments/"+id+"/patches/ai-apply", "", map[string]any{"planID": plan.ID, "confirmation": aiPatchConfirmation})
+	if response.Code == http.StatusOK || !strings.Contains(response.Body.String(), "已发生变化") {
+		t.Fatalf("hash guard: %d %s", response.Code, response.Body.String())
 	}
 }
 

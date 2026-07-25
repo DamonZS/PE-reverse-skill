@@ -741,6 +741,10 @@ func (s *Server) patchWorkbench(w http.ResponseWriter, r *http.Request, id strin
 		method(w)
 		return
 	}
+	if actionParts[0] == "ai-plan" || actionParts[0] == "ai-apply" || actionParts[0] == "ai-rollback" {
+		s.aiPatch(w, r, id, actionParts[0])
+		return
+	}
 	var payload map[string]any
 	if readJSON(r, &payload) != nil {
 		bad(w, "无效的定点修改请求")
@@ -958,6 +962,9 @@ func (s *Server) sourceProject(w http.ResponseWriter, r *http.Request, id string
 			return nil
 		}
 		rel, _ := filepath.Rel(project, path)
+		if filepath.ToSlash(rel) == "SOURCE_TREE.json" || filepath.ToSlash(rel) == "BUILD_STATUS.json" {
+			return nil
+		}
 		if rel == "." {
 			return nil
 		}
@@ -1023,23 +1030,34 @@ func (s *Server) sourceArchive(w http.ResponseWriter, r *http.Request, id string
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="reconstructed-%s.zip"`, id[:8]))
 	archive := zip.NewWriter(w)
 	defer archive.Close()
+	manifest := []map[string]any{}
 	_ = filepath.Walk(project, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil || info.IsDir() || strings.Contains(filepath.ToSlash(path), "/.build/") {
 			return nil
 		}
 		rel, _ := filepath.Rel(project, path)
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		manifest = append(manifest, map[string]any{"path": filepath.ToSlash(rel), "size": info.Size(), "sha256": sha256Hex(data), "editable": sourceEditable(rel)})
 		entry, createErr := archive.Create(filepath.ToSlash(rel))
 		if createErr != nil {
 			return createErr
 		}
-		file, openErr := os.Open(path)
-		if openErr != nil {
-			return openErr
-		}
-		defer file.Close()
-		_, copyErr := io.Copy(entry, file)
+		_, copyErr := entry.Write(data)
 		return copyErr
 	})
+	if entry, createErr := archive.Create("SOURCE_TREE.json"); createErr == nil {
+		payload, _ := json.MarshalIndent(map[string]any{"schema_version": 1, "project_root": filepath.Base(project), "generated_at": now(), "files": manifest}, "", "  ")
+		_, _ = entry.Write(append(payload, '\n'))
+	}
+	if experiment, loadErr := s.loadExperiment(id); loadErr == nil {
+		if entry, createErr := archive.Create("BUILD_STATUS.json"); createErr == nil {
+			payload, _ := json.MarshalIndent(map[string]any{"schema_version": 1, "experiment_id": id, "reconstruction": experiment.Reconstruction}, "", "  ")
+			_, _ = entry.Write(append(payload, '\n'))
+		}
+	}
 }
 
 func (s *Server) buildSourceProject(w http.ResponseWriter, r *http.Request, id string) {

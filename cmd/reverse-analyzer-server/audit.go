@@ -60,8 +60,8 @@ func auditDescriptor(r *http.Request) (auditRecordDescriptor, bool) {
 					descriptor.Action = "source.save"
 				}
 			case "patches":
-				if len(parts) >= 5 && (parts[4] == "apply" || parts[4] == "rollback" || parts[4] == "plan") {
-					descriptor.Action = "patch." + parts[4]
+				if len(parts) >= 5 && (parts[4] == "apply" || parts[4] == "rollback" || parts[4] == "plan" || parts[4] == "ai-plan" || parts[4] == "ai-apply" || parts[4] == "ai-rollback") {
+					descriptor.Action = "patch." + strings.TrimPrefix(parts[4], "ai-")
 				}
 			case "runtime-marks":
 				descriptor.Action = "runtime-mark.create"

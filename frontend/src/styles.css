@@ -452,6 +452,59 @@ pre {
 .patchSummary b { color:var(--cyan); font-size:11px; }
 .patchActions { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:14px; }
 .patchActions .primaryBtn { grid-column:1/-1; }
+.instructionWorkspace { min-width:0; }
+.instructionGrid { display:grid; grid-template-columns:310px minmax(460px,1fr) 290px; min-height:0; }
+.instructionGrid > aside { min-height:0; overflow:auto; padding:18px; background:#07110e; }
+.instructionComposer { border-right:1px solid var(--line); }
+.executionPanel { border-left:1px solid var(--line); }
+.stepLabel { display:flex; align-items:center; gap:9px; margin-bottom:14px; color:var(--soft); font-size:12px; font-weight:700; }
+.stepLabel > span { display:grid; place-items:center; width:22px; height:22px; border:1px solid #4b887a; border-radius:50%; color:var(--cyan); font:10px "Cascadia Mono",monospace; }
+.instructionComposer textarea { width:100%; min-height:180px; resize:vertical; border:1px solid #31594f; border-radius:6px; outline:0; background:#050d0b; color:#c6dcd6; padding:13px; font:12px/1.65 "Microsoft YaHei UI",sans-serif; }
+.instructionComposer textarea:focus,.instructionComposer input:focus { border-color:var(--cyan); }
+.instructionComposer label { display:grid; gap:7px; margin:14px 0; color:var(--muted); font-size:10px; }
+.instructionComposer input { width:100%; border:1px solid #29483f; border-radius:5px; outline:0; background:#050d0b; color:var(--soft); padding:9px; font:10px "Cascadia Mono",monospace; }
+.planCommand { width:100%; justify-content:center; min-height:38px; }
+.workflowRail { display:grid; gap:0; margin-top:20px; border-top:1px solid var(--line); padding-top:13px; }
+.workflowRail span { position:relative; min-height:31px; border-left:1px solid #29483f; padding:2px 0 9px 17px; color:var(--muted); font-size:10px; }
+.workflowRail span::before { content:""; position:absolute; left:-4px; top:4px; width:7px; height:7px; border-radius:50%; background:#29483f; }
+.workflowRail span.active,.workflowRail span.done { color:var(--cyan); }
+.workflowRail span.active::before,.workflowRail span.done::before { background:var(--green); box-shadow:0 0 0 3px rgba(109,219,156,.1); }
+.aiPlanReview { min-width:0; min-height:0; overflow:auto; padding:20px; background:#050d0b; }
+.planEmpty { min-height:100%; display:grid; place-items:center; align-content:center; gap:10px; color:var(--muted); text-align:center; }
+.planEmpty svg { color:#3c7165; }
+.planEmpty b { color:var(--soft); font-size:13px; }
+.planEmpty span { max-width:420px; font-size:10px; line-height:1.6; }
+.planHeading { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; border-bottom:1px solid var(--line); padding-bottom:15px; }
+.planHeading span { color:var(--muted); font-size:9px; }
+.planHeading h3 { margin:5px 0 0; font-size:15px; line-height:1.55; }
+.modelStamp { display:grid; flex:0 0 auto; gap:3px; text-align:right; }
+.modelStamp b { color:var(--cyan); font:10px "Cascadia Mono",monospace; }
+.modelStamp small { color:var(--muted); font-size:9px; }
+.planFacts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin:14px 0; }
+.planFacts article { display:grid; gap:5px; border:1px solid #214139; border-radius:6px; background:#08130f; padding:10px; }
+.planFacts span { color:var(--muted); font-size:9px; }
+.planFacts b { color:var(--cyan); font-size:11px; }
+.sourceDiffList { display:grid; gap:10px; }
+.sourceDiffList details { border:1px solid #29483f; border-radius:6px; overflow:hidden; background:#07110e; }
+.sourceDiffList summary { display:grid; grid-template-columns:16px minmax(120px,.45fr) minmax(180px,1fr); gap:8px; align-items:center; padding:10px 12px; cursor:pointer; }
+.sourceDiffList summary code { color:var(--cyan); font-size:10px; overflow-wrap:anywhere; }
+.sourceDiffList summary span { color:var(--muted); font-size:9px; }
+.sourceDiffColumns { display:grid; grid-template-columns:1fr 1fr; border-top:1px solid var(--line); }
+.sourceDiffColumns article { min-width:0; }
+.sourceDiffColumns article+article { border-left:1px solid var(--line); }
+.sourceDiffColumns b { display:block; padding:7px 11px; color:var(--muted); background:#0a1713; font-size:9px; }
+.sourceDiffColumns pre { max-height:330px; min-height:120px; overflow:auto; margin:0; padding:12px; color:#a9c8bf; font:10px/1.55 "Cascadia Mono",Consolas,monospace; white-space:pre; }
+.sourceDiffColumns article:last-child pre { color:#b9dfcb; background:rgba(74,141,103,.05); }
+.reviewNotes { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
+.reviewNotes > div,.validationList { display:grid; gap:7px; border-top:1px solid var(--line); padding-top:10px; }
+.reviewNotes b,.validationList b { color:var(--soft); font-size:10px; }
+.reviewNotes span,.validationList span { color:var(--muted); font-size:9px; line-height:1.5; }
+.executionPanel { display:flex; flex-direction:column; gap:8px; }
+.executionPanel > button { width:100%; justify-content:center; }
+.validationList { margin-top:10px; }
+.validationList span { display:flex; gap:6px; align-items:flex-start; }
+.validationList svg { flex:0 0 auto; color:var(--green); }
+.commandMessage { max-height:260px; overflow:auto; margin:10px 0 0; border:1px solid #29483f; border-radius:5px; background:#050d0b; color:var(--cyan); padding:10px; font:9px/1.55 "Cascadia Mono",monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
 .resultStats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin-bottom:14px; }
 .resultStats article { display:grid; gap:5px; border:1px solid var(--line); border-radius:6px; background:#081310; padding:9px; }
 .resultStats span { color:var(--muted); font-size:9px; }
@@ -630,6 +683,11 @@ pre {
   .sourceWorkspaceBody { grid-template-columns: 1fr; grid-template-rows: 180px minmax(0,1fr); }
   .sourceWorkspaceBody > aside { border-right: 0; border-bottom: 1px solid var(--line); }
   .patchGrid { grid-template-columns:1fr; grid-template-rows:auto auto auto; overflow:auto; }
+  .instructionGrid { grid-template-columns:1fr; grid-template-rows:auto auto auto; overflow:auto; }
+  .instructionComposer,.executionPanel { border:0; border-bottom:1px solid var(--line); }
+  .aiPlanReview { min-height:440px; }
+  .sourceDiffColumns,.reviewNotes { grid-template-columns:1fr; }
+  .sourceDiffColumns article+article { border-left:0; border-top:1px solid var(--line); }
   .patchGrid > aside:first-child,.patchGrid > aside:last-child { border:0; border-bottom:1px solid var(--line); }
   .patchEvidence { min-height:520px; }
   .hexRow { grid-template-columns:64px minmax(520px,1fr); }

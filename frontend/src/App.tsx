@@ -2536,14 +2536,234 @@ type PatchRecord = {
   error?: string;
   updated_at: string;
 };
-function PatchWorkspace({
+type AIPatchPlan = {
+  id: string;
+  status: string;
+  mode: string;
+  summary: string;
+  evidence: string[];
+  source_changes: Array<{
+    path: string;
+    before: string;
+    after: string;
+    reason: string;
+  }>;
+  validation: string[];
+  risks: string[];
+  provider: string;
+  model: string;
+};
+
+function PatchWorkspace(props: {
+  experiment: Experiment;
+  identity: Identity;
+  onClose: () => void;
+}) {
+  const { experiment, identity, onClose } = props;
+  const canWrite = ["admin", "analyst"].includes(identity?.role || "");
+  const [mode, setMode] = useState<"instruction" | "hex">("instruction");
+  const [instruction, setInstruction] = useState("");
+  const [target, setTarget] = useState("");
+  const [plan, setPlan] = useState<AIPatchPlan | null>(null);
+  const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState("");
+  const call = async (action: string, body: Record<string, unknown>) => {
+    setBusy(action);
+    try {
+      const response = await fetch(
+        `/api/experiments/${experiment.id}/patches/${action}`,
+        {
+          method: "POST",
+          headers: headers({ "Content-Type": "application/json" }),
+          body: JSON.stringify(body),
+        },
+      );
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || `请求失败：${response.status}`);
+      return payload;
+    } finally {
+      setBusy("");
+    }
+  };
+  const createPlan = async () => {
+    if (!canWrite) return setMessage("只读角色不能生成修改方案。");
+    try {
+      const payload = await call("ai-plan", {
+        instruction,
+        target,
+        mode: "source_edit",
+      });
+      setPlan(payload.plan);
+      setMessage("方案已生成。请逐项审查差异，确认后再应用。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  };
+  const apply = async () => {
+    if (!plan || !confirm(`确认修改 ${plan.source_changes.length} 个源码文件？应用前会自动备份。`)) return;
+    try {
+      const payload = await call("ai-apply", {
+        planID: plan.id,
+        confirmation: "APPLY_AI_SOURCE_CHANGES",
+      });
+      setPlan(payload.plan);
+      setMessage("源码修改已应用。下一步请执行真实构建验证。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  };
+  const rollback = async () => {
+    if (!plan || !confirm("确认恢复本方案应用前的全部源码？")) return;
+    try {
+      const payload = await call("ai-rollback", {
+        planID: plan.id,
+        confirmation: "ROLLBACK_AI_SOURCE_CHANGES",
+      });
+      setPlan(payload.plan);
+      setMessage("已恢复修改前的源码。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  };
+  const build = async () => {
+    setBusy("build");
+    try {
+      const response = await fetch(`/api/experiments/${experiment.id}/build`, {
+        method: "POST",
+        headers: headers({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ confirmation: "BUILD_RECONSTRUCTED_SOURCE" }),
+      });
+      const payload = await response.json();
+      setMessage(response.ok ? `真实构建已完成。\n${payload.output || ""}` : `构建失败：\n${payload.error || payload.output || "未知错误"}`);
+    } finally {
+      setBusy("");
+    }
+  };
+  const download = async () => {
+    setBusy("download");
+    try {
+      const response = await fetch(`/api/experiments/${experiment.id}/source/archive`, { headers: headers() });
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.error || "源码工程尚未生成");
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `完整源码工程-${experiment.id.slice(0, 8)}.zip`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage("完整源码工程 ZIP 已导出，目录结构和构建文件均已保留。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy("");
+    }
+  };
+  if (mode === "hex") {
+    return <HexPatchWorkspace {...props} onBack={() => setMode("instruction")} />;
+  }
+  return (
+    <div className="sourceWorkspaceLayer">
+      <section className="patchWorkspace instructionWorkspace">
+        <header>
+          <div>
+            <p>大模型源码修改工作台</p>
+            <h2>{experiment.name}</h2>
+            <code>用中文描述目标，模型基于实际重构源码生成可审查差异</code>
+          </div>
+          <div className="sourceActions">
+            <button className="ghostBtn" disabled={!!busy} onClick={() => void download()}>
+              <Download size={15} />导出完整源码工程
+            </button>
+            <button className="ghostBtn" onClick={() => setMode("hex")}>
+              <Terminal size={15} />高级十六进制
+            </button>
+            <button className="iconBtn" onClick={onClose} title="关闭修改工作台"><X size={17} /></button>
+          </div>
+        </header>
+        <div className="instructionGrid">
+          <aside className="instructionComposer">
+            <div className="stepLabel"><span>1</span>描述修改目标</div>
+            <textarea
+              rows={9}
+              value={instruction}
+              onChange={(event) => setInstruction(event.target.value)}
+              placeholder="例如：将设置页的默认重试次数改为 5，保留原有错误提示，并补充边界检查。"
+              disabled={!canWrite || !!busy}
+            />
+            <label>优先定位的源码文件（可选）
+              <input value={target} onChange={(event) => setTarget(event.target.value)} placeholder="例如 src/config.cpp" />
+            </label>
+            <button className="primaryBtn planCommand" disabled={!canWrite || !!busy || instruction.trim().length < 4} onClick={() => void createPlan()}>
+              {busy === "ai-plan" ? <Loader2 className="spin" size={16} /> : <Zap size={16} />}
+              让大模型生成修改方案
+            </button>
+            <div className="workflowRail">
+              <span className={plan ? "done" : "active"}>理解指令</span>
+              <span className={plan ? "done" : ""}>定位源码</span>
+              <span className={plan?.status === "applied" ? "done" : ""}>确认应用</span>
+              <span>真实构建</span>
+            </div>
+            {!canWrite && <div className="editorMessage">只读角色可以查看和导出源码，但不能生成或应用修改。</div>}
+          </aside>
+          <main className="aiPlanReview">
+            {!plan ? (
+              <div className="planEmpty"><Code2 size={30} /><b>等待修改指令</b><span>模型只会修改实际存在的源码文件；证据不足时会停止并说明缺少内容。</span></div>
+            ) : (
+              <>
+                <section className="planHeading">
+                  <div><span>模型理解</span><h3>{plan.summary}</h3></div>
+                  <div className="modelStamp"><b>{plan.model}</b><small>{plan.provider}</small></div>
+                </section>
+                <section className="planFacts">
+                  <article><span>涉及文件</span><b>{plan.source_changes.length}</b></article>
+                  <article><span>方案状态</span><b>{status(plan.status)}</b></article>
+                  <article><span>执行方式</span><b>源码修改</b></article>
+                </section>
+                <div className="sourceDiffList">
+                  {plan.source_changes.map((change) => (
+                    <details open key={change.path}>
+                      <summary><Code2 size={14} /><code>{change.path}</code><span>{change.reason}</span></summary>
+                      <div className="sourceDiffColumns">
+                        <article><b>修改前</b><pre>{change.before}</pre></article>
+                        <article><b>修改后</b><pre>{change.after}</pre></article>
+                      </div>
+                    </details>
+                  ))}
+                </div>
+                {(plan.evidence.length > 0 || plan.risks.length > 0) && <section className="reviewNotes">
+                  <div><b>定位依据</b>{plan.evidence.map((item) => <span key={item}>{item}</span>)}</div>
+                  <div><b>风险提示</b>{plan.risks.map((item) => <span key={item}>{item}</span>)}</div>
+                </section>}
+              </>
+            )}
+          </main>
+          <aside className="executionPanel">
+            <div className="stepLabel"><span>2</span>确认与验证</div>
+            <button className="primaryBtn" disabled={!canWrite || !!busy || plan?.status !== "planned"} onClick={() => void apply()}><Wrench size={15} />确认应用源码修改</button>
+            <button className="primaryBtn" disabled={!canWrite || !!busy || plan?.status !== "applied"} onClick={() => void build()}>{busy === "build" ? <Loader2 className="spin" size={15} /> : <Hammer size={15} />}真实构建验证</button>
+            <button className="ghostBtn" disabled={!canWrite || !!busy || plan?.status !== "applied"} onClick={() => void rollback()}><RotateCcw size={15} />一键回滚源码</button>
+            <button className="ghostBtn" disabled={!!busy} onClick={() => void download()}><Download size={15} />导出当前完整工程</button>
+            {plan?.validation?.length ? <section className="validationList"><b>建议验证</b>{plan.validation.map((item) => <span key={item}><ShieldCheck size={12} />{item}</span>)}</section> : null}
+            {message && <pre className="commandMessage">{message}</pre>}
+          </aside>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function HexPatchWorkspace({
   experiment,
   identity,
   onClose,
+  onBack,
 }: {
   experiment: Experiment;
   identity: Identity;
   onClose: () => void;
+  onBack: () => void;
 }) {
   const canWrite = ["admin", "analyst"].includes(identity?.role || "");
   const [target, setTarget] = useState(experiment.sample);
@@ -2732,6 +2952,7 @@ function PatchWorkspace({
             <code>{target}</code>
           </div>
           <div className="sourceActions">
+            <button className="ghostBtn" onClick={onBack}><ChevronRight size={15} />返回指令模式</button>
             <label className="openBinaryBtn">
               <HardDriveUpload size={15} />
               {busy === "upload" ? "正在打开" : "打开本地程序"}

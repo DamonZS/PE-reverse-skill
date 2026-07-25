@@ -13,7 +13,7 @@ test("身份被显式传入任务、源码和修改工作台", () => {
 test("只读查看者不能触发任务、源码和修改写操作", () => {
   assert.equal(
     app.match(/const canWrite = \["admin", "analyst"\]\.includes\(identity\?\.role \|\| ""\)/g)?.length,
-    3,
+    4,
     "三个写操作工作区都必须采用明确角色白名单",
   );
   assert.match(app, /disabled=\{!canWrite \|\|[\s\S]*?action\("execute"\)/);
@@ -21,6 +21,13 @@ test("只读查看者不能触发任务、源码和修改写操作", () => {
   assert.match(app, /disabled=\{!canWrite \|\|[\s\S]*?action\("retry"\)/);
   assert.match(app, /只读角色仅可查看和下载，不能保存源码或发起构建。/);
   assert.match(app, /只读角色仅可查看修改证据，不能上传、规划、执行、验证或回滚修改。/);
+});
+
+test("修改工作台默认使用中文指令并保留工程导出和高级模式", () => {
+  assert.match(app, /大模型源码修改工作台/);
+  assert.match(app, /APPLY_AI_SOURCE_CHANGES/);
+  assert.match(app, /source\/archive/);
+  assert.match(app, /高级十六进制/);
 });
 
 test("模型服务和权限管理视图只向管理员渲染", () => {

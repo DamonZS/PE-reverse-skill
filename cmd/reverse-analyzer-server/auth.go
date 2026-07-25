@@ -270,7 +270,7 @@ func permission(r *http.Request) string {
 	if strings.HasPrefix(p, "/api/providers") {
 		return "providers.manage"
 	}
-	if strings.HasSuffix(p, "/execute") || strings.HasSuffix(p, "/cancel") || strings.HasSuffix(p, "/retry") || strings.HasSuffix(p, "/build") || strings.HasSuffix(p, "/patches/apply") || strings.HasSuffix(p, "/patches/rollback") {
+	if strings.HasSuffix(p, "/execute") || strings.HasSuffix(p, "/cancel") || strings.HasSuffix(p, "/retry") || strings.HasSuffix(p, "/build") || strings.HasSuffix(p, "/patches/apply") || strings.HasSuffix(p, "/patches/rollback") || strings.HasSuffix(p, "/patches/ai-apply") || strings.HasSuffix(p, "/patches/ai-rollback") {
 		return "analysis.execute"
 	}
 	return "analysis.plan"
