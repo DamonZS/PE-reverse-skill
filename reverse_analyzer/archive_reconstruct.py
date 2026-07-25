@@ -260,9 +260,9 @@ def _default_runner(command: Sequence[str]) -> int:
     if "--out" in command:
         output = Path(command[command.index("--out") + 1]).resolve()
         runtime = output / ".runtime"
-        environment.setdefault("REVERSE_ANALYZER_KNOWLEDGE_DIR", str(runtime / "knowledge"))
-        environment.setdefault("REVERSE_ANALYZER_SESSIONS_DIR", str(runtime / "sessions"))
-        environment.setdefault("REVERSE_ANALYZER_REPORTS_DIR", str(runtime / "reports"))
+        environment["REVERSE_ANALYZER_KNOWLEDGE_DIR"] = str(runtime / "knowledge")
+        environment["REVERSE_ANALYZER_SESSIONS_DIR"] = str(runtime / "sessions")
+        environment["REVERSE_ANALYZER_REPORTS_DIR"] = str(runtime / "reports")
     return subprocess.run(command, check=False, env=environment).returncode
 
 

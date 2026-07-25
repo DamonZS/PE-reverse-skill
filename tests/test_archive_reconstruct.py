@@ -63,7 +63,12 @@ class ArchiveReconstructTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "analysis"
             command = ["reverse-analyzer", "android", "analyze", "fixture.apk", "--out", str(output)]
-            with patch("reverse_analyzer.archive_reconstruct.subprocess.run") as run:
+            conflicting = {
+                "REVERSE_ANALYZER_KNOWLEDGE_DIR": "/workspace/.reverse_analyzer/knowledge",
+                "REVERSE_ANALYZER_SESSIONS_DIR": "/workspace/.reverse_analyzer/sessions",
+                "REVERSE_ANALYZER_REPORTS_DIR": "/workspace/reports",
+            }
+            with patch.dict(os.environ, conflicting), patch("reverse_analyzer.archive_reconstruct.subprocess.run") as run:
                 run.return_value.returncode = 0
 
                 self.assertEqual(_default_runner(command), 0)
