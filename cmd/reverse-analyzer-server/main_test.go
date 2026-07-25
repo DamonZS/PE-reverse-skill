@@ -30,7 +30,9 @@ func testServer(t *testing.T, token string) (*Server, string) {
 	if err := os.WriteFile(filepath.Join(front, "index.html"), []byte("<html>go</html>"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	return newServer(Config{Workspace: root, Frontend: front, Addr: "127.0.0.1:0", Token: token, Python: "python", Timeout: time.Second}), root
+	server := newServer(Config{Workspace: root, Frontend: front, Addr: "127.0.0.1:0", Token: token, Python: "python", Timeout: time.Second})
+	t.Cleanup(server.close)
+	return server, root
 }
 func request(t *testing.T, s *Server, method, path, token string, body any) *httptest.ResponseRecorder {
 	t.Helper()
