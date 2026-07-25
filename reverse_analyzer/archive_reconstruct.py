@@ -183,6 +183,21 @@ def _member_path(name: str) -> Path:
     return Path(*[part for part in pure.parts if part not in {"", "."}])
 
 
+def _member_name(info: zipfile.ZipInfo) -> str:
+    """Recover legacy Chinese ZIP names decoded as CP437 by zipfile."""
+
+    name = info.filename
+    if info.flag_bits & 0x800:
+        return name
+    try:
+        candidate = name.encode("cp437").decode("gb18030")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return name
+    cjk = sum("\u3400" <= char <= "\u9fff" for char in candidate)
+    mojibake = sum("\u2500" <= char <= "\u259f" for char in name)
+    return candidate if cjk > 0 and mojibake > 0 else name
+
+
 def extract_archive(archive_path: Path, destination: Path) -> list[dict[str, Any]]:
     """Extract a ZIP with traversal, link, count and expansion limits."""
 
@@ -193,7 +208,8 @@ def extract_archive(archive_path: Path, destination: Path) -> list[dict[str, Any
         if len(infos) > MAX_FILES:
             raise ValueError(f"archive contains more than {MAX_FILES} entries")
         for info in infos:
-            relative = _member_path(info.filename)
+            member_name = _member_name(info)
+            relative = _member_path(member_name)
             if not relative.parts:
                 continue
             mode = info.external_attr >> 16

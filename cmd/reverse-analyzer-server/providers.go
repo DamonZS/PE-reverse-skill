@@ -277,6 +277,13 @@ func (s *Server) selectProvider(requested string) (providerProfile, bool) {
 			return profile, false
 		}
 	}
+	if requested == "" {
+		for _, profile := range items {
+			if profile.Kind != "local" && s.providerReady(profile) {
+				return profile, false
+			}
+		}
+	}
 	for _, profile := range items {
 		if s.providerReady(profile) {
 			return profile, requested != "" && requested != profile.Name

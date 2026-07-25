@@ -16,6 +16,7 @@ from unittest.mock import patch
 from reverse_analyzer.archive_reconstruct import (
     _artifact_evidence,
     _repair_behavior_with_model,
+    _member_name,
     extract_archive,
     main,
     reconstruct_archive,
@@ -55,6 +56,14 @@ class _OpenAIChatFixtureHandler(BaseHTTPRequestHandler):
 
 
 class ArchiveReconstructTests(unittest.TestCase):
+    def test_legacy_gb18030_zip_name_is_recovered_from_cp437(self):
+        original = "风灵月影【控制端】30.15内部版/说明.txt"
+        mojibake = original.encode("gb18030").decode("cp437")
+        info = zipfile.ZipInfo(mojibake)
+        info.flag_bits = 0
+
+        self.assertEqual(_member_name(info), original)
+
     def test_artifact_evidence_hashes_files_and_directory_trees(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
