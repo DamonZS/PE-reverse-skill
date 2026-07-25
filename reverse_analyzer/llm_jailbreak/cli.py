@@ -26,6 +26,14 @@ from .templates import initialize_workspace
 from .transport import OpenAICompatibleTransport, TransportError
 
 
+def _configure_utf8_console() -> None:
+    """Keep structured CLI output readable on non-UTF-8 Windows consoles."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="reverse-jailbreak",
@@ -353,6 +361,7 @@ def _promote_command(args: argparse.Namespace) -> int:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    _configure_utf8_console()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

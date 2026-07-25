@@ -85,6 +85,44 @@ func TestProviderBrokerInvokesSelectedProviderAndWritesSecretFreeAudit(t *testin
 	}
 }
 
+func TestProviderBrokerUsesNativeResponsesProtocol(t *testing.T) {
+	var received map[string]any
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/responses" {
+			t.Fatalf("responses path = %q", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+			t.Fatal(err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id": "response-native", "model": "gpt-test", "output_text": "native inference",
+			"usage": map[string]any{"input_tokens": 5, "output_tokens": 2, "total_tokens": 7},
+		})
+	}))
+	defer provider.Close()
+	t.Setenv("RESPONSES_TEST_KEY", "responses-test-secret")
+	root := t.TempDir()
+	broker, err := newProviderBroker(root, providerProfile{Name: "openai_compatible", Kind: "openai-compatible", Protocol: "responses", Model: "gpt-test", BaseURL: provider.URL + "/v1", APIKeyEnv: "RESPONSES_TEST_KEY", Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := strings.Repeat("e", 32)
+	writeBrokerRequest(t, broker.inbox, id, map[string]any{"schema_version": 1, "request_id": id, "provider": "openai_compatible", "model": "gpt-test", "timeout_seconds": 5, "max_output_tokens": 32, "context": map[string]any{"context": map[string]any{"strict_output_contract": map[string]any{"module_id": "program", "allowed_source_paths": []string{"targets/program/main.c"}}}}})
+	broker.process(context.Background(), id, filepath.Join(broker.inbox, id+".json"))
+	if received["instructions"] == nil || received["input"] == nil || received["messages"] != nil || received["max_output_tokens"] != float64(32) {
+		t.Fatalf("invalid Responses payload: %#v", received)
+	}
+	text, _ := received["text"].(map[string]any)
+	format, _ := text["format"].(map[string]any)
+	if format["type"] != "json_schema" || format["strict"] != true {
+		t.Fatalf("missing strict Responses schema: %#v", format)
+	}
+	var response map[string]any
+	if err := readFileJSON(filepath.Join(broker.outbox, id+".json"), &response); err != nil || response["status"] != "ok" {
+		t.Fatalf("unexpected broker response: %#v err=%v", response, err)
+	}
+}
+
 func TestProviderBrokerFallsBackAcrossCredentialSlots(t *testing.T) {
 	const first = "first-broker-secret"
 	const second = "second-broker-secret"

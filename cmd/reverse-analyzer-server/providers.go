@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -24,6 +25,7 @@ type providerUsage struct {
 type providerProfile struct {
 	Name      string          `json:"name"`
 	Kind      string          `json:"kind"`
+	Protocol  string          `json:"protocol,omitempty"`
 	Model     string          `json:"model,omitempty"`
 	BaseURL   string          `json:"base_url,omitempty"`
 	APIKeys   []string        `json:"api_keys,omitempty"`
@@ -45,6 +47,7 @@ type providerModel struct {
 type localProviderConfig struct {
 	BaseURL     string          `json:"base_url"`
 	Model       string          `json:"model"`
+	Protocol    string          `json:"protocol,omitempty"`
 	DisplayName string          `json:"display_name"`
 	APIKeys     []string        `json:"api_keys"`
 	Models      []providerModel `json:"models"`
@@ -101,8 +104,19 @@ func defaultProviderProfiles() []providerProfile {
 	}
 	return []providerProfile{
 		{Name: "rule_based", Kind: "local", Enabled: true, Priority: 0},
-		{Name: "openai_compatible", Kind: "openai-compatible", Model: model, Models: normalizeProviderModels(local.Models, model), BaseURL: baseURL, KeyCount: len(local.APIKeys), Enabled: os.Getenv("REVERSE_ANALYZER_OPENAI_ENABLED") != "" || len(local.APIKeys) > 0, Priority: 10},
+		{Name: "openai_compatible", Kind: "openai-compatible", Protocol: normalizeProviderProtocol(local.Protocol, model), Model: model, Models: normalizeProviderModels(local.Models, model), BaseURL: baseURL, KeyCount: len(local.APIKeys), Enabled: os.Getenv("REVERSE_ANALYZER_OPENAI_ENABLED") != "" || len(local.APIKeys) > 0, Priority: 10},
 	}
+}
+
+func normalizeProviderProtocol(protocol, model string) string {
+	protocol = strings.TrimSpace(strings.ToLower(protocol))
+	if protocol == "" {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(model)), "gpt-") {
+			return "responses"
+		}
+		return "chat_completions"
+	}
+	return protocol
 }
 
 func normalizeProviderModels(items []providerModel, legacy string) []providerModel {
@@ -128,6 +142,7 @@ func preferredProviderModel(profile *providerProfile) bool {
 	for _, item := range profile.Models {
 		if item.Enabled {
 			profile.Model = item.ID
+			profile.Protocol = normalizeProviderProtocol(profile.Protocol, profile.Model)
 			return true
 		}
 	}
@@ -202,6 +217,7 @@ func (s *Server) providerUsage() map[string]providerUsage {
 
 func validateProvider(profile providerProfile) error {
 	preferredProviderModel(&profile)
+	profile.Protocol = normalizeProviderProtocol(profile.Protocol, profile.Model)
 	if profile.Name == "" || profile.Kind == "" {
 		return errors.New("provider name and kind are required")
 	}
@@ -212,6 +228,9 @@ func validateProvider(profile providerProfile) error {
 		return errors.New("supported provider kinds are local and openai-compatible")
 	}
 	if profile.Kind == "openai-compatible" {
+		if profile.Protocol != "responses" && profile.Protocol != "chat_completions" {
+			return errors.New("openai-compatible protocol must be responses or chat_completions")
+		}
 		if profile.Model == "" {
 			return errors.New("openai-compatible provider requires at least one enabled model")
 		}
@@ -225,12 +244,13 @@ func validateProvider(profile providerProfile) error {
 
 func (s *Server) saveProvider(profile providerProfile) error {
 	preferredProviderModel(&profile)
+	profile.Protocol = normalizeProviderProtocol(profile.Protocol, profile.Model)
 	if err := validateProvider(profile); err != nil {
 		return err
 	}
 	if profile.Name == "openai_compatible" && len(profile.APIKeys) > 0 {
 		local := readLocalProviderConfig()
-		local.BaseURL, local.Model, local.Models = profile.BaseURL, profile.Model, profile.Models
+		local.BaseURL, local.Model, local.Protocol, local.Models = profile.BaseURL, profile.Model, profile.Protocol, profile.Models
 		local.DisplayName = profile.Model
 		local.APIKeys = providerAPIKeys(profile)
 		if err := writeFileJSON(localProviderConfigPath(), local); err != nil {
@@ -298,6 +318,7 @@ func (s *Server) providerReady(profile providerProfile) bool {
 }
 
 func (s *Server) testProvider(ctx context.Context, profile providerProfile) (map[string]any, error) {
+	profile.Protocol = normalizeProviderProtocol(profile.Protocol, profile.Model)
 	if profile.Kind == "local" {
 		return map[string]any{"name": profile.Name, "status": "ready", "network_call": false, "model": profile.Model}, nil
 	}
@@ -305,11 +326,21 @@ func (s *Server) testProvider(ctx context.Context, profile providerProfile) (map
 	if len(keys) == 0 {
 		return map[string]any{"name": profile.Name, "status": "dependency-gated", "network_call": false, "missing": profile.APIKeyEnv}, nil
 	}
-	endpoint := strings.TrimRight(profile.BaseURL, "/") + "/models"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	endpoint := strings.TrimRight(profile.BaseURL, "/") + "/chat/completions"
+	payload := map[string]any{"model": profile.Model, "max_tokens": 8, "messages": []map[string]string{{"role": "user", "content": "Reply with OK."}}}
+	if profile.Protocol == "responses" {
+		endpoint = strings.TrimRight(profile.BaseURL, "/") + "/responses"
+		payload = map[string]any{"model": profile.Model, "input": "Reply with OK.", "max_output_tokens": 8}
+	}
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 10 * time.Second}
 	for slot, key := range keys {
 		current := req.Clone(ctx)
@@ -324,7 +355,7 @@ func (s *Server) testProvider(ctx context.Context, profile providerProfile) (map
 		status := response.StatusCode
 		response.Body.Close()
 		if status >= 200 && status < 300 {
-			return map[string]any{"name": profile.Name, "status": "ready", "network_call": true, "model": profile.Model, "endpoint": endpoint, "key_slot": slot + 1}, nil
+			return map[string]any{"name": profile.Name, "status": "ready", "network_call": true, "model": profile.Model, "protocol": profile.Protocol, "endpoint": endpoint, "key_slot": slot + 1}, nil
 		}
 		if status != 401 && status != 403 && status != 429 && status < 500 {
 			return nil, fmt.Errorf("provider returned HTTP %d", status)

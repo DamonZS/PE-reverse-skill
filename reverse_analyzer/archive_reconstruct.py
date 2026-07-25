@@ -1291,6 +1291,38 @@ def _parse_model_json(content: str) -> Mapping[str, Any] | None:
     return parsed if isinstance(parsed, Mapping) else None
 
 
+def _ensure_native_source_scaffold(destination: Path, module_id: str, kind: str) -> bool:
+    """Create a real model-editable build target when decompilation yielded no project."""
+
+    if kind not in {
+        "windows-executable",
+        "windows-library",
+        "linux-native-executable",
+        "linux-native-library",
+    }:
+        return False
+    source = destination / "source" / "main.c"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    if not source.is_file():
+        source.write_text(
+            "/* Evidence-driven reconstruction entry point; completed by the model stage. */\n"
+            "int reconstructed_module(void) { return 0; }\n",
+            encoding="utf-8",
+        )
+    target_name = "module_" + _slug(module_id).replace("-", "_")
+    command = "add_library" if kind.endswith("library") else "add_executable"
+    kind_arg = " SHARED" if command == "add_library" else ""
+    cmake = destination / "CMakeLists.txt"
+    if not cmake.is_file():
+        cmake.write_text(
+            "cmake_minimum_required(VERSION 3.16)\n"
+            f"project({target_name} LANGUAGES C)\n"
+            f"{command}({target_name}{kind_arg} source/main.c)\n",
+            encoding="utf-8",
+        )
+    return True
+
+
 def compose_project(archive_path: Path, out_dir: Path, workspace: Path, inventory: list[dict[str, Any]], results: list[dict[str, Any]]) -> Path:
     project = out_dir / f"reconstructed_archive_{_slug(archive_path.stem)}"
     if project.exists():
@@ -1330,6 +1362,9 @@ def compose_project(archive_path: Path, out_dir: Path, workspace: Path, inventor
                 "The package tree is extracted exactly. Source decompilation is dependency-gated and has not been represented as original source.\n",
                 encoding="utf-8",
             )
+            if _ensure_native_source_scaffold(destination, str(result["id"]), str(result.get("kind") or "")):
+                item["model_source_scaffold"] = (destination / "source" / "main.c").relative_to(project).as_posix()
+                cmake_lines.append(f'add_subdirectory("targets/{result["id"]}")')
         capability_plan = raw_analysis / "capability-plan.json"
         if capability_plan.is_file():
             shutil.copy2(capability_plan, destination / "capability-plan.json")

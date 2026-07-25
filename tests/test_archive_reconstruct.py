@@ -17,6 +17,8 @@ from reverse_analyzer.archive_reconstruct import (
     _artifact_evidence,
     _repair_behavior_with_model,
     _member_name,
+    _model_context,
+    compose_project,
     extract_archive,
     main,
     reconstruct_archive,
@@ -577,6 +579,36 @@ class ArchiveReconstructTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unsafe archive member"):
                 extract_archive(archive, root / "out")
             self.assertFalse((root / "escape.exe").exists())
+
+    def test_composite_creates_model_source_for_native_target_without_project(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "native.zip"
+            archive.write_bytes(b"fixture")
+            workspace = root / "workspace"
+            (workspace / "package").mkdir(parents=True)
+            project = compose_project(
+                archive,
+                root / "analysis",
+                workspace,
+                [],
+                [{
+                    "id": "winmm",
+                    "source": "winmm.dll",
+                    "kind": "windows-library",
+                    "status": "partial",
+                    "analysis_dir": "analysis-winmm",
+                    "capabilities": [],
+                }],
+            )
+
+            source = project / "targets" / "winmm" / "source" / "main.c"
+            self.assertTrue(source.is_file())
+            self.assertTrue((project / "targets" / "winmm" / "CMakeLists.txt").is_file())
+            self.assertIn('add_subdirectory("targets/winmm")', (project / "CMakeLists.txt").read_text(encoding="utf-8"))
+            context = _model_context(project, [{"id": "winmm", "source": "winmm.dll", "kind": "windows-library", "status": "partial", "capabilities": []}])
+            paths = [item["path"] for item in context["targets"][0]["source_files"]]
+            self.assertIn("targets/winmm/source/main.c", paths)
 
     def test_builds_composite_tree_and_routes_each_binary_target(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

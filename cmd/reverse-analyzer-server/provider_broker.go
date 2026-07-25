@@ -281,6 +281,8 @@ func (b *providerBroker) invoke(parent context.Context, request providerBrokerRe
 	if phase == "behavior_repair" {
 		systemInstruction = "You are repairing a compiled program after a real behavior comparison failed. Implement every field of repair_recipe literally using the target language standard I/O APIs: write exact stdout_text and stderr_text, create every output path with evidence-derived content matching its size/hash, then return the exact exit_code. Rewrite the complete allowed source file; changing only comments or copying the current main body is invalid. Return only the strict business JSON object; source_changes.path and evidence must use the allowed path byte-for-byte."
 	}
+	protocol := normalizeProviderProtocol(b.profile.Protocol, request.Model)
+	endpoint := "/chat/completions"
 	payload := map[string]any{
 		"model":           request.Model,
 		"max_tokens":      request.MaxOutputTokens,
@@ -291,6 +293,18 @@ func (b *providerBroker) invoke(parent context.Context, request providerBrokerRe
 			{"role": "user", "content": string(request.Context)},
 		},
 	}
+	if protocol == "responses" {
+		endpoint = "/responses"
+		payload = map[string]any{
+			"model":             request.Model,
+			"instructions":      systemInstruction,
+			"input":             string(request.Context),
+			"max_output_tokens": request.MaxOutputTokens,
+			"text": map[string]any{"format": map[string]any{
+				"type": "json_schema", "name": "module_reconstruction", "strict": true, "schema": responseSchema,
+			}},
+		}
+	}
 	body, _ := json.Marshal(payload)
 	keys := providerAPIKeys(b.profile)
 	if len(keys) == 0 {
@@ -300,7 +314,7 @@ func (b *providerBroker) invoke(parent context.Context, request providerBrokerRe
 	selectedSlot := 0
 	failures := []map[string]any{}
 	for slot, key := range keys {
-		httpRequest, requestErr := http.NewRequestWithContext(ctx, http.MethodPost, stringsTrimRightSlash(b.profile.BaseURL)+"/chat/completions", bytes.NewReader(body))
+		httpRequest, requestErr := http.NewRequestWithContext(ctx, http.MethodPost, stringsTrimRightSlash(b.profile.BaseURL)+endpoint, bytes.NewReader(body))
 		if requestErr != nil {
 			return nil, nil, requestErr
 		}
@@ -339,18 +353,42 @@ func (b *providerBroker) invoke(parent context.Context, request providerBrokerRe
 		return nil, nil, errors.New("provider response exceeded broker limit")
 	}
 	var decoded struct {
-		ID      string         `json:"id"`
-		Model   string         `json:"model"`
-		Usage   map[string]any `json:"usage"`
+		ID         string         `json:"id"`
+		Model      string         `json:"model"`
+		Usage      map[string]any `json:"usage"`
+		OutputText string         `json:"output_text"`
+		Output     []struct {
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"output"`
 		Choices []struct {
 			Message      map[string]any `json:"message"`
 			FinishReason any            `json:"finish_reason"`
 		} `json:"choices"`
 	}
-	if err = json.Unmarshal(raw, &decoded); err != nil || len(decoded.Choices) == 0 {
-		return nil, nil, errors.New("provider response did not contain a valid choice")
+	if err = json.Unmarshal(raw, &decoded); err != nil {
+		return nil, nil, errors.New("provider response was not valid JSON")
 	}
-	content := fmt.Sprint(decoded.Choices[0].Message["content"])
+	content, finishReason := decoded.OutputText, any(nil)
+	if content == "" {
+		for _, output := range decoded.Output {
+			for _, item := range output.Content {
+				if item.Type == "output_text" && item.Text != "" {
+					content = item.Text
+					break
+				}
+			}
+		}
+	}
+	if content == "" && len(decoded.Choices) > 0 {
+		content = fmt.Sprint(decoded.Choices[0].Message["content"])
+		finishReason = decoded.Choices[0].FinishReason
+	}
+	if content == "" {
+		return nil, nil, errors.New("provider response did not contain output text")
+	}
 	usage := decoded.Usage
 	if usage == nil {
 		usage = map[string]any{}
@@ -358,7 +396,7 @@ func (b *providerBroker) invoke(parent context.Context, request providerBrokerRe
 	usage["key_slot"] = selectedSlot
 	usage["fallback_count"] = selectedSlot - 1
 	usage["key_failures"] = failures
-	result := map[string]any{"content": content, "final_answer": content, "confidence": 0.7, "metadata": map[string]any{"model": decoded.Model, "usage": usage, "finish_reason": decoded.Choices[0].FinishReason, "request_id": decoded.ID, "broker": true, "worker_network": "none", "key_slot": selectedSlot, "fallback_count": selectedSlot - 1}}
+	result := map[string]any{"content": content, "final_answer": content, "confidence": 0.7, "metadata": map[string]any{"model": decoded.Model, "usage": usage, "finish_reason": finishReason, "request_id": decoded.ID, "protocol": protocol, "broker": true, "worker_network": "none", "key_slot": selectedSlot, "fallback_count": selectedSlot - 1}}
 	return result, usage, nil
 }
 

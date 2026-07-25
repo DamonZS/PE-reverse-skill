@@ -56,6 +56,14 @@ jobs:
         run: |
           docker pull postgres:15-bookworm
           docker save reverse-analyzer:${{ github.sha }} postgres:15-bookworm | gzip -1 > reverse-analyzer-image.tar.gz
+          git archive --format=tar.gz -o source.tar.gz HEAD
+          curl -fsSL --retry 5 --retry-all-errors \
+            https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.9.0/codebase-memory-mcp-ui-linux-amd64-portable.tar.gz \
+            -o codebase-memory-mcp-ui-linux-amd64-portable.tar.gz
+          curl -fsSL --retry 5 --retry-all-errors \
+            https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.9.0/checksums.txt \
+            -o codegraph-checksums.txt
+          grep '  codebase-memory-mcp-ui-linux-amd64-portable.tar.gz$' codegraph-checksums.txt | sha256sum -c -
       - uses: actions/upload-artifact@v4
         with:
           name: reverse-analyzer-${{ github.sha }}
@@ -68,7 +76,7 @@ jobs:
           username: ${{ secrets.ALIYUN_USER }}
           key: ${{ secrets.ALIYUN_SSH_KEY }}
           port: ${{ secrets.ALIYUN_PORT }}
-          source: "reverse-analyzer-image.tar.gz,deploy/compose.aliyun.yml,deploy/nginx.aliyun.conf"
+          source: "reverse-analyzer-image.tar.gz,source.tar.gz,codebase-memory-mcp-ui-linux-amd64-portable.tar.gz,codegraph-checksums.txt,deploy/compose.aliyun.yml,deploy/nginx.aliyun.conf,deploy/install-codegraph.sh,deploy/codebase-memory.service"
           target: "/opt/pe-reverse-analyzer/releases/${{ github.sha }}"
 
   deploy:
@@ -92,6 +100,7 @@ jobs:
             gzip -dc "$RELEASE/reverse-analyzer-image.tar.gz" | docker load
             cp "$RELEASE/deploy/compose.aliyun.yml" "$ROOT/compose.yml"
             cp "$RELEASE/deploy/nginx.aliyun.conf" "$ROOT/nginx.conf"
+            sh "$RELEASE/deploy/install-codegraph.sh" "$RELEASE"
             chown root:10001 "$ROOT/secrets/postgres_password" "$ROOT/secrets/web_token" "$ROOT/config/provider.local.json"
             chmod 0640 "$ROOT/secrets/postgres_password" "$ROOT/secrets/web_token"
             chmod 0660 "$ROOT/config/provider.local.json"

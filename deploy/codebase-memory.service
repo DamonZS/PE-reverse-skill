@@ -1,0 +1,26 @@
+[Unit]
+Description=Codebase Memory MCP knowledge graph
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=codegraph
+Group=codegraph
+WorkingDirectory=/opt/codebase-memory/repositories/pe-reverse-analyzer
+Environment=HOME=/opt/codebase-memory
+Environment=CBM_DIAGNOSTICS=1
+ExecStart=/bin/sh -c 'tail -f /dev/null | /opt/codebase-memory/bin/codebase-memory-mcp --ui=true --port=9749'
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/codebase-memory
+MemoryMax=384M
+CPUQuota=50%
+TasksMax=128
+
+[Install]
+WantedBy=multi-user.target

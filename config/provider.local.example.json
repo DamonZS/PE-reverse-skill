@@ -1,6 +1,7 @@
 {
   "base_url": "https://api.example.com/v1",
   "model": "provider-model-id",
+  "protocol": "responses",
   "display_name": "模型显示名称",
   "models": [
     {"id": "provider-model-id", "display_name": "首选模型", "priority": 10, "enabled": true}

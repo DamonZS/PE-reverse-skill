@@ -1,4 +1,5 @@
 import json
+import io
 import re
 import subprocess
 import tempfile
@@ -26,6 +27,30 @@ from scripts.smoke_reverse_jailbreak_release import _load_verified_manifest, _ru
 
 
 class ReleaseCliTests(unittest.TestCase):
+    def test_cli_reconfigures_non_utf8_console_before_writing_json(self):
+        with tempfile.TemporaryDirectory() as directory:
+            campaign_path = Path(directory) / "campaign.json"
+            fixture = Path(__file__).parents[1] / "config" / "jailbreak-campaign.example.json"
+            campaign = json.loads(fixture.read_text(encoding="utf-8"))
+            campaign["objective"] = "中文验证"
+            campaign_path.write_text(
+                json.dumps(campaign, ensure_ascii=False), encoding="utf-8"
+            )
+            stdout_bytes = io.BytesIO()
+            stderr_bytes = io.BytesIO()
+            stdout = io.TextIOWrapper(stdout_bytes, encoding="cp1252")
+            stderr = io.TextIOWrapper(stderr_bytes, encoding="cp1252")
+
+            with patch("sys.stdout", stdout), patch("sys.stderr", stderr):
+                exit_code = main(["validate", str(campaign_path), "--json"])
+                stdout.flush()
+                stderr.flush()
+
+            self.assertEqual(exit_code, 0)
+            payload = json.loads(stdout_bytes.getvalue().decode("utf-8"))
+            self.assertEqual(payload["objective"], "中文验证")
+            self.assertEqual(stderr_bytes.getvalue(), b"")
+
     def _write_release_fixture(self, root: Path) -> None:
         for name, content in (
             ("CHANGELOG.md", "changelog"),

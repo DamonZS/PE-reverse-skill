@@ -113,6 +113,7 @@ type Knowledge = {
 type Provider = {
   name: string;
   kind: string;
+  protocol?: "responses" | "chat_completions";
   model?: string;
   base_url?: string;
   api_keys?: string[];
@@ -970,6 +971,19 @@ function ProvidersView({
                 </div>
               ))}
             </div>
+            <label>
+              接口协议
+              <select
+                value={selected.protocol || (selected.model?.startsWith("gpt-") ? "responses" : "chat_completions")}
+                disabled={selected.kind === "local"}
+                onChange={(e) =>
+                  setSelected({ ...selected, protocol: e.target.value as Provider["protocol"] })
+                }
+              >
+                <option value="responses">OpenAI 原生 Responses（/v1/responses）</option>
+                <option value="chat_completions">Chat Completions（/v1/chat/completions）</option>
+              </select>
+            </label>
             <label>
               服务端点
               <input

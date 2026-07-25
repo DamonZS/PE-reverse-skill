@@ -656,3 +656,14 @@ git diff --check
 ```
 
 仅对自己拥有、公开许可、CTF 或已获得明确授权的软件样本使用本项目。许可证以 [LICENSE](LICENSE) 为准。
+# 远程知识图谱与模型协议
+
+生产部署会常驻运行 `codebase-memory-mcp v0.9.0`，索引当前发布版本源码，并通过经过 TLS 和 Bearer Token 保护的端点提供 MCP JSON-RPC：
+
+```text
+https://pe.toporeduce.cn/codegraph/rpc
+```
+
+服务器私有 Token 位于 `/opt/codebase-memory/bearer-token`，不会写入 Git 或构建产物。远程 Codex 应将该值放入本机环境变量（例如 `PE_CODEGRAPH_TOKEN`），并把上面的 URL 配置为 HTTP MCP 服务；请求头使用 `Authorization: Bearer <token>`。
+
+模型服务管理页支持两种协议：OpenAI 原生 Responses（`/v1/responses`）与兼容 Chat Completions（`/v1/chat/completions`）。未显式设置协议的 `gpt-*` 模型默认使用 Responses，其他旧配置继续使用 Chat Completions。
