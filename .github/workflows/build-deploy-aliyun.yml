@@ -52,6 +52,10 @@ jobs:
           tags: reverse-analyzer:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: 验证 Android 真实构建工具链
+        run: |
+          docker run --rm --entrypoint sh reverse-analyzer:${{ github.sha }} -lc \
+            'java -version && apktool --version && jadx --version'
       - name: 打包镜像
         run: |
           docker pull postgres:15-bookworm

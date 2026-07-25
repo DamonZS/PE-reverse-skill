@@ -7,6 +7,23 @@ from reverse_analyzer.source.project_manifest import build_project_manifests
 
 
 class ProjectManifestTests(unittest.TestCase):
+    def test_apktool_project_is_a_locked_buildable_target(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            target = project / "targets" / "mobile" / "source" / "apktool"
+            target.mkdir(parents=True)
+            (target / "apktool.yml").write_text("version: 2.9.3\n", encoding="utf-8")
+            (target / "AndroidManifest.xml").write_text("<manifest package=\"fixture\" />\n", encoding="utf-8")
+            (target / "Main.java").write_text("class Main {}\n", encoding="utf-8")
+
+            result = build_project_manifests(project, [{"id": "mobile", "kind": "android-package"}])
+
+            self.assertTrue(result["project_manifest"]["structure_complete"])
+            self.assertTrue(result["dependency_lock"]["dependencies_locked"])
+            self.assertTrue(result["build_readiness"]["build_ready"])
+            descriptor = result["project_manifest"]["targets"][0]["build_descriptors"][0]
+            self.assertEqual(descriptor["build_system"], "apktool")
+
     def test_fully_locked_native_fixture_is_build_ready(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary) / "composite"

@@ -35,6 +35,7 @@ DESCRIPTOR_NAMES = {
     "package.json": "node",
     "build.gradle": "gradle",
     "build.gradle.kts": "gradle",
+    "apktool.yml": "apktool",
     "pom.xml": "maven",
     "cargo.toml": "cargo",
     "go.mod": "go",
@@ -172,6 +173,8 @@ def _collect_dependencies(root: Path, targets: list[dict[str, Any]]) -> list[dic
                 collected.extend(_cargo_dependencies(root, target["id"], path))
             elif system == "go":
                 collected.extend(_go_dependencies(root, target["id"], path))
+            elif system == "apktool":
+                continue
             elif system != "python-requirements":
                 collected.append(_dependency(
                     target["id"], system, f"<unverified-{path.name}>", None, path, False,

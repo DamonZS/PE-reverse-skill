@@ -96,6 +96,26 @@ class ProjectBuilderTests(unittest.TestCase):
             self.assertIn("compiler error", (project / "docs" / "build-logs" / "build.log").read_text())
             self.assertTrue((project / "docs" / "build-result.json").is_file())
 
+    def test_mixed_project_builds_cmake_and_apktool_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            decoded = project / "targets" / "mobile" / "source" / "apktool"
+            decoded.mkdir(parents=True)
+            (decoded / "apktool.yml").write_text("version: 2.9.3\n", encoding="utf-8")
+            (project / "CMakeLists.txt").write_text("cmake_minimum_required(VERSION 3.16)\nproject(mixed)\n", encoding="utf-8")
+            runner = _Runner([
+                subprocess.CompletedProcess([], 0, "configured", ""),
+                subprocess.CompletedProcess([], 0, "native built", ""),
+                subprocess.CompletedProcess([], 0, "apk built", ""),
+            ])
+
+            result = build_project(project, {"build_ready": True}, {"status": "executed"}, runner=runner)
+
+            self.assertEqual(result["status"], "passed")
+            self.assertEqual([stage["name"] for stage in result["stages"]], ["configure", "build", "apktool-mobile"])
+            self.assertEqual(runner.calls[2][0][:2], ["apktool", "build"])
+            self.assertEqual(Path(runner.calls[2][0][2]), decoded)
+
     def test_readiness_and_model_gates_prevent_execution(self) -> None:
         for readiness, model_state, reason in (
             ({"build_ready": False}, {"status": "executed"}, "readiness_not_build_ready"),

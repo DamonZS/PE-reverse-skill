@@ -34,7 +34,12 @@ WORKDIR /app
 
 RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get -o Acquire::Retries=5 update \
-    && apt-get -o Acquire::Retries=5 install -y --no-install-recommends file binutils build-essential cmake postgresql-client docker.io \
+    && apt-get -o Acquire::Retries=5 install -y --no-install-recommends file binutils build-essential cmake postgresql-client docker.io default-jre-headless apktool curl unzip \
+    && curl -fsSL --retry 5 --retry-all-errors https://github.com/skylot/jadx/releases/download/v1.5.6/jadx-1.5.6.zip -o /tmp/jadx.zip \
+    && echo "545ea2be9c242511bc145755cf4bda2485ade42966e096f8b4d3da2a230e8974  /tmp/jadx.zip" | sha256sum -c - \
+    && unzip -q /tmp/jadx.zip -d /opt/jadx \
+    && ln -s /opt/jadx/bin/jadx /usr/local/bin/jadx \
+    && rm -f /tmp/jadx.zip \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml requirements.txt README.md ./

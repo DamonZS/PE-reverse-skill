@@ -1417,6 +1417,9 @@ function CreateDialog({
       const p = await r.json();
       if (r.ok) {
         setTarget(p.path);
+        if (/\.(zip|exe|dll|apk|ipa)$/i.test(file.name)) {
+          setMode("pe-reconstruction");
+        }
         setMessage(
           `上传完成：${file.name}（${Math.ceil(Number(p.size || file.size) / 1024 / 1024)} 兆字节）`,
         );
@@ -1632,6 +1635,8 @@ function FlowDrawer({
   const stageIndex =
     experiment.status === "failed" || experiment.status === "cancelled"
       ? 2
+      : experiment.status === "partial"
+        ? 3
       : Math.max(
           0,
           stages.findIndex((x) => x.key === experiment.status),
@@ -3262,6 +3267,7 @@ function flowProgress(
   reported: number,
 ) {
   if (statusValue === "completed") return 100;
+  if (statusValue === "partial") return 82;
   if (statusValue === "failed" || statusValue === "cancelled") return 100;
   if (statusValue === "queued") return 8;
   if (statusValue === "planned") return 18;

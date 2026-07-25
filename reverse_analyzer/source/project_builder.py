@@ -1,4 +1,4 @@
-"""Isolated, evidence-producing builds for reconstructed CMake projects."""
+"""Isolated, evidence-producing builds for reconstructed mixed projects."""
 
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ def build_project(
         return _finish_and_write(result, result_path, started)
 
     command_runner = runner or subprocess.run
-    commands = (
+    commands: list[tuple[str, list[str], float]] = [
         (
             "configure",
             ["cmake", "-S", str(root), "-B", str(build_directory)],
@@ -96,7 +96,17 @@ def build_project(
             ["cmake", "--build", str(build_directory)],
             BUILD_TIMEOUT_SECONDS,
         ),
-    )
+    ]
+    android_output = build_directory / "android"
+    for descriptor in sorted(root.glob("targets/**/apktool.yml")):
+        target_root = descriptor.parent
+        target_id = target_root.relative_to(root / "targets").parts[0]
+        android_output.mkdir(parents=True, exist_ok=True)
+        commands.append((
+            f"apktool-{target_id}",
+            ["apktool", "build", str(target_root), "--output", str(android_output / f"{target_id}.apk")],
+            BUILD_TIMEOUT_SECONDS,
+        ))
     result["status"] = "running"
     for stage_name, command, timeout_seconds in commands:
         stage, should_continue = _run_stage(

@@ -1474,7 +1474,9 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 		latest.Reconstruction.SourceGenerated = sourceProjectExists(out)
 		latest.Reconstruction = reconstructionState(latest.Reconstruction)
 	}
+	gateObserved := false
 	if readiness, found := loadBuildReadiness(out); found {
+		gateObserved = true
 		if latest.Metadata == nil {
 			latest.Metadata = map[string]any{}
 		}
@@ -1485,6 +1487,7 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 		s.appendEvent(x.ID, "project_readiness", "completed", "工程结构与依赖锁定状态已记录", readiness)
 	}
 	if buildState, found := loadAutomatedBuildResult(out); found {
+		gateObserved = true
 		exposeArtifactPaths(buildState, out, s.cfg.Workspace)
 		if latest.Metadata == nil {
 			latest.Metadata = map[string]any{}
@@ -1496,6 +1499,7 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 		s.appendEvent(x.ID, eventType, fmt.Sprint(buildState["status"]), "隔离构建结果已记录", buildState)
 	}
 	if behaviorState, found := loadBehaviorValidationResult(out); found {
+		gateObserved = true
 		exposeArtifactPaths(behaviorState, out, s.cfg.Workspace)
 		if latest.Metadata == nil {
 			latest.Metadata = map[string]any{}
@@ -1544,8 +1548,11 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 	} else {
 		s.recordProvider(selected.Name, err != nil || ctx.Err() == context.DeadlineExceeded)
 	}
+	if gateObserved && !latest.Reconstruction.CompleteBuildable && latest.Status == "completed" {
+		latest = s.status(latest, "partial", "reconstruction gates remain incomplete")
+	}
 	_ = s.saveExperiment(latest)
-	s.appendEvent(x.ID, latest.Status, latest.Status, map[string]string{"completed": "分析任务已完成", "failed": "分析任务失败"}[latest.Status], nil)
+	s.appendEvent(x.ID, latest.Status, latest.Status, map[string]string{"completed": "分析任务已完成", "partial": "分析已结束，完整构建门禁尚未通过", "failed": "分析任务失败"}[latest.Status], nil)
 }
 
 func applyAutomatedBuildState(state ReconstructionState, buildState map[string]any) ReconstructionState {
