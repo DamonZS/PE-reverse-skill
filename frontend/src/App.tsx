@@ -71,6 +71,7 @@ type Experiment = {
   summary?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
   reconstruction?: ReconstructionState;
+  error?: string;
 };
 type EventRecord = {
   sequence: number;
@@ -1738,6 +1739,15 @@ function FlowDrawer({
           </div>
           <p title={latest}>{latest}</p>
         </section>
+        {experiment.status === "failed" && experiment.error && (
+          <section className="failureDiagnostics">
+            <div>
+              <AlertTriangle size={15} />
+              <b>分析进程退出原因</b>
+            </div>
+            <pre>{experiment.error}</pre>
+          </section>
+        )}
         <div className="stageFlow">
           {stages.map((stage, i) => (
             <div

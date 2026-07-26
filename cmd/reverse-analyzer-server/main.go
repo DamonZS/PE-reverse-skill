@@ -567,8 +567,15 @@ func (s *Server) experiment(w http.ResponseWriter, r *http.Request) {
 	id := parts[0]
 	if len(parts) == 1 && r.Method == "GET" {
 		x, err := s.loadExperiment(id)
-		if err == nil && x.Status == "completed" {
-			x.Summary = s.artifactSummary(filepath.Join(s.cfg.Workspace, "experiments", id, "analysis"))
+		if err == nil && (x.Status == "completed" || x.Status == "partial" || x.Status == "failed") {
+			analysisRoot := filepath.Join(s.cfg.Workspace, "experiments", id, "analysis")
+			x.Artifacts = s.collectArtifacts(analysisRoot)
+			x.Summary = s.artifactSummary(analysisRoot)
+			if x.Status == "failed" {
+				if diagnostics := workerFailureDiagnostics(filepath.Join(analysisRoot, "worker-output.json")); diagnostics != "" {
+					x.Error = diagnostics
+				}
+			}
 		}
 		if err == nil && x.Reconstruction.Stage == "" {
 			x.Reconstruction = s.deriveLegacyReconstruction(x)
@@ -1478,16 +1485,19 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 	if e != nil {
 		return
 	}
+	latest.Artifacts = s.collectArtifacts(out)
+	latest.Summary = s.artifactSummary(out)
 	if ctx.Err() == context.DeadlineExceeded {
 		latest = s.status(latest, "failed", "worker timeout")
 		latest.Error = "analysis timed out"
 	} else if err != nil {
 		latest = s.status(latest, "failed", err.Error())
-		latest.Error = err.Error()
+		latest.Error = workerFailureDiagnostics(filepath.Join(out, "worker-output.json"))
+		if latest.Error == "" {
+			latest.Error = err.Error()
+		}
 	} else {
 		latest = s.status(latest, "completed", "result recorded")
-		latest.Artifacts = s.collectArtifacts(out)
-		latest.Summary = s.artifactSummary(out)
 		latest.Reconstruction.AnalysisComplete = true
 		latest.Reconstruction.SourceGenerated = sourceProjectExists(out)
 		latest.Reconstruction = reconstructionState(latest.Reconstruction)
@@ -1571,6 +1581,18 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 	}
 	_ = s.saveExperiment(latest)
 	s.appendEvent(x.ID, latest.Status, latest.Status, map[string]string{"completed": "分析任务已完成", "partial": "分析已结束，完整构建门禁尚未通过", "failed": "分析任务失败"}[latest.Status], nil)
+}
+
+func workerFailureDiagnostics(path string) string {
+	content, err := os.ReadFile(path)
+	if err != nil || len(content) == 0 {
+		return ""
+	}
+	const limit = 16 << 10
+	if len(content) > limit {
+		content = content[len(content)-limit:]
+	}
+	return strings.TrimSpace(string(content))
 }
 
 func applyAutomatedBuildState(state ReconstructionState, buildState map[string]any) ReconstructionState {

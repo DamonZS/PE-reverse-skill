@@ -209,6 +209,37 @@ func TestArtifactSummaryReportsArchivedWorkerLogSize(t *testing.T) {
 	}
 }
 
+func TestFailedExperimentExposesArchivedWorkerDiagnostics(t *testing.T) {
+	s, root := testServer(t, "")
+	id := newID()
+	x := Experiment{Schema: 1, SchemaVersion: 1, ID: id, Sample: "sample.exe", Status: "failed", CreatedAt: now(), UpdatedAt: now(), Options: map[string]any{}, Metadata: map[string]any{}, Error: "exit status 2"}
+	if err := s.saveExperiment(x); err != nil {
+		t.Fatal(err)
+	}
+	analysis := filepath.Join(root, "experiments", id, "analysis")
+	if err := os.MkdirAll(analysis, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(analysis, "worker-output.json"), []byte("tool bootstrap failed: missing dependency\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	response := request(t, s, http.MethodGet, "/api/experiments/"+id, "", nil)
+	if response.Code != http.StatusOK {
+		t.Fatal(response.Body.String())
+	}
+	var payload Experiment
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Error != "tool bootstrap failed: missing dependency" {
+		t.Fatalf("diagnostics not exposed: %#v", payload)
+	}
+	if len(payload.Artifacts) != 1 || !strings.Contains(fmt.Sprint(payload.Artifacts[0]["path"]), "worker-output.json") {
+		t.Fatalf("failed task artifacts missing: %#v", payload.Artifacts)
+	}
+}
+
 func TestReconstructionCompletionRequiresEveryHardGate(t *testing.T) {
 	state := reconstructionState(ReconstructionState{
 		AnalysisComplete: true,
