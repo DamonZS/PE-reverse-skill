@@ -1,5 +1,0 @@
-LIBRARY "fixture.dll"
-EXPORTS
-    LoaderData=fixture_original.LoaderData @1
-    Forwarded=fixture_original.Forwarded @2
-    __proxy_ordinal_3="fixture_original.#3" @3 NONAME
