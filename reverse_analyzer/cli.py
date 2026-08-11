@@ -4418,9 +4418,34 @@ def skills_command(args: argparse.Namespace) -> int:
     if SkillCatalog is None:
         print("Skill catalog runtime is unavailable.", file=sys.stderr)
         return 3
-    catalog = SkillCatalog(Path(__file__).resolve().parents[1] / "reverse-skills")
+    skills_root = Path(
+        getattr(args, "skills_root", None) or Path(__file__).resolve().parents[1] / "reverse-skills"
+    )
+    if not skills_root.is_dir():
+        print(
+            f"Skill suite root not found: {skills_root}. Pass `skills --root <path>` for an external suite.",
+            file=sys.stderr,
+        )
+        return 2
+    catalog = SkillCatalog(skills_root)
     if args.skills_command == "audit":
         _print_json_payload(catalog.audit())
+        return 0
+    if args.skills_command == "route":
+        try:
+            _print_json_payload(
+                catalog.route(
+                    args.query,
+                    target=args.target,
+                    endpoint=args.endpoint,
+                    interface=args.interface,
+                    package=args.package,
+                    limit=args.limit,
+                )
+            )
+        except ValueError as exc:
+            print(f"Skill routing failed: {exc}", file=sys.stderr)
+            return 2
         return 0
     if args.skills_command == "show":
         record = catalog.get(args.skill_id)
@@ -4652,15 +4677,36 @@ def build_parser() -> argparse.ArgumentParser:
         command.set_defaults(func=knowledge_command)
 
     skills = subparsers.add_parser("skills", help="Discover, route, and audit repository-backed skill instructions.")
+    skills.add_argument(
+        "--root",
+        dest="skills_root",
+        type=Path,
+        default=None,
+        help="External skill-suite root; use when the installed CLI has no source-adjacent assets.",
+    )
     skills_commands = skills.add_subparsers(dest="skills_command", required=True)
     skills_list = skills_commands.add_parser("list", help="List all discovered skill instructions.")
-    skills_list.add_argument("--route", choices=("android", "ios", "protocol", "source", "memory", "patch", "jailbreak", "capability"), default=None)
+    skills_list.add_argument("--route", choices=("pe", "android", "ios", "protocol", "source", "memory", "patch", "jailbreak", "capability"), default=None)
     skills_list.set_defaults(func=skills_command)
     skills_show = skills_commands.add_parser("show", help="Show one discovered skill and its platform routes.")
     skills_show.add_argument("skill_id")
     skills_show.set_defaults(func=skills_command)
     skills_audit = skills_commands.add_parser("audit", help="Audit metadata and platform routing coverage for all skills.")
     skills_audit.set_defaults(func=skills_command)
+    skills_route = skills_commands.add_parser("route", help="Plan a master-first reverse workflow without executing a target.")
+    skills_route.add_argument("query", help="Natural-language request to route.")
+    skills_route.add_argument("--target", default=None, help="Optional local target path used only for suffix routing.")
+    skills_route.add_argument(
+        "--endpoint",
+        "--url",
+        dest="endpoint",
+        default=None,
+        help="Optional HTTP(S) endpoint descriptor; it is classified but never fetched.",
+    )
+    skills_route.add_argument("--interface", default=None, help="Optional interface kind such as rest, graphql, or websocket.")
+    skills_route.add_argument("--package", default=None, help="Optional package ecosystem such as android, dotnet, or npm.")
+    skills_route.add_argument("--limit", type=int, default=3, help="Maximum ranked skill routes to return.")
+    skills_route.set_defaults(func=skills_command)
 
     coverage = subparsers.add_parser("coverage", help="Audit executable capability parity and remaining acceptance gates.")
     coverage.add_argument("--only-unresolved", action="store_true", help="Return unresolved capabilities as the primary capability list.")

@@ -16,10 +16,12 @@ def build_platform_catalog(workspace: str | Path) -> dict[str, Any]:
     """Return a JSON-compatible platform inventory without executing catalog items."""
 
     root = Path(workspace).resolve()
+    skill_catalog = SkillCatalog(root / "reverse-skills")
     skills = [
         record.to_dict()
-        for record in SkillCatalog(root / "reverse-skills").discover()
+        for record in skill_catalog.discover()
     ]
+    routing = skill_catalog.audit()["skill_runtime"]
     tools = _builtin_tools()
     providers = _default_providers()
     scripts = _scripts(root / "scripts", root)
@@ -47,6 +49,7 @@ def build_platform_catalog(workspace: str | Path) -> dict[str, Any]:
             "meaning": "All discovered repository assets are represented in this catalog; this is separate from dependency readiness and live acceptance.",
         },
         "skills": skills,
+        "routing": routing,
         "tools": tools,
         "providers": providers,
         "scripts": scripts,

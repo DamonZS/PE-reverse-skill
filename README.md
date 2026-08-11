@@ -53,6 +53,51 @@ go run ./cmd/reverse-analyzer-server
 
 平台不会自动上传样本、报告、密钥或 trace。具体深度取决于样本类型、操作系统、目标权限以及本地可选工具。
 
+## 智能逆向任务路由器
+
+仓库内置一个由主技能开始的、配置驱动的本地路由层。它会根据请求文本、
+本地文件后缀、接口类型、HTTP(S) 网址描述符和包生态选择工作流，并返回有序
+阶段、可用子技能和 manifest 声明的本地辅助工具。入口文档与生成导航分别见
+[主技能](reverse-skills/skills/SKILL.md) 和 [工作流索引](reverse-skills/skills/INDEX.md)。
+
+```powershell
+# 本地 PE/二进制的首轮分流
+python -m reverse_analyzer skills route "检查导入表和节区" --target .\sample.exe
+
+# URL 仅作描述符分类，不发送网络请求
+python -m reverse_analyzer skills route "检查接口描述" `
+  --endpoint "https://api.example.test/openapi.json" `
+  --interface rest --package openapi
+
+# 也可从主技能脚本调用同一套 SkillRouter
+python reverse-skills\skills\scripts\master-route.py `
+  --intent "检查 Android 包" --target .\client.apk --package android
+```
+
+路由结果包含 `master_skill`、`workflow.stages`、`workflow.subskills` 和
+`workflow.tools`；它们是 AI/操作员读取和选择后续步骤的索引，不会隐式运行
+脚本、provider、目标进程或远端接口。当前工作流覆盖：
+
+| 输入或意图 | 路由工作流 |
+|---|---|
+| PE/EXE/DLL/SYS | PE 分诊、静态分析、深度分析、源码重建和 case review |
+| OpenAPI/HAR/GraphQL/WebSocket/gRPC/网址描述符 | 接口与端点分析 |
+| APK/AAB、IPA/app、.NET/NuGet、JAR/ASAR/npm/Python/archive | 对应移动、CLR 或通用包分析 |
+| 许可证、完整性、反篡改、反作弊 | 受控 `protection-review` 证据审查 |
+| EDR、端点遥测、检测覆盖 | 受控 `edr-defense-review` 防御审查 |
+
+受控保护流程仅在请求含有明确的保护意图、接口类型或包描述符时才会匹配，且
+返回 `authorization_required`。它们只提供静态证据、完整性/遥测审计和人工
+审批所需的计划；不会自动执行许可证绕过、篡改、注入、unhook、禁用或规避
+操作。
+
+变更路由配置或技能后，重新生成并校验索引：
+
+```powershell
+python reverse-skills\skills\scripts\refresh-skill-index.py
+python reverse-skills\skills\scripts\verify-skill-suite.py --strict-index
+```
+
 ## 快速开始
 
 ### 环境

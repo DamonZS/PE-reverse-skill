@@ -15,6 +15,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PlatformCatalogTests(unittest.TestCase):
+    def test_catalog_exposes_master_first_routing_summary(self) -> None:
+        payload = build_platform_catalog(ROOT)
+
+        self.assertEqual(payload["routing"]["status"], "ready")
+        self.assertIn("protection-review", payload["routing"]["skill_ids"])
+        self.assertEqual(payload["routing"]["master_skill"]["path"], "SKILL.md")
+
     def test_cli_exposes_catalog_and_separate_integration_metric(self) -> None:
         completed = subprocess.run(
             [sys.executable, "-m", "reverse_analyzer", "platform", "audit"],

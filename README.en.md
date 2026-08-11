@@ -23,6 +23,56 @@ A local-first platform for authorized reverse engineering and software-security 
 
 The platform does not automatically upload samples, reports, keys, or traces. Analysis depth depends on the sample type, operating system, target permissions, and locally available optional tooling.
 
+## Intelligent Reverse Task Router
+
+The repository includes a local, configuration-driven routing layer that starts
+from one master skill. It selects a workflow from request text, local filename
+suffixes, interface types, HTTP(S) URL descriptors, and package ecosystems,
+then returns ordered stages, indexed subskills, and manifest-declared local
+helpers. See the [master skill](reverse-skills/skills/SKILL.md) and generated
+[workflow index](reverse-skills/skills/INDEX.md).
+
+```powershell
+# First-pass routing for a local PE or binary
+python -m reverse_analyzer skills route "inspect imports and sections" --target .\sample.exe
+
+# A URL is classified as a descriptor only; it is never fetched by the router
+python -m reverse_analyzer skills route "inspect interface" `
+  --endpoint "https://api.example.test/openapi.json" `
+  --interface rest --package openapi
+
+# The master-skill script uses the same SkillRouter implementation
+python reverse-skills\skills\scripts\master-route.py `
+  --intent "inspect Android package" --target .\client.apk --package android
+```
+
+Each decision includes `master_skill`, `workflow.stages`, `workflow.subskills`,
+and `workflow.tools`. These fields are an index for the next deliberate step;
+they do not implicitly run a script, provider, target process, or remote
+endpoint. Current workflow families cover:
+
+| Input or intent | Routed workflow |
+|---|---|
+| PE/EXE/DLL/SYS | PE triage, static/deep analysis, source reconstruction, and case review |
+| OpenAPI/HAR/GraphQL/WebSocket/gRPC/URL descriptor | Interface and endpoint analysis |
+| APK/AAB, IPA/app, .NET/NuGet, JAR/ASAR/npm/Python/archive | Mobile, CLR, or generic package analysis |
+| License, integrity, anti-tamper, anti-cheat | Controlled `protection-review` evidence review |
+| EDR, endpoint telemetry, detection coverage | Controlled `edr-defense-review` defensive review |
+
+Controlled protection workflows are selected only by explicit protection
+intent, interface type, or package descriptors and return
+`authorization_required`. They provide static evidence, integrity/telemetry
+auditing, and a plan for human approval; they do not automate license bypass,
+tampering, injection, unhooking, disablement, or evasion.
+
+Regenerate and verify the navigation after changing routing metadata or a
+skill:
+
+```powershell
+python reverse-skills\skills\scripts\refresh-skill-index.py
+python reverse-skills\skills\scripts\verify-skill-suite.py --strict-index
+```
+
 ## Quick Start
 
 ### Environment

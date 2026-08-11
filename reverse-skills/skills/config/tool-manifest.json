@@ -1,0 +1,113 @@
+{
+  "format": "pe-skill-tool-manifest/v1",
+  "version": 1,
+  "policy": {
+    "scope": "local-offline",
+    "network": "forbidden",
+    "target_execution": "forbidden",
+    "auto_install": false
+  },
+  "skill_ids": [
+    "pe-triage",
+    "interface-analysis",
+    "apk-reverse",
+    "mobile-reverse",
+    "dotnet-analysis",
+    "package-analysis",
+    "protection-review",
+    "edr-defense-review",
+    "pe-static-analysis",
+    "pe-deep-analysis",
+    "source-reconstruction",
+    "case-review"
+  ],
+  "tools": [
+    {
+      "id": "master-route",
+      "entrypoint": "scripts/master-route.py",
+      "mode": "read-only",
+      "summary": "Select a master-first workflow from local route metadata and input descriptors.",
+      "skill_ids": [
+        "pe-triage",
+        "interface-analysis",
+        "apk-reverse",
+        "mobile-reverse",
+        "dotnet-analysis",
+        "package-analysis",
+        "protection-review",
+        "edr-defense-review",
+        "pe-static-analysis",
+        "pe-deep-analysis",
+        "source-reconstruction",
+        "case-review"
+      ]
+    },
+    {
+      "id": "case-init",
+      "entrypoint": "scripts/case-init.py",
+      "mode": "case-workspace-write",
+      "summary": "Create an empty local case record without ingesting, executing, or contacting a target.",
+      "skill_ids": [
+        "pe-triage",
+        "interface-analysis",
+        "apk-reverse",
+        "mobile-reverse",
+        "dotnet-analysis",
+        "package-analysis",
+        "protection-review",
+        "edr-defense-review"
+      ]
+    },
+    {
+      "id": "review-case",
+      "entrypoint": "scripts/review-case.py",
+      "mode": "read-only",
+      "summary": "Check a local case record for required structure and policy metadata.",
+      "skill_ids": [
+        "protection-review",
+        "edr-defense-review",
+        "case-review"
+      ]
+    },
+    {
+      "id": "refresh-skill-index",
+      "entrypoint": "scripts/refresh-skill-index.py",
+      "mode": "generated-navigation-write",
+      "summary": "Regenerate the skill navigation index from routing metadata.",
+      "skill_ids": [
+        "pe-triage",
+        "interface-analysis",
+        "apk-reverse",
+        "mobile-reverse",
+        "dotnet-analysis",
+        "package-analysis",
+        "protection-review",
+        "edr-defense-review",
+        "pe-static-analysis",
+        "pe-deep-analysis",
+        "source-reconstruction",
+        "case-review"
+      ]
+    },
+    {
+      "id": "verify-skill-suite",
+      "entrypoint": "scripts/verify-skill-suite.py",
+      "mode": "read-only",
+      "summary": "Validate routing, tool, skill, and generated-index consistency.",
+      "skill_ids": [
+        "pe-triage",
+        "interface-analysis",
+        "apk-reverse",
+        "mobile-reverse",
+        "dotnet-analysis",
+        "package-analysis",
+        "protection-review",
+        "edr-defense-review",
+        "pe-static-analysis",
+        "pe-deep-analysis",
+        "source-reconstruction",
+        "case-review"
+      ]
+    }
+  ]
+}
