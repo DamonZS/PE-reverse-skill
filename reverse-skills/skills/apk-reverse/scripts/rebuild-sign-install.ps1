@@ -33,7 +33,7 @@ $ErrorActionPreference = 'Stop'
 $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 
 if ([string]::IsNullOrWhiteSpace($KeystorePath)) {
-    $KeystorePath = Join-Path $PSScriptRoot '..\debug.keystore'
+    $KeystorePath = Join-Path (Join-Path $env:USERPROFILE '.android') 'debug.keystore'
 }
 
 function Get-ToolPath {

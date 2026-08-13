@@ -18,40 +18,26 @@ from pathlib import Path
 from collections import Counter
 
 def ensure_deps():
-    """检查并提示安装依赖工具"""
-    deps = {}
-    # 检查 apktool
-    result = subprocess.run(['where', 'apktool.bat'], capture_output=True, shell=True)
-    if result.returncode != 0:
-        result = subprocess.run(['which', 'apktool'], capture_output=True, shell=True)
-    deps['apktool'] = result.returncode == 0
-
-    # 检查 jadx
-    result = subprocess.run(['where', 'jadx.bat'], capture_output=True, shell=True)
-    if result.returncode != 0:
-        result = subprocess.run(['which', 'jadx'], capture_output=True, shell=True)
-    deps['jadx'] = result.returncode == 0
-
-    # 检查 apksigner
-    result = subprocess.run(['where', 'apksigner.bat'], capture_output=True, shell=True)
-    if result.returncode != 0:
-        result = subprocess.run(['which', 'apksigner'], capture_output=True, shell=True)
-    deps['apksigner'] = result.returncode == 0
-
-    # 检查 keytool
-    result = subprocess.run(['where', 'keytool.exe'], capture_output=True, shell=True)
-    if result.returncode != 0:
-        result = subprocess.run(['which', 'keytool'], capture_output=True, shell=True)
-    deps['keytool'] = result.returncode == 0
-
-    return deps
+    """检查并提示安装依赖工具。"""
+    candidates = {
+        'apktool': ('apktool.bat', 'apktool'),
+        'jadx': ('jadx.bat', 'jadx'),
+        'apksigner': ('apksigner.bat', 'apksigner'),
+        'keytool': ('keytool.exe', 'keytool'),
+    }
+    return {
+        name: any(shutil.which(candidate) for candidate in names)
+        for name, names in candidates.items()
+    }
 
 def get_apk_info(apk_path):
     """用 aapt 或 unzip 获取 APK 基本信息"""
     info = {}
     # 尝试用 aapt
-    r = subprocess.run(['aapt', 'dump', 'badging', str(apk_path)],
-                      capture_output=True, text=True, shell=True)
+    r = subprocess.run(
+        ['aapt', 'dump', 'badging', str(apk_path)],
+        capture_output=True, text=True, shell=False, timeout=60,
+    )
     if r.returncode == 0:
         for line in r.stdout.splitlines():
             if line.startswith('package:'):
@@ -111,7 +97,7 @@ def analyze_apk(apk_path, deep=False, decompile=False,
         out("  正在用 apktool 解包...")
         r = subprocess.run(
             ['apktool', 'd', '-f', str(apk_path), '-o', str(work_dir)],
-            capture_output=True, text=True, shell=True
+            capture_output=True, text=True, shell=False, timeout=120
         )
         if r.returncode != 0:
             # 尝试直接用 jar
@@ -320,7 +306,7 @@ def analyze_apk(apk_path, deep=False, decompile=False,
         rebuilt_path = apk_path.parent / "rebuilt.apk"
         r = subprocess.run(
             ['apktool', 'b', str(work_dir), '-o', str(rebuilt_path)],
-            capture_output=True, text=True, shell=True
+            capture_output=True, text=True, shell=False, timeout=120
         )
         if r.returncode == 0:
             out("  [+] 重打包完成: %s" % rebuilt_path)
@@ -329,7 +315,7 @@ def analyze_apk(apk_path, deep=False, decompile=False,
                 r2 = subprocess.run(
                     ['apksigner', 'sign', '--ks', 'my-release-key.keystore',
                      str(rebuilt_path)],
-                    capture_output=True, text=True, shell=True
+                    capture_output=True, text=True, shell=False, timeout=120
                 )
                 if r2.returncode == 0:
                     out("  [+] 签名完成")

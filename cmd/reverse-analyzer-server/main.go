@@ -25,6 +25,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,11 +37,16 @@ import (
 const confirmation = "EXECUTE_LOCAL_ANALYSIS"
 const maxArtifactPreviewBytes int64 = 256 * 1024
 const maxRepairLoopBytes int64 = 256 * 1024
+const terminalMaxLines = 2000
+const terminalMaxBytes = 2 << 20
+const terminalEventLines = 200
+const terminalSessionTTL = 30 * time.Minute
 
 type Config struct {
 	Workspace, Frontend, Addr, Token, Python string
 	SandboxRuntime, SandboxImage             string
 	SandboxWorkspaceVolume                   string
+	RunnerURL, RunnerToken                   string
 	Timeout                                  time.Duration
 	Production                               bool
 	AllowAnonymous                           bool
@@ -65,6 +71,7 @@ type Experiment struct {
 	Artifacts      []map[string]any    `json:"artifacts"`
 	Summary        any                 `json:"summary"`
 	Reconstruction ReconstructionState `json:"reconstruction"`
+	Orchestration  *OrchestrationState `json:"orchestration,omitempty"`
 	Error          string              `json:"error,omitempty"`
 }
 type ReconstructionState struct {
@@ -80,6 +87,55 @@ type ReconstructionState struct {
 	BlockingReasons    []string `json:"blocking_reasons"`
 	UpdatedAt          string   `json:"updated_at,omitempty"`
 }
+type OrchestrationState struct {
+	Version           int                     `json:"version"`
+	LastEventSequence int64                   `json:"last_event_sequence"`
+	Flow              OrchestrationFlow       `json:"flow"`
+	Tasks             []OrchestrationTask     `json:"tasks"`
+	Subtasks          []OrchestrationSubtask  `json:"subtasks"`
+	ToolCalls         []OrchestrationToolCall `json:"tool_calls"`
+	UpdatedAt         string                  `json:"updated_at"`
+}
+type OrchestrationFlow struct {
+	ID        string `json:"id"`
+	Title     string `json:"title,omitempty"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"created_at,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
+}
+type OrchestrationTask struct {
+	ID     string `json:"id"`
+	Title  string `json:"title"`
+	Status string `json:"status"`
+	Input  string `json:"input,omitempty"`
+	Result string `json:"result,omitempty"`
+}
+type OrchestrationSubtask struct {
+	ID          string `json:"id"`
+	TaskID      string `json:"task_id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Status      string `json:"status"`
+	Result      string `json:"result,omitempty"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+}
+type OrchestrationToolCall struct {
+	ID        string         `json:"id"`
+	RootID    string         `json:"root_id,omitempty"`
+	Attempt   int            `json:"attempt,omitempty"`
+	Name      string         `json:"name"`
+	Status    string         `json:"status"`
+	Result    string         `json:"result,omitempty"`
+	Timestamp string         `json:"timestamp,omitempty"`
+	StartedAt string         `json:"started_at,omitempty"`
+	EndedAt   string         `json:"ended_at,omitempty"`
+	Duration  string         `json:"duration,omitempty"`
+	RetryOf   string         `json:"retry_of,omitempty"`
+	Canceled  bool           `json:"canceled,omitempty"`
+	Args      map[string]any `json:"args,omitempty"`
+}
+
+type toolCallExecutor func(context.Context, Experiment, OrchestrationToolCall) (string, error)
 type Event struct {
 	Sequence  int64          `json:"sequence"`
 	Timestamp string         `json:"timestamp"`
@@ -105,17 +161,58 @@ type PatchRecord struct {
 	ArtifactDir    string `json:"artifact_dir"`
 	Error          string `json:"error,omitempty"`
 }
+type runnerJobRequest struct {
+	Kind    string            `json:"kind"`
+	Args    []string          `json:"args,omitempty"`
+	Env     map[string]string `json:"env,omitempty"`
+	Network string            `json:"network,omitempty"`
+	Project string            `json:"project,omitempty"`
+	Command string            `json:"command,omitempty"`
+}
+
+type workerExecution struct {
+	Output io.ReadCloser
+	Wait   func() error
+}
+
+type workerLeaseClaim struct {
+	ownerID      string
+	fencingToken int64
+}
+
+type terminalSession struct {
+	ID           string
+	ExperimentID string
+	Command      string
+	StartedAt    string
+	EndedAt      string
+	Status       string
+	ExitCode     *int
+	Error        string
+	Output       []map[string]any
+	OutputBytes  int
+	DroppedLines int
+	Truncated    bool
+	Cmd          *exec.Cmd
+	Cancel       context.CancelFunc
+	Mu           sync.Mutex
+}
+
 type Server struct {
-	cfg          Config
-	mux          *http.ServeMux
-	mu           sync.Mutex
-	running      map[string]context.CancelFunc
-	workers      sync.WaitGroup
-	eventSeq     map[string]int64
-	db           *sql.DB
-	dbErr        error
-	auditErr     error
-	migrationsOK bool
+	cfg           Config
+	mux           *http.ServeMux
+	mu            sync.Mutex
+	running       map[string]context.CancelFunc
+	toolRunning   map[string]context.CancelFunc
+	toolExecutors map[string]toolCallExecutor
+	workers       sync.WaitGroup
+	eventSeq      map[string]int64
+	terminals     map[string]*terminalSession
+	db            *sql.DB
+	dbErr         error
+	auditErr      error
+	migrationsOK  bool
+	workerOwner   string
 }
 
 func main() {
@@ -168,7 +265,16 @@ func loadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("frontend build not found: %s", frontend)
 	}
 	seconds, _ := strconv.Atoi(env("REVERSE_ANALYZER_JOB_TIMEOUT", "3600"))
-	cfg := Config{Workspace: workspace, Frontend: frontend, Addr: env("REVERSE_ANALYZER_WEB_ADDR", "127.0.0.1:8090"), Token: os.Getenv("REVERSE_ANALYZER_WEB_TOKEN"), Python: env("REVERSE_ANALYZER_PYTHON", "python"), SandboxRuntime: strings.TrimSpace(os.Getenv("REVERSE_ANALYZER_SANDBOX_RUNTIME")), SandboxImage: env("REVERSE_ANALYZER_SANDBOX_IMAGE", "reverse-analyzer:web"), SandboxWorkspaceVolume: strings.TrimSpace(os.Getenv("REVERSE_ANALYZER_SANDBOX_WORKSPACE_VOLUME")), Timeout: time.Duration(seconds) * time.Second, Production: strings.EqualFold(env("REVERSE_ANALYZER_ENV", "local-dev"), "production"), AllowAnonymous: strings.EqualFold(os.Getenv("REVERSE_ANALYZER_ALLOW_ANONYMOUS"), "true"), AllowedOrigins: csvSet(os.Getenv("REVERSE_ANALYZER_CORS_ALLOWED_ORIGINS")), TrustedProxyCIDRs: csvValues(os.Getenv("REVERSE_ANALYZER_TRUSTED_PROXY_CIDRS"))}
+	cfg := Config{Workspace: workspace, Frontend: frontend, Addr: env("REVERSE_ANALYZER_WEB_ADDR", "127.0.0.1:8090"), Token: os.Getenv("REVERSE_ANALYZER_WEB_TOKEN"), Python: env("REVERSE_ANALYZER_PYTHON", "python"), SandboxRuntime: strings.TrimSpace(os.Getenv("REVERSE_ANALYZER_SANDBOX_RUNTIME")), SandboxImage: env("REVERSE_ANALYZER_SANDBOX_IMAGE", "reverse-analyzer:web"), SandboxWorkspaceVolume: strings.TrimSpace(os.Getenv("REVERSE_ANALYZER_SANDBOX_WORKSPACE_VOLUME")), RunnerURL: strings.TrimRight(strings.TrimSpace(os.Getenv("REVERSE_ANALYZER_RUNNER_URL")), "/"), RunnerToken: strings.TrimSpace(os.Getenv("REVERSE_ANALYZER_RUNNER_TOKEN")), Timeout: time.Duration(seconds) * time.Second, Production: strings.EqualFold(env("REVERSE_ANALYZER_ENV", "local-dev"), "production"), AllowAnonymous: strings.EqualFold(os.Getenv("REVERSE_ANALYZER_ALLOW_ANONYMOUS"), "true"), AllowedOrigins: csvSet(os.Getenv("REVERSE_ANALYZER_CORS_ALLOWED_ORIGINS")), TrustedProxyCIDRs: csvValues(os.Getenv("REVERSE_ANALYZER_TRUSTED_PROXY_CIDRS"))}
+	if cfg.RunnerToken == "" {
+		if tokenFile := strings.TrimSpace(os.Getenv("REVERSE_ANALYZER_RUNNER_TOKEN_FILE")); tokenFile != "" {
+			content, readErr := os.ReadFile(tokenFile)
+			if readErr != nil {
+				return Config{}, fmt.Errorf("runner token file: %w", readErr)
+			}
+			cfg.RunnerToken = strings.TrimSpace(string(content))
+		}
+	}
 	cfg.HTTPReadTimeout = envSeconds("REVERSE_ANALYZER_HTTP_READ_TIMEOUT", 900)
 	cfg.HTTPWriteTimeout = envSeconds("REVERSE_ANALYZER_HTTP_WRITE_TIMEOUT", 7200)
 	cfg.HTTPIdleTimeout = envSeconds("REVERSE_ANALYZER_HTTP_IDLE_TIMEOUT", 90)
@@ -221,6 +327,12 @@ func validateRuntimeConfig(cfg Config, databaseURL string) error {
 	if cfg.AllowAnonymous || (strings.TrimSpace(cfg.Token) == "" && os.Getenv("REVERSE_ANALYZER_GITHUB_CLIENT_ID") == "" && os.Getenv("REVERSE_ANALYZER_GOOGLE_CLIENT_ID") == "") {
 		return errors.New("production requires API token or OAuth authentication and forbids anonymous access")
 	}
+	if cfg.RunnerURL == "" || cfg.RunnerToken == "" {
+		return errors.New("production requires an authenticated isolated runner")
+	}
+	if cfg.SandboxRuntime != "" {
+		return errors.New("production control plane cannot own a local sandbox runtime")
+	}
 	return nil
 }
 func env(k, d string) string {
@@ -231,7 +343,11 @@ func env(k, d string) string {
 }
 
 func newServer(cfg Config) *Server {
-	s := &Server{cfg: cfg, mux: http.NewServeMux(), running: map[string]context.CancelFunc{}, eventSeq: map[string]int64{}}
+	s := &Server{
+		cfg: cfg, mux: http.NewServeMux(), running: map[string]context.CancelFunc{},
+		toolRunning: map[string]context.CancelFunc{}, toolExecutors: defaultToolCallExecutors(),
+		eventSeq: map[string]int64{}, terminals: map[string]*terminalSession{}, workerOwner: newID(),
+	}
 	s.initDatabase()
 	_ = s.deliverAuditOutbox()
 	s.recoverInterruptedExperiments()
@@ -385,6 +501,28 @@ func (s *Server) routes() {
 }
 
 func (s *Server) recoverInterruptedExperiments() {
+	if s.db != nil {
+		rows, err := s.db.Query(`SELECT id FROM experiments WHERE workspace_id=$1 AND status='running' ORDER BY updated_at`, s.cfg.Workspace)
+		if err != nil {
+			return
+		}
+		ids := []string{}
+		for rows.Next() {
+			var id string
+			if err = rows.Scan(&id); err != nil {
+				_ = rows.Close()
+				return
+			}
+			ids = append(ids, id)
+		}
+		_ = rows.Close()
+		for _, id := range ids {
+			if err = s.recoverInterruptedExperiment(id); err != nil {
+				log.Printf("recover interrupted experiment %s failed: %v", id, err)
+			}
+		}
+		return
+	}
 	items, err := s.listExperiments()
 	if err != nil {
 		return
@@ -393,16 +531,79 @@ func (s *Server) recoverInterruptedExperiments() {
 		if experiment.Status != "running" {
 			continue
 		}
-		experiment = s.status(experiment, "failed", "control plane restarted while worker was running")
-		experiment.Error = "worker interrupted by control-plane restart; retry is available"
-		experiment.Reconstruction.BuildPassed = false
-		experiment.Reconstruction.BehaviorPassed = false
-		experiment.Reconstruction.CompleteBuildable = false
-		experiment.Reconstruction.BlockingReasons = append(experiment.Reconstruction.BlockingReasons, "worker interrupted; build and behavior evidence must be regenerated")
+		experiment = interruptedExperiment(experiment)
 		if s.saveExperiment(experiment) == nil {
 			s.appendEvent(experiment.ID, "recovered", "failed", "服务重启后检测到中断任务，已标记失败并允许重试", nil)
 		}
 	}
+}
+
+func interruptedExperiment(experiment Experiment) Experiment {
+	experiment.Status = "failed"
+	experiment.UpdatedAt = now()
+	experiment.Error = "worker interrupted by control-plane restart; retry is available"
+	experiment.History = append(experiment.History, map[string]any{"timestamp": experiment.UpdatedAt, "status": "failed", "detail": "control plane restarted while worker was running"})
+	if experiment.Orchestration != nil {
+		experiment.Orchestration.Flow.Status = "failed"
+		experiment.Orchestration.Flow.UpdatedAt = experiment.UpdatedAt
+		experiment.Orchestration.Tasks = ensureOrchestrationTasks(experiment.Orchestration.Tasks, experiment)
+		experiment.Orchestration.Tasks[0].Status = "failed"
+		experiment.Orchestration.Tasks[0].Result = orchestrationResult(experiment)
+		experiment.Orchestration.UpdatedAt = experiment.UpdatedAt
+	}
+	experiment.Reconstruction.BuildPassed = false
+	experiment.Reconstruction.BehaviorPassed = false
+	experiment.Reconstruction.CompleteBuildable = false
+	experiment.Reconstruction.BlockingReasons = append(experiment.Reconstruction.BlockingReasons, "worker interrupted; build and behavior evidence must be regenerated")
+	return experiment
+}
+
+func (s *Server) recoverInterruptedExperiment(id string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var payload []byte
+	var status string
+	if err = tx.QueryRow(`SELECT status,payload FROM experiments WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, id, s.cfg.Workspace).Scan(&status, &payload); err != nil {
+		return err
+	}
+	if status != "running" {
+		return nil
+	}
+	var active bool
+	if err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM worker_leases WHERE experiment_id=$1 AND workspace_id=$2 AND expires_at>now())`, id, s.cfg.Workspace).Scan(&active); err != nil {
+		return err
+	}
+	if active {
+		return nil
+	}
+	var experiment Experiment
+	if err = json.Unmarshal(payload, &experiment); err != nil {
+		return err
+	}
+	experiment = interruptedExperiment(experiment)
+	if _, err = tx.Exec(`DELETE FROM worker_leases WHERE experiment_id=$1 AND workspace_id=$2 AND expires_at<=now()`, id, s.cfg.Workspace); err != nil {
+		return err
+	}
+	event, err := insertEventRecordTx(tx, id, "recovered", "failed", "服务重启后检测到中断任务，已标记失败并允许重试", nil)
+	if err != nil {
+		return err
+	}
+	experiment = s.ensureOrchestrationState(experiment, []Event{event})
+	payload, err = json.Marshal(experiment)
+	if err != nil {
+		return err
+	}
+	result, err := tx.Exec(`UPDATE experiments SET status='failed',updated_at=$1,payload=$2::jsonb WHERE id=$3 AND workspace_id=$4 AND status='running'`, experiment.UpdatedAt, string(payload), id, s.cfg.Workspace)
+	if err != nil {
+		return err
+	}
+	if rows, rowsErr := result.RowsAffected(); rowsErr != nil || rows != 1 {
+		return errors.New("interrupted experiment recovery lost its state claim")
+	}
+	return tx.Commit()
 }
 
 func (s *Server) close() {
@@ -410,6 +611,24 @@ func (s *Server) close() {
 	for id, cancel := range s.running {
 		cancel()
 		delete(s.running, id)
+	}
+	for id, cancel := range s.toolRunning {
+		cancel()
+		delete(s.toolRunning, id)
+	}
+	for id, session := range s.terminals {
+		session.Mu.Lock()
+		if session.Cancel != nil {
+			session.Cancel()
+		}
+		if session.Status == "running" {
+			exitCode := -1
+			session.Status = "stopped"
+			session.ExitCode = &exitCode
+			session.EndedAt = now()
+		}
+		session.Mu.Unlock()
+		delete(s.terminals, id)
 	}
 	s.mu.Unlock()
 	done := make(chan struct{})
@@ -447,31 +666,68 @@ func (s *Server) liveness(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) readiness(w http.ResponseWriter, r *http.Request) {
 	reasons := []string{}
+	checks := map[string]string{"audit": "ready", "database": "ready", "workspace": "ready", "runner": "ready"}
 	if s.auditError() != nil {
 		reasons = append(reasons, "audit persistence degraded")
+		checks["audit"] = "not_ready"
+	}
+	if s.cfg.RunnerURL != "" {
+		if s.cfg.RunnerToken == "" {
+			reasons = append(reasons, "runner authentication is not configured")
+			checks["runner"] = "not_ready"
+		} else if err := s.probeRunner(r.Context()); err != nil {
+			reasons = append(reasons, "runner unavailable: "+err.Error())
+			checks["runner"] = "not_ready"
+		}
+	} else if s.cfg.Production {
+		reasons = append(reasons, "isolated runner is not configured")
+		checks["runner"] = "not_ready"
 	}
 	if s.dbErr != nil {
+		checks["database"] = "not_ready"
 		reasons = append(reasons, "database unavailable")
 	} else if os.Getenv("REVERSE_ANALYZER_DATABASE_URL") != "" {
 		if s.db == nil || !s.migrationsOK {
 			reasons = append(reasons, "database migrations not ready")
+			checks["database"] = "not_ready"
 		} else if err := s.db.PingContext(r.Context()); err != nil {
 			reasons = append(reasons, "database ping failed")
+			checks["database"] = "not_ready"
 		}
 	}
 	probe, err := os.CreateTemp(s.cfg.Workspace, ".ready-*")
 	if err != nil {
 		reasons = append(reasons, "workspace is not writable")
+		checks["workspace"] = "not_ready"
 	} else {
 		name := probe.Name()
 		_ = probe.Close()
 		_ = os.Remove(name)
 	}
 	if len(reasons) > 0 {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "not_ready", "reasons": reasons})
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "not_ready", "checks": checks, "reasons": reasons})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ready", "storage": storageBackend()})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ready", "checks": checks, "storage": storageBackend()})
+}
+
+func (s *Server) probeRunner(parent context.Context) error {
+	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, s.cfg.RunnerURL+"/healthz", nil)
+	if err != nil {
+		return err
+	}
+	request.Header.Set("X-Runner-Token", s.cfg.RunnerToken)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("health probe returned %d", response.StatusCode)
+	}
+	return nil
 }
 func (s *Server) workspace(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -539,6 +795,7 @@ func (s *Server) experiments(w http.ResponseWriter, r *http.Request) {
 			History:   []map[string]any{{"timestamp": t, "status": "queued", "detail": "created"}},
 			Artifacts: []map[string]any{}, Reconstruction: reconstructionState(ReconstructionState{}),
 		}
+		x.Orchestration = newOrchestrationState(x)
 		if requestedAsset != "" && requestedAsset != "<nil>" {
 			x.Metadata["requested_asset"] = requestedAsset
 		}
@@ -583,6 +840,10 @@ func (s *Server) experiment(w http.ResponseWriter, r *http.Request) {
 		respond(w, x, err)
 		return
 	}
+	if len(parts) == 2 && parts[1] == "orchestration" && r.Method == http.MethodGet {
+		s.orchestration(w, r, id)
+		return
+	}
 	if len(parts) == 2 && parts[1] == "events" && r.Method == "GET" {
 		if _, err := s.loadExperiment(id); err != nil {
 			respond(w, nil, err)
@@ -613,6 +874,34 @@ func (s *Server) experiment(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(parts) == 3 && parts[1] == "source" && parts[2] == "archive" && r.Method == http.MethodGet {
 		s.sourceArchive(w, r, id)
+		return
+	}
+	if len(parts) == 3 && parts[1] == "source" && parts[2] == "actions" && r.Method == http.MethodPost {
+		s.sourceActions(w, r, id)
+		return
+	}
+	if len(parts) == 2 && parts[1] == "terminal" {
+		if r.Method != http.MethodGet && r.Method != http.MethodPost {
+			method(w)
+			return
+		}
+		s.terminalSessions(w, r, id)
+		return
+	}
+	if len(parts) == 4 && parts[1] == "terminal" && parts[3] == "output" && r.Method == http.MethodGet {
+		s.terminalOutput(w, r, id, parts[2])
+		return
+	}
+	if len(parts) == 4 && parts[1] == "terminal" && parts[3] == "stop" && r.Method == http.MethodPost {
+		s.terminalStop(w, r, id, parts[2])
+		return
+	}
+	if len(parts) == 4 && parts[1] == "tool-calls" {
+		if r.Method != http.MethodPost || (parts[3] != "retry" && parts[3] != "cancel") {
+			method(w)
+			return
+		}
+		s.toolCallAction(w, r, id, parts[2], parts[3])
 		return
 	}
 	if len(parts) >= 2 && parts[1] == "patches" {
@@ -969,13 +1258,13 @@ func (s *Server) sourceProject(w http.ResponseWriter, r *http.Request, id string
 			return nil
 		}
 		rel, _ := filepath.Rel(project, path)
-		if filepath.ToSlash(rel) == "SOURCE_TREE.json" || filepath.ToSlash(rel) == "BUILD_STATUS.json" {
-			return nil
-		}
 		if rel == "." {
 			return nil
 		}
-		files = append(files, map[string]any{"path": filepath.ToSlash(rel), "size": info.Size(), "editable": !info.IsDir() && sourceEditable(rel), "directory": info.IsDir()})
+		if skipSourceFile(filepath.ToSlash(rel)) {
+			return nil
+		}
+		files = append(files, map[string]any{"path": filepath.ToSlash(rel), "size": info.Size(), "editable": !info.IsDir() && sourceEditable(rel), "directory": info.IsDir(), "modified_at": info.ModTime().UTC().Format(time.RFC3339Nano)})
 		return nil
 	})
 	payload := map[string]any{"project_root": relativeTo(s.cfg.Workspace, project), "files": files, "build_system": "cmake", "confirmation": "BUILD_RECONSTRUCTED_SOURCE"}
@@ -1027,6 +1316,150 @@ func (s *Server) sourceFile(w http.ResponseWriter, r *http.Request, id string) {
 	writeJSON(w, http.StatusOK, map[string]any{"path": filepath.ToSlash(payload.Path), "size": len(payload.Content), "saved": true})
 }
 
+func (s *Server) sourceActions(w http.ResponseWriter, r *http.Request, id string) {
+	project, err := s.findSourceProject(id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+		return
+	}
+	var payload struct {
+		Action  string   `json:"action"`
+		Path    string   `json:"path"`
+		Target  string   `json:"target"`
+		Content string   `json:"content"`
+		Paths   []string `json:"paths"`
+	}
+	if readJSON(r, &payload) != nil {
+		bad(w, "无效的文件操作请求")
+		return
+	}
+	action := strings.TrimSpace(strings.ToLower(payload.Action))
+	if action == "" {
+		bad(w, "缺少文件操作类型")
+		return
+	}
+	applySingle := func(op string, path string, fn func(string) error) bool {
+		if path == "" {
+			bad(w, "缺少文件路径")
+			return false
+		}
+		resolved, pathErr := safeProjectFile(project, path)
+		if pathErr != nil {
+			bad(w, pathErr.Error())
+			return false
+		}
+		if err = fn(resolved); err != nil {
+			respond(w, nil, err)
+			return false
+		}
+		s.appendEvent(id, "source_"+op, "completed", "已执行文件操作 "+op+": "+filepath.ToSlash(path), map[string]any{"path": filepath.ToSlash(path), "target": filepath.ToSlash(payload.Target)})
+		return true
+	}
+	applyMany := func(op string, paths []string, fn func(string) error) bool {
+		if len(paths) == 0 {
+			bad(w, "缺少批量文件路径")
+			return false
+		}
+		for _, path := range paths {
+			resolved, pathErr := safeProjectFile(project, path)
+			if pathErr != nil {
+				bad(w, pathErr.Error())
+				return false
+			}
+			if err = fn(resolved); err != nil {
+				respond(w, nil, err)
+				return false
+			}
+		}
+		s.appendEvent(id, "source_"+op, "completed", "已执行批量文件操作 "+op, map[string]any{"paths": paths, "target": filepath.ToSlash(payload.Target)})
+		return true
+	}
+	switch action {
+	case "delete":
+		if !applySingle("delete", payload.Path, func(path string) error { return os.RemoveAll(path) }) {
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "path": filepath.ToSlash(payload.Path)})
+	case "copy":
+		if payload.Target == "" {
+			bad(w, "缺少目标路径")
+			return
+		}
+		if !applySingle("copy", payload.Path, func(path string) error { return copyProjectPath(project, path, payload.Target) }) {
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"copied": true, "path": filepath.ToSlash(payload.Path), "target": filepath.ToSlash(payload.Target)})
+	case "move":
+		if payload.Target == "" {
+			bad(w, "缺少目标路径")
+			return
+		}
+		if !applySingle("move", payload.Path, func(path string) error { return moveProjectPath(project, path, payload.Target) }) {
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"moved": true, "path": filepath.ToSlash(payload.Path), "target": filepath.ToSlash(payload.Target)})
+	case "mkdir":
+		if payload.Path == "" {
+			bad(w, "缺少目录路径")
+			return
+		}
+		resolved, pathErr := safeProjectFile(project, payload.Path)
+		if pathErr != nil {
+			bad(w, pathErr.Error())
+			return
+		}
+		if err = os.MkdirAll(resolved, 0755); err != nil {
+			respond(w, nil, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"created": true, "path": filepath.ToSlash(payload.Path)})
+	case "write":
+		if payload.Path == "" {
+			bad(w, "缺少文件路径")
+			return
+		}
+		resolved, pathErr := safeProjectFile(project, payload.Path)
+		if pathErr != nil {
+			bad(w, pathErr.Error())
+			return
+		}
+		if err = os.MkdirAll(filepath.Dir(resolved), 0755); err != nil {
+			respond(w, nil, err)
+			return
+		}
+		if err = os.WriteFile(resolved, []byte(payload.Content), 0600); err != nil {
+			respond(w, nil, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"written": true, "path": filepath.ToSlash(payload.Path), "size": len(payload.Content)})
+	case "batch-delete":
+		if !applyMany("batch_delete", payload.Paths, func(path string) error { return os.RemoveAll(path) }) {
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "count": len(payload.Paths)})
+	case "batch-copy":
+		if payload.Target == "" {
+			bad(w, "缺少目标目录")
+			return
+		}
+		if !applyMany("batch_copy", payload.Paths, func(path string) error { return copyProjectPath(project, path, payload.Target) }) {
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"copied": true, "count": len(payload.Paths), "target": filepath.ToSlash(payload.Target)})
+	case "batch-move":
+		if payload.Target == "" {
+			bad(w, "缺少目标目录")
+			return
+		}
+		if !applyMany("batch_move", payload.Paths, func(path string) error { return moveProjectPath(project, path, payload.Target) }) {
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"moved": true, "count": len(payload.Paths), "target": filepath.ToSlash(payload.Target)})
+	default:
+		bad(w, "不支持的文件操作类型")
+	}
+}
+
 func (s *Server) sourceArchive(w http.ResponseWriter, r *http.Request, id string) {
 	project, err := s.findSourceProject(id)
 	if err != nil {
@@ -1039,7 +1472,7 @@ func (s *Server) sourceArchive(w http.ResponseWriter, r *http.Request, id string
 	defer archive.Close()
 	manifest := []map[string]any{}
 	_ = filepath.Walk(project, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil || info.IsDir() || strings.Contains(filepath.ToSlash(path), "/.build/") {
+		if walkErr != nil || info.IsDir() || strings.Contains(filepath.ToSlash(path), "/.build/") || skipSourceFile(filepath.ToSlash(path)) {
 			return nil
 		}
 		rel, _ := filepath.Rel(project, path)
@@ -1067,19 +1500,455 @@ func (s *Server) sourceArchive(w http.ResponseWriter, r *http.Request, id string
 	}
 }
 
-func (s *Server) buildSourceProject(w http.ResponseWriter, r *http.Request, id string) {
+func (s *Server) terminalSessions(w http.ResponseWriter, r *http.Request, id string) {
 	project, err := s.findSourceProject(id)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 		return
 	}
-	if _, err = exec.LookPath("cmake"); err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "运行环境缺少 cmake"})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if r.Method == http.MethodGet {
+		items := []map[string]any{}
+		for _, session := range s.terminals {
+			if session.ExperimentID != id {
+				continue
+			}
+			session.Mu.Lock()
+			items = append(items, terminalSessionView(session))
+			session.Mu.Unlock()
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"sessions": items})
 		return
 	}
-	isolated, isolation := buildIsolation()
-	if !isolated {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "dependency-gated", "error": "真实构建必须在容器或明确配置的隔离运行时中执行", "isolation": isolation})
+	var payload struct {
+		Command string `json:"command"`
+	}
+	if readJSON(r, &payload) != nil || strings.TrimSpace(payload.Command) == "" {
+		bad(w, "请输入终端命令")
+		return
+	}
+	session := &terminalSession{ID: newID(), ExperimentID: id, Command: strings.TrimSpace(payload.Command), StartedAt: now(), Status: "running"}
+	ctx, cancel := context.WithCancel(context.Background())
+	session.Cancel = cancel
+	var execution workerExecution
+	if s.cfg.Production || s.cfg.RunnerURL != "" {
+		relativeProject, relErr := filepath.Rel(s.cfg.Workspace, project)
+		if relErr != nil || relativeProject == ".." || strings.HasPrefix(relativeProject, ".."+string(filepath.Separator)) {
+			cancel()
+			bad(w, "源码工程不在共享工作区")
+			return
+		}
+		execution, err = s.startRunnerJob(ctx, runnerJobRequest{Kind: "terminal", Project: filepath.ToSlash(relativeProject), Command: session.Command})
+	} else {
+		cmd := exec.CommandContext(ctx, "cmd", "/c", session.Command)
+		if runtime.GOOS != "windows" {
+			cmd = exec.CommandContext(ctx, "bash", "-lc", session.Command)
+		}
+		cmd.Dir = project
+		stdout, pipeErr := cmd.StdoutPipe()
+		if pipeErr == nil {
+			cmd.Stderr = cmd.Stdout
+			pipeErr = cmd.Start()
+		}
+		if pipeErr == nil {
+			session.Cmd = cmd
+			execution = workerExecution{Output: stdout, Wait: cmd.Wait}
+		}
+		err = pipeErr
+	}
+	if err != nil {
+		cancel()
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "dependency-gated", "error": err.Error()})
+		return
+	}
+	s.terminals[session.ID] = session
+	s.workers.Add(1)
+	go func() {
+		defer s.workers.Done()
+		defer execution.Output.Close()
+		scanner := bufio.NewScanner(execution.Output)
+		scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+		eventLines := 0
+		eventTruncated := false
+		for scanner.Scan() {
+			line := scanner.Text()
+			session.Mu.Lock()
+			appendTerminalOutput(session, line)
+			session.Mu.Unlock()
+			if eventLines < terminalEventLines {
+				s.appendEvent(id, "terminal_output", "running", line, map[string]any{"session_id": session.ID})
+				eventLines++
+			} else if !eventTruncated {
+				eventTruncated = true
+				s.appendEvent(id, "terminal_output_truncated", "running", "终端事件输出已截断，完整尾部请读取会话输出", map[string]any{"session_id": session.ID, "event_line_limit": terminalEventLines})
+			}
+		}
+		waitErr := execution.Wait()
+		session.Mu.Lock()
+		if session.Status != "stopped" {
+			exitCode := 0
+			if waitErr != nil {
+				session.Status = "failed"
+				session.Error = waitErr.Error()
+				exitCode = 1
+				var exitError *exec.ExitError
+				if errors.As(waitErr, &exitError) {
+					exitCode = exitError.ExitCode()
+				}
+			} else {
+				session.Status = "finished"
+			}
+			session.ExitCode = &exitCode
+			session.EndedAt = now()
+		}
+		status := session.Status
+		session.Mu.Unlock()
+		s.scheduleTerminalCleanup(session.ID)
+		eventStatus := "completed"
+		message := "终端会话已结束"
+		if status == "failed" {
+			eventStatus = "failed"
+			message = "终端会话执行失败"
+		}
+		s.appendEvent(id, "terminal_closed", eventStatus, message, map[string]any{"session_id": session.ID})
+	}()
+	writeJSON(w, http.StatusCreated, map[string]any{"session": map[string]any{"id": session.ID, "command": session.Command, "status": session.Status, "started_at": session.StartedAt}})
+}
+
+func (s *Server) terminalOutput(w http.ResponseWriter, r *http.Request, id, sessionID string) {
+	if _, err := s.findSourceProject(id); err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+		return
+	}
+	s.mu.Lock()
+	session := s.terminals[sessionID]
+	s.mu.Unlock()
+	if session == nil || session.ExperimentID != id {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": "终端会话不存在"})
+		return
+	}
+	session.Mu.Lock()
+	defer session.Mu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]any{"session": terminalSessionView(session), "output": session.Output})
+}
+
+func (s *Server) terminalStop(w http.ResponseWriter, r *http.Request, id, sessionID string) {
+	s.mu.Lock()
+	session := s.terminals[sessionID]
+	s.mu.Unlock()
+	if session == nil || session.ExperimentID != id {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": "终端会话不存在"})
+		return
+	}
+	session.Mu.Lock()
+	if session.Cancel != nil {
+		session.Cancel()
+	}
+	if session.Status == "running" {
+		exitCode := -1
+		session.Status = "stopped"
+		session.ExitCode = &exitCode
+		session.EndedAt = now()
+	}
+	session.Mu.Unlock()
+	s.scheduleTerminalCleanup(sessionID)
+	writeJSON(w, http.StatusOK, map[string]any{"stopped": true, "session_id": sessionID})
+}
+
+func appendTerminalOutput(session *terminalSession, line string) {
+	entryBytes := len(line) + 1
+	for len(session.Output) > 0 && (len(session.Output) >= terminalMaxLines || session.OutputBytes+entryBytes > terminalMaxBytes) {
+		oldest := fmt.Sprint(session.Output[0]["line"])
+		session.Output = session.Output[1:]
+		session.OutputBytes -= len(oldest) + 1
+		session.DroppedLines++
+		session.Truncated = true
+	}
+	if entryBytes > terminalMaxBytes {
+		line = line[len(line)-terminalMaxBytes+1:]
+		entryBytes = len(line) + 1
+		session.DroppedLines++
+		session.Truncated = true
+	}
+	session.Output = append(session.Output, map[string]any{"timestamp": now(), "line": line})
+	session.OutputBytes += entryBytes
+}
+
+func terminalSessionView(session *terminalSession) map[string]any {
+	return map[string]any{
+		"id": session.ID, "command": session.Command, "status": session.Status,
+		"started_at": session.StartedAt, "ended_at": session.EndedAt,
+		"exit_code": session.ExitCode, "error": session.Error,
+		"output_count": len(session.Output), "output_bytes": session.OutputBytes,
+		"dropped_lines": session.DroppedLines, "truncated": session.Truncated,
+	}
+}
+
+func (s *Server) scheduleTerminalCleanup(sessionID string) {
+	time.AfterFunc(terminalSessionTTL, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		session := s.terminals[sessionID]
+		if session == nil {
+			return
+		}
+		session.Mu.Lock()
+		endedAt, err := time.Parse(time.RFC3339Nano, session.EndedAt)
+		finished := session.Status != "running" && err == nil && time.Since(endedAt) >= terminalSessionTTL
+		session.Mu.Unlock()
+		if finished {
+			delete(s.terminals, sessionID)
+		}
+	})
+}
+
+var (
+	errToolCallNotFound = errors.New("工具调用不存在")
+	errToolCallConflict = errors.New("工具调用状态不允许此操作")
+)
+
+func defaultToolCallExecutors() map[string]toolCallExecutor {
+	return map[string]toolCallExecutor{}
+}
+
+func normalizeToolCall(call *OrchestrationToolCall) {
+	if call.RootID == "" {
+		call.RootID = call.ID
+	}
+	if call.Attempt <= 0 {
+		call.Attempt = 1
+	}
+}
+
+func toolCallExecutionKey(experimentID, toolCallID string) string {
+	return experimentID + ":" + toolCallID
+}
+
+func (s *Server) mutateExperiment(id string, mutate func(*Experiment) error) (Experiment, error) {
+	if s.dbErr != nil {
+		return Experiment{}, s.dbErr
+	}
+	if s.db != nil {
+		tx, err := s.db.Begin()
+		if err != nil {
+			return Experiment{}, err
+		}
+		defer tx.Rollback()
+		var payload []byte
+		if err = tx.QueryRow(`SELECT payload FROM experiments WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, id, s.cfg.Workspace).Scan(&payload); err != nil {
+			return Experiment{}, err
+		}
+		var experiment Experiment
+		if err = json.Unmarshal(payload, &experiment); err != nil {
+			return Experiment{}, err
+		}
+		if err = mutate(&experiment); err != nil {
+			return Experiment{}, err
+		}
+		payload, err = json.Marshal(experiment)
+		if err != nil {
+			return Experiment{}, err
+		}
+		result, err := tx.Exec(`UPDATE experiments SET status=$1,updated_at=$2,payload=$3::jsonb WHERE id=$4 AND workspace_id=$5`, experiment.Status, experiment.UpdatedAt, string(payload), id, s.cfg.Workspace)
+		if err != nil {
+			return Experiment{}, err
+		}
+		rows, err := result.RowsAffected()
+		if err != nil || rows != 1 {
+			return Experiment{}, errors.New("experiment update was not applied")
+		}
+		if err = tx.Commit(); err != nil {
+			return Experiment{}, err
+		}
+		return experiment, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var experiment Experiment
+	if err := readFileJSON(s.experimentPath(id), &experiment); err != nil {
+		return Experiment{}, err
+	}
+	if err := mutate(&experiment); err != nil {
+		return Experiment{}, err
+	}
+	if err := writeFileJSON(s.experimentPath(id), experiment); err != nil {
+		return Experiment{}, err
+	}
+	return experiment, nil
+}
+
+func (s *Server) toolCallAction(w http.ResponseWriter, r *http.Request, id, toolID, action string) {
+	if action != "retry" && action != "cancel" {
+		bad(w, "不支持的工具调用操作")
+		return
+	}
+	nowStr := now()
+	var source OrchestrationToolCall
+	var successor OrchestrationToolCall
+	experiment, err := s.mutateExperiment(id, func(experiment *Experiment) error {
+		if experiment.Orchestration == nil {
+			experiment.Orchestration = newOrchestrationState(*experiment)
+		}
+		var call *OrchestrationToolCall
+		for idx := range experiment.Orchestration.ToolCalls {
+			candidate := &experiment.Orchestration.ToolCalls[idx]
+			normalizeToolCall(candidate)
+			if candidate.ID == toolID {
+				call = candidate
+			}
+		}
+		if call == nil {
+			return errToolCallNotFound
+		}
+		source = *call
+		switch action {
+		case "retry":
+			if call.Status != "failed" && call.Status != "cancelled" && call.Status != "dependency-gated" {
+				return fmt.Errorf("%w: 只有失败、已取消或依赖受限的调用可以重试", errToolCallConflict)
+			}
+			successor = OrchestrationToolCall{
+				ID: newID(), RootID: call.RootID, Attempt: call.Attempt + 1, RetryOf: call.ID,
+				Name: call.Name, Status: "queued", Result: "已创建重试 attempt，等待执行",
+				Timestamp: nowStr, Args: call.Args,
+			}
+			if _, replayable := s.toolExecutors[call.Name]; !replayable {
+				successor.Status = "dependency-gated"
+				successor.EndedAt = nowStr
+				successor.Result = "该历史工具调用未注册安全重放执行器"
+			}
+			experiment.Orchestration.ToolCalls = append(experiment.Orchestration.ToolCalls, successor)
+		case "cancel":
+			if call.Status != "queued" && call.Status != "running" {
+				return fmt.Errorf("%w: 只有排队中或运行中的调用可以取消", errToolCallConflict)
+			}
+			call.Status = "cancelled"
+			call.Canceled = true
+			call.EndedAt = nowStr
+			if call.StartedAt != "" {
+				call.Duration = durationSince(call.StartedAt, nowStr)
+			}
+			call.Result = "已取消"
+			source = *call
+		}
+		experiment.UpdatedAt = nowStr
+		experiment.Orchestration.UpdatedAt = nowStr
+		return nil
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, errToolCallNotFound), errors.Is(err, sql.ErrNoRows), os.IsNotExist(err):
+			writeJSON(w, http.StatusNotFound, map[string]any{"error": "工具调用不存在"})
+		case errors.Is(err, errToolCallConflict):
+			writeJSON(w, http.StatusConflict, map[string]any{"error": err.Error()})
+		default:
+			respond(w, nil, err)
+		}
+		return
+	}
+	if action == "cancel" {
+		s.mu.Lock()
+		if cancel := s.toolRunning[toolCallExecutionKey(id, toolID)]; cancel != nil {
+			cancel()
+		}
+		s.mu.Unlock()
+		s.appendEvent(id, "tool_call_cancel", "cancelled", "工具调用 attempt 已取消", map[string]any{"tool_call_id": toolID, "root_id": source.RootID, "attempt": source.Attempt})
+		writeJSON(w, http.StatusOK, map[string]any{"tool_call": source, "action": action, "saved": true})
+		return
+	}
+	s.appendEvent(id, "tool_call_retry", successor.Status, "已创建工具调用 successor attempt", map[string]any{"tool_call_id": successor.ID, "retry_of": source.ID, "root_id": successor.RootID, "attempt": successor.Attempt})
+	if successor.Status == "queued" {
+		s.startToolCallAttempt(experiment, successor)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tool_call": successor, "action": action, "saved": true})
+}
+
+func (s *Server) startToolCallAttempt(experiment Experiment, call OrchestrationToolCall) {
+	executor := s.toolExecutors[call.Name]
+	if executor == nil {
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	key := toolCallExecutionKey(experiment.ID, call.ID)
+	s.mu.Lock()
+	s.toolRunning[key] = cancel
+	s.mu.Unlock()
+	s.workers.Add(1)
+	go func() {
+		defer s.workers.Done()
+		defer func() {
+			s.mu.Lock()
+			delete(s.toolRunning, key)
+			s.mu.Unlock()
+			cancel()
+		}()
+		startedAt := now()
+		started := false
+		_, err := s.mutateExperiment(experiment.ID, func(current *Experiment) error {
+			if current.Orchestration == nil {
+				return nil
+			}
+			for idx := range current.Orchestration.ToolCalls {
+				candidate := &current.Orchestration.ToolCalls[idx]
+				if candidate.ID != call.ID || candidate.Status != "queued" {
+					continue
+				}
+				candidate.Status = "running"
+				candidate.StartedAt = startedAt
+				candidate.Result = "执行中"
+				current.UpdatedAt = startedAt
+				current.Orchestration.UpdatedAt = startedAt
+				started = true
+				break
+			}
+			return nil
+		})
+		if err != nil || !started {
+			return
+		}
+		s.appendEvent(experiment.ID, "tool_call_started", "running", "工具调用 attempt 开始执行", map[string]any{"tool_call_id": call.ID, "root_id": call.RootID, "attempt": call.Attempt})
+		result, executeErr := executor(ctx, experiment, call)
+		endedAt := now()
+		terminalStatus := "completed"
+		if ctx.Err() != nil {
+			terminalStatus = "cancelled"
+			result = "已取消"
+		} else if executeErr != nil {
+			terminalStatus = "failed"
+			result = executeErr.Error()
+		}
+		updated := false
+		_, err = s.mutateExperiment(experiment.ID, func(current *Experiment) error {
+			if current.Orchestration == nil {
+				return nil
+			}
+			for idx := range current.Orchestration.ToolCalls {
+				candidate := &current.Orchestration.ToolCalls[idx]
+				if candidate.ID != call.ID || candidate.Status != "running" {
+					continue
+				}
+				candidate.Status = terminalStatus
+				candidate.Canceled = terminalStatus == "cancelled"
+				candidate.Result = result
+				candidate.EndedAt = endedAt
+				candidate.Duration = durationSince(candidate.StartedAt, endedAt)
+				current.UpdatedAt = endedAt
+				current.Orchestration.UpdatedAt = endedAt
+				updated = true
+				break
+			}
+			return nil
+		})
+		if err == nil && updated {
+			s.appendEvent(experiment.ID, "tool_call_finished", terminalStatus, "工具调用 attempt 已结束", map[string]any{"tool_call_id": call.ID, "root_id": call.RootID, "attempt": call.Attempt})
+		}
+	}()
+}
+
+func (s *Server) buildSourceProject(w http.ResponseWriter, r *http.Request, id string) {
+	project, err := s.findSourceProject(id)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 		return
 	}
 	buildDir := filepath.Join(project, ".build")
@@ -1087,14 +1956,44 @@ func (s *Server) buildSourceProject(w http.ResponseWriter, r *http.Request, id s
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
 	output := &limitedWriter{remaining: 2 << 20}
+	isolation := "local-container"
 	s.appendEvent(id, "build_started", "running", "开始构建重构源码工程", map[string]any{"isolated": true, "isolation": isolation})
-	for _, args := range [][]string{{"-S", project, "-B", buildDir}, {"--build", buildDir, "--config", "Release"}} {
-		cmd := exec.CommandContext(ctx, "cmake", args...)
-		cmd.Dir = project
-		cmd.Stdout, cmd.Stderr = output, output
-		if err = cmd.Run(); err != nil {
-			break
+	if s.cfg.Production || s.cfg.RunnerURL != "" {
+		relativeProject, relErr := filepath.Rel(s.cfg.Workspace, project)
+		if relErr != nil || relativeProject == ".." || strings.HasPrefix(relativeProject, ".."+string(filepath.Separator)) {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"error": "源码工程不在共享工作区"})
+			return
 		}
+		var execution workerExecution
+		execution, err = s.startRunnerJob(ctx, runnerJobRequest{Kind: "build", Project: filepath.ToSlash(relativeProject)})
+		if err == nil {
+			isolation = "remote-runner"
+			_, err = io.Copy(output, execution.Output)
+			closeErr := execution.Output.Close()
+			waitErr := execution.Wait()
+			err = errors.Join(err, closeErr, waitErr)
+		}
+	} else {
+		if _, err = exec.LookPath("cmake"); err == nil {
+			isolated, mode := buildIsolation()
+			if !isolated {
+				writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "dependency-gated", "error": "真实构建必须在独立 runner 或明确配置的本地测试环境中执行", "isolation": mode})
+				return
+			}
+			isolation = mode
+			for _, args := range [][]string{{"-S", project, "-B", buildDir}, {"--build", buildDir, "--config", "Release"}} {
+				cmd := exec.CommandContext(ctx, "cmake", args...)
+				cmd.Dir = project
+				cmd.Stdout, cmd.Stderr = output, output
+				if err = cmd.Run(); err != nil {
+					break
+				}
+			}
+		}
+	}
+	if err != nil && output.buf.Len() == 0 {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"status": "dependency-gated", "error": err.Error(), "isolation": isolation})
+		return
 	}
 	logPath := filepath.Join(project, "build-output.log")
 	_ = os.WriteFile(logPath, output.buf.Bytes(), 0600)
@@ -1153,19 +2052,123 @@ func (s *Server) findSourceProject(id string) (string, error) {
 }
 
 func safeProjectFile(project, requested string) (string, error) {
+	project, err := filepath.Abs(project)
+	if err != nil {
+		return "", err
+	}
+	realProject, err := filepath.EvalSymlinks(project)
+	if err != nil {
+		return "", fmt.Errorf("源码工程真实路径不可用: %w", err)
+	}
 	path := filepath.Join(project, filepath.FromSlash(requested))
-	path, _ = filepath.Abs(path)
-	rel, err := filepath.Rel(project, path)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	path, err = filepath.Abs(path)
+	if err != nil || !pathWithin(project, path) {
 		return "", errors.New("源码路径超出重构工程")
 	}
+	ancestor := path
+	for {
+		info, statErr := os.Lstat(ancestor)
+		if statErr == nil {
+			if info.Mode()&os.ModeSymlink != 0 {
+				return "", errors.New("源码路径不允许经过符号链接或重解析点")
+			}
+			break
+		}
+		if !os.IsNotExist(statErr) {
+			return "", statErr
+		}
+		parent := filepath.Dir(ancestor)
+		if parent == ancestor || !pathWithin(project, parent) {
+			return "", errors.New("源码路径超出重构工程")
+		}
+		ancestor = parent
+	}
+	realAncestor, err := filepath.EvalSymlinks(ancestor)
+	if err != nil || !pathWithin(realProject, realAncestor) {
+		return "", errors.New("源码路径真实位置超出重构工程")
+	}
 	return path, nil
+}
+
+func pathWithin(root, path string) bool {
+	rel, err := filepath.Rel(root, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func sourceEditable(path string) bool {
 	name := filepath.Base(path)
 	extension := strings.ToLower(filepath.Ext(name))
 	return name == "CMakeLists.txt" || map[string]bool{".c": true, ".h": true, ".cc": true, ".cpp": true, ".hpp": true, ".md": true, ".py": true, ".java": true, ".kt": true, ".smali": true, ".xml": true, ".json": true, ".js": true, ".ts": true, ".html": true, ".css": true, ".gradle": true, ".properties": true, ".txt": true}[extension]
+}
+
+func skipSourceFile(path string) bool {
+	base := filepath.Base(path)
+	return base == "SOURCE_TREE.json" || base == "BUILD_STATUS.json"
+}
+
+func copyProjectPath(project, sourcePath, target string) error {
+	dest, err := safeProjectFile(project, target)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return filepath.Walk(sourcePath, func(path string, fileInfo os.FileInfo, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if fileInfo.Mode()&os.ModeSymlink != 0 {
+				return errors.New("不允许复制包含符号链接或重解析点的源码目录")
+			}
+			rel, relErr := filepath.Rel(sourcePath, path)
+			if relErr != nil {
+				return relErr
+			}
+			out := filepath.Join(dest, rel)
+			if fileInfo.IsDir() {
+				return os.MkdirAll(out, 0755)
+			}
+			data, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
+			if err := os.MkdirAll(filepath.Dir(out), 0755); err != nil {
+				return err
+			}
+			return os.WriteFile(out, data, 0600)
+		})
+	}
+	data, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return err
+	}
+	if err = os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(dest, data, 0600)
+}
+
+func moveProjectPath(project, sourcePath, target string) error {
+	dest, err := safeProjectFile(project, target)
+	if err != nil {
+		return err
+	}
+	if err = os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+		return err
+	}
+	return os.Rename(sourcePath, dest)
+}
+
+func durationSince(startedAt, endedAt string) string {
+	start, err1 := time.Parse(time.RFC3339Nano, startedAt)
+	end, err2 := time.Parse(time.RFC3339Nano, endedAt)
+	if err1 != nil || err2 != nil {
+		return ""
+	}
+	return end.Sub(start).String()
 }
 
 func relativeTo(root, path string) string {
@@ -1210,6 +2213,244 @@ func (s *Server) flowTemplates(w http.ResponseWriter, r *http.Request) {
 	}})
 }
 
+func newOrchestrationState(experiment Experiment) *OrchestrationState {
+	return &OrchestrationState{
+		Version: 1,
+		Flow:    OrchestrationFlow{ID: experiment.ID, Title: experiment.Name, Status: experiment.Status, CreatedAt: experiment.CreatedAt, UpdatedAt: experiment.UpdatedAt},
+		Tasks:   []OrchestrationTask{{ID: experiment.ID, Title: experiment.Name, Status: experiment.Status, Input: experiment.Sample, Result: orchestrationResult(experiment)}},
+		Subtasks: []OrchestrationSubtask{
+			{ID: experiment.ID + "-subtask-1", TaskID: experiment.ID, Title: "证据与静态分析", Description: "收集目标文件、字符串、导入和基础分析证据", Status: "waiting", Result: "等待执行"},
+			{ID: experiment.ID + "-subtask-2", TaskID: experiment.ID, Title: "语义与源码重构", Description: "生成语义中间表示和可编辑源码工程", Status: "waiting", Result: "等待前置阶段"},
+			{ID: experiment.ID + "-subtask-3", TaskID: experiment.ID, Title: "构建与行为验证", Description: "验证重构工程的构建和行为等价性", Status: "waiting", Result: "等待前置阶段"},
+		},
+		ToolCalls: []OrchestrationToolCall{}, UpdatedAt: experiment.UpdatedAt,
+	}
+}
+
+func (s *Server) ensureOrchestrationState(experiment Experiment, events []Event) Experiment {
+	if experiment.Orchestration == nil {
+		experiment.Orchestration = newOrchestrationState(experiment)
+	}
+	state := experiment.Orchestration
+	for idx := range state.ToolCalls {
+		normalizeToolCall(&state.ToolCalls[idx])
+	}
+	state.Flow.Status = experiment.Status
+	state.Flow.Title = experiment.Name
+	state.Flow.UpdatedAt = experiment.UpdatedAt
+	if len(state.Tasks) == 0 {
+		state.Tasks = newOrchestrationState(experiment).Tasks
+	}
+	state.Tasks[0].Status = experiment.Status
+	state.Tasks[0].Title = experiment.Name
+	state.Tasks[0].Input = experiment.Sample
+	state.Tasks[0].Result = orchestrationResult(experiment)
+	for _, event := range events {
+		if event.Sequence <= state.LastEventSequence {
+			continue
+		}
+		applyOrchestrationEvent(state, event)
+		state.LastEventSequence = event.Sequence
+	}
+	state.UpdatedAt = experiment.UpdatedAt
+	return experiment
+}
+
+func applyOrchestrationEvent(state *OrchestrationState, event Event) {
+	if state == nil || len(state.Subtasks) < 3 {
+		return
+	}
+	if strings.HasPrefix(event.Type, "tool_call_") {
+		return
+	}
+	setSubtask := func(index int, status, result string) {
+		state.Subtasks[index].Status = status
+		state.Subtasks[index].Result = result
+		state.Subtasks[index].UpdatedAt = event.Timestamp
+	}
+	switch {
+	case event.Type == "queued":
+		setSubtask(0, "waiting", "等待执行")
+	case event.Type == "started" || event.Type == "progress" || event.Type == "provider_broker_started" || event.Type == "provider_fallback":
+		setSubtask(0, "running", event.Message)
+	case event.Type == "result_summary":
+		setSubtask(0, "finished", event.Message)
+		setSubtask(1, "running", "开始生成语义与源码工程")
+	case event.Type == "project_readiness" || strings.HasPrefix(event.Type, "model_") || event.Type == "model_reconstruction_recorded":
+		setSubtask(0, "finished", "静态分析证据已记录")
+		setSubtask(1, "running", event.Message)
+	case event.Type == "build_started" || strings.HasPrefix(event.Type, "automated_build") || event.Type == "build_repair_recorded":
+		setSubtask(0, "finished", "静态分析证据已记录")
+		setSubtask(1, "finished", "源码工程已生成")
+		setSubtask(2, "running", event.Message)
+	case event.Type == "build_completed" || strings.HasPrefix(event.Type, "behavior_") || event.Type == "behavior_repair_recorded":
+		setSubtask(0, "finished", "静态分析证据已记录")
+		setSubtask(1, "finished", "源码工程已生成")
+		setSubtask(2, event.Status, event.Message)
+	case event.Status == "failed" || event.Status == "cancelled":
+		for index := range state.Subtasks {
+			if state.Subtasks[index].Status == "running" {
+				setSubtask(index, event.Status, event.Message)
+			}
+		}
+	}
+	controlEvent := strings.HasPrefix(event.Type, "tool_call_")
+	if !controlEvent && (strings.Contains(event.Type, "model") || strings.Contains(event.Type, "provider") || strings.Contains(event.Type, "tool")) {
+		toolCallID := fmt.Sprintf("%s-tool-%d", state.Flow.ID, event.Sequence)
+		state.ToolCalls = append(state.ToolCalls, OrchestrationToolCall{
+			ID:        toolCallID,
+			RootID:    toolCallID,
+			Attempt:   1,
+			Name:      event.Type,
+			Status:    event.Status,
+			Result:    event.Message,
+			Timestamp: event.Timestamp,
+			StartedAt: event.Timestamp,
+			EndedAt:   event.Timestamp,
+			Duration:  "0s",
+			Args:      event.Data,
+		})
+	}
+}
+
+func (s *Server) persistOrchestrationEvent(id string, event Event) {
+	experiment, err := s.loadExperiment(id)
+	if err != nil {
+		return
+	}
+	experiment = s.ensureOrchestrationState(experiment, []Event{event})
+	if err := s.saveExperiment(experiment); err != nil {
+		log.Printf("persist orchestration state failed for experiment %s: %v", id, err)
+	}
+}
+
+func (s *Server) orchestration(w http.ResponseWriter, r *http.Request, id string) {
+	experiment, err := s.loadExperiment(id)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	events, err := s.events(id)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	root := filepath.Join(s.cfg.Workspace, "experiments", id, "analysis")
+	files := s.orchestrationFiles(root)
+	state := s.ensureOrchestrationState(experiment, events).Orchestration
+	logs := []map[string]any{}
+	for _, event := range events {
+		logs = append(logs, map[string]any{
+			"id": fmt.Sprintf("%s-%d", id, event.Sequence), "type": orchestrationLogType(event.Type),
+			"message": event.Message, "status": event.Status, "timestamp": event.Timestamp,
+		})
+	}
+	if state == nil {
+		state = newOrchestrationState(experiment)
+	}
+	flow := map[string]any{"id": state.Flow.ID, "title": state.Flow.Title, "status": state.Flow.Status, "created_at": state.Flow.CreatedAt, "updated_at": state.Flow.UpdatedAt}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"flow": flow, "tasks": state.Tasks, "subtasks": state.Subtasks,
+		"tool_calls": state.ToolCalls, "logs": logs, "files": files,
+		"generated_at": now(),
+	})
+}
+
+func orchestrationLogType(eventType string) string {
+	switch {
+	case eventType == "output" || strings.Contains(eventType, "terminal"):
+		return "terminal"
+	case strings.Contains(eventType, "model") || strings.Contains(eventType, "provider") || strings.Contains(eventType, "tool"):
+		return "tool"
+	case strings.Contains(eventType, "build") || strings.Contains(eventType, "behavior") || strings.Contains(eventType, "validation"):
+		return "validation"
+	default:
+		return "message"
+	}
+}
+
+func orchestrationResult(experiment Experiment) string {
+	if experiment.Error != "" {
+		return experiment.Error
+	}
+	if experiment.Summary != nil {
+		return "分析结果已归档"
+	}
+	return statusText(experiment.Status)
+}
+
+func getOrchestrationToolCallDuration(startedAt, endedAt string) string {
+	if startedAt == "" || endedAt == "" {
+		return ""
+	}
+	start, err1 := time.Parse(time.RFC3339Nano, startedAt)
+	end, err2 := time.Parse(time.RFC3339Nano, endedAt)
+	if err1 != nil || err2 != nil {
+		return ""
+	}
+	return end.Sub(start).String()
+}
+
+func statusText(value string) string {
+	return map[string]string{"queued": "已排队", "planned": "已计划", "running": "运行中", "completed": "已完成", "partial": "部分完成", "failed": "失败", "cancelled": "已取消"}[value]
+}
+
+func orchestrationStages(experiment Experiment, events []Event, sourceGenerated bool) [][4]string {
+	stages := [][4]string{
+		{"证据与静态分析", "收集目标文件、字符串、导入和基础分析证据", "waiting", "等待执行"},
+		{"语义与源码重构", "生成语义中间表示和可编辑源码工程", "waiting", "等待前置阶段"},
+		{"构建与行为验证", "验证重构工程的构建和行为等价性", "waiting", "等待前置阶段"},
+	}
+	if experiment.Status == "queued" || experiment.Status == "planned" {
+		return stages
+	}
+	stages[0][2], stages[0][3] = "finished", "分析证据已记录"
+	if sourceGenerated {
+		stages[1][2], stages[1][3] = "finished", "源码工程已生成"
+	} else if experiment.Status == "running" {
+		stages[1][2], stages[1][3] = "running", "源码重构阶段进行中"
+	}
+	if experiment.Reconstruction.CompleteBuildable {
+		stages[2][2], stages[2][3] = "finished", "构建与行为验证均通过"
+	} else if experiment.Reconstruction.BuildPassed || experiment.Reconstruction.BehaviorPassed || hasEventType(events, "project_readiness") {
+		stages[2][2], stages[2][3] = "running", "部分验证证据已记录"
+	} else if experiment.Status == "failed" || experiment.Status == "partial" {
+		stages[2][2], stages[2][3] = "failed", "验证门禁尚未全部通过"
+	}
+	return stages
+}
+
+func hasEventType(events []Event, kind string) bool {
+	for _, event := range events {
+		if event.Type == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) orchestrationFiles(root string) []map[string]any {
+	files := []map[string]any{}
+	if _, err := os.Stat(root); err != nil {
+		return files
+	}
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil || info == nil || info.IsDir() || len(files) >= 500 {
+			return nil
+		}
+		if strings.Contains(filepath.ToSlash(path), "/.build/") || strings.Contains(filepath.ToSlash(path), "/CMakeFiles/") {
+			return nil
+		}
+		rel, err := filepath.Rel(s.cfg.Workspace, path)
+		if err != nil {
+			return nil
+		}
+		files = append(files, map[string]any{"id": filepath.ToSlash(rel), "name": info.Name(), "path": filepath.ToSlash(rel), "size": info.Size(), "is_dir": false, "modified_at": info.ModTime().UTC().Format(time.RFC3339Nano)})
+		return nil
+	})
+	return files
+}
+
 func (s *Server) eventStream(w http.ResponseWriter, r *http.Request, id string) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -1232,9 +2473,6 @@ func (s *Server) eventStream(w http.ResponseWriter, r *http.Request, id string) 
 				continue
 			}
 			last = event.Sequence
-			if event.Type == "output" {
-				continue
-			}
 			payload, _ := json.Marshal(event)
 			fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", event.Sequence, event.Type, payload)
 			flusher.Flush()
@@ -1301,15 +2539,42 @@ func (s *Server) startConfirmed(id string, r *http.Request) (Experiment, error) 
 			cancel()
 			return x, errors.New("job execution was already claimed")
 		}
-		if _, txErr = insertEventTx(tx, id, "execution_confirmed", "completed", "人工确认已记录", eventData); txErr != nil {
+		confirmedEvent, txErr := insertEventRecordTx(tx, id, "execution_confirmed", "completed", "人工确认已记录", eventData)
+		if txErr != nil {
 			cancel()
 			return x, txErr
 		}
-		if _, txErr = insertEventTx(tx, id, "started", "running", "任务执行器已启动", nil); txErr != nil {
+		startedEvent, txErr := insertEventRecordTx(tx, id, "started", "running", "任务执行器已启动", nil)
+		if txErr != nil {
 			cancel()
 			return x, txErr
 		}
-		if txErr = tx.Commit(); txErr != nil {
+		x = s.ensureOrchestrationState(x, []Event{confirmedEvent, startedEvent})
+		var fencingToken int64
+		leaseUntil := time.Now().UTC().Add(30 * time.Second)
+		txErr = tx.QueryRowContext(r.Context(), `INSERT INTO worker_leases(experiment_id,workspace_id,owner_id,heartbeat_at,expires_at,fencing_token,version)
+			VALUES($1,$2,$3,now(),$4,1,1)
+			ON CONFLICT(experiment_id) DO UPDATE SET owner_id=excluded.owner_id,heartbeat_at=excluded.heartbeat_at,expires_at=excluded.expires_at,
+				fencing_token=worker_leases.fencing_token+1,version=worker_leases.version+1
+			WHERE worker_leases.expires_at <= now()
+			RETURNING fencing_token`, id, s.cfg.Workspace, s.workerOwner, leaseUntil).Scan(&fencingToken)
+		if txErr != nil {
+			cancel()
+			if errors.Is(txErr, sql.ErrNoRows) {
+				return x, errors.New("job execution lease is held by another worker")
+			}
+			return x, txErr
+		}
+		if x.Metadata == nil {
+			x.Metadata = map[string]any{}
+		}
+		x.Metadata["worker_fencing_token"] = fencingToken
+		payload, txErr = json.Marshal(x)
+		if txErr != nil {
+			cancel()
+			return x, txErr
+		}
+		if _, txErr = tx.ExecContext(r.Context(), `UPDATE experiments SET updated_at=$1,payload=$2::jsonb WHERE id=$3 AND workspace_id=$4 AND status='running'`, x.UpdatedAt, string(payload), id, s.cfg.Workspace); txErr != nil {
 			cancel()
 			return x, txErr
 		}
@@ -1321,6 +2586,13 @@ func (s *Server) startConfirmed(id string, r *http.Request) (Experiment, error) 
 		}
 		s.running[id] = cancel
 		s.mu.Unlock()
+		if txErr = tx.Commit(); txErr != nil {
+			s.mu.Lock()
+			delete(s.running, id)
+			s.mu.Unlock()
+			cancel()
+			return x, txErr
+		}
 	} else {
 		s.mu.Lock()
 		if _, exists := s.running[id]; exists {
@@ -1360,7 +2632,150 @@ func (s *Server) startConfirmed(id string, r *http.Request) (Experiment, error) 
 	}()
 	return x, nil
 }
+func experimentFencingToken(x Experiment) int64 {
+	if x.Metadata == nil {
+		return 0
+	}
+	switch value := x.Metadata["worker_fencing_token"].(type) {
+	case int64:
+		return value
+	case int:
+		return int64(value)
+	case float64:
+		return int64(value)
+	case json.Number:
+		parsed, _ := value.Int64()
+		return parsed
+	default:
+		return 0
+	}
+}
+
+func (s *Server) heartbeatWorkerLease(ctx context.Context, cancel context.CancelFunc, experimentID string, fencingToken int64) {
+	if s.db == nil || fencingToken <= 0 {
+		return
+	}
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			result, err := s.db.ExecContext(ctx, `UPDATE worker_leases SET heartbeat_at=now(),expires_at=now()+interval '30 seconds',version=version+1
+				WHERE experiment_id=$1 AND workspace_id=$2 AND owner_id=$3 AND fencing_token=$4 AND expires_at>now()`, experimentID, s.cfg.Workspace, s.workerOwner, fencingToken)
+			if err != nil {
+				log.Printf("worker lease heartbeat failed for experiment %s: %v", experimentID, err)
+				cancel()
+				return
+			}
+			if rows, _ := result.RowsAffected(); rows != 1 {
+				log.Printf("worker lease lost for experiment %s", experimentID)
+				cancel()
+				return
+			}
+		}
+	}
+}
+
+func (s *Server) releaseWorkerLease(experimentID string, fencingToken int64) {
+	if s.db == nil || fencingToken <= 0 {
+		return
+	}
+	_, _ = s.db.Exec(`DELETE FROM worker_leases WHERE experiment_id=$1 AND workspace_id=$2 AND owner_id=$3 AND fencing_token=$4`, experimentID, s.cfg.Workspace, s.workerOwner, fencingToken)
+}
+
+func (s *Server) finalizeWorkerExperiment(x Experiment, eventMessage string, fencingToken int64) error {
+	if s.db == nil {
+		if _, err := s.mutateExperiment(x.ID, func(current *Experiment) error {
+			if current.Status != "running" {
+				return errors.New("worker finalization rejected by terminal status")
+			}
+			*current = x
+			return nil
+		}); err != nil {
+			return err
+		}
+		s.appendEvent(x.ID, x.Status, x.Status, eventMessage, nil)
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var currentPayload []byte
+	var currentStatus string
+	if err = tx.QueryRow(`SELECT status,payload FROM experiments WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, x.ID, s.cfg.Workspace).Scan(&currentStatus, &currentPayload); err != nil {
+		return err
+	}
+	if currentStatus != "running" {
+		return errors.New("worker finalization rejected by terminal status")
+	}
+	var validLease bool
+	if err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM worker_leases WHERE experiment_id=$1 AND workspace_id=$2 AND owner_id=$3 AND fencing_token=$4 AND expires_at>now())`, x.ID, s.cfg.Workspace, s.workerOwner, fencingToken).Scan(&validLease); err != nil {
+		return err
+	}
+	if !validLease {
+		return errors.New("worker finalization rejected by fencing token")
+	}
+	var current Experiment
+	if err = json.Unmarshal(currentPayload, &current); err != nil {
+		return err
+	}
+	terminalEvent, err := insertEventRecordTx(tx, x.ID, x.Status, x.Status, eventMessage, nil)
+	if err != nil {
+		return err
+	}
+	current.Status = x.Status
+	current.UpdatedAt = x.UpdatedAt
+	current.Error = x.Error
+	current.Artifacts = x.Artifacts
+	current.Summary = x.Summary
+	current.Metadata = x.Metadata
+	current.History = x.History
+	current.Reconstruction = x.Reconstruction
+	current = s.ensureOrchestrationState(current, []Event{terminalEvent})
+	x = current
+	payload, err := json.Marshal(x)
+	if err != nil {
+		return err
+	}
+	result, err := tx.Exec(`UPDATE experiments SET status=$1,updated_at=$2,payload=$3::jsonb WHERE id=$4 AND workspace_id=$5 AND status='running'`, x.Status, x.UpdatedAt, string(payload), x.ID, s.cfg.Workspace)
+	if err != nil {
+		return err
+	}
+	if rows, rowsErr := result.RowsAffected(); rowsErr != nil || rows != 1 {
+		return errors.New("worker finalization lost its state claim")
+	}
+	if _, err = tx.Exec(`DELETE FROM worker_leases WHERE experiment_id=$1 AND workspace_id=$2 AND owner_id=$3 AND fencing_token=$4`, x.ID, s.cfg.Workspace, s.workerOwner, fencingToken); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s *Server) run(ctx context.Context, x Experiment) {
+	fencingToken := experimentFencingToken(x)
+	leaseContext, stopHeartbeat := context.WithCancel(ctx)
+	defer func() {
+		stopHeartbeat()
+		s.releaseWorkerLease(x.ID, fencingToken)
+		s.mu.Lock()
+		delete(s.running, x.ID)
+		s.mu.Unlock()
+	}()
+	if s.db != nil {
+		go s.heartbeatWorkerLease(leaseContext, stopHeartbeat, x.ID, fencingToken)
+	}
+	ctx = leaseContext
+	workerEvent := func(kind, status, message string, data map[string]any) bool {
+		if eventErr := s.appendWorkerEvent(x.ID, kind, status, message, data, fencingToken); eventErr != nil {
+			log.Printf("worker event %s rejected for experiment %s: %v", kind, x.ID, eventErr)
+			stopHeartbeat()
+			return false
+		}
+		return true
+	}
 	out := filepath.Join(s.cfg.Workspace, "experiments", x.ID, "analysis")
 	_ = os.MkdirAll(out, 0755)
 	args := analysisArgs(x, out)
@@ -1375,13 +2790,15 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 	workerNetwork := "none"
 	var brokerCancel context.CancelFunc
 	if selected.Kind == "openai-compatible" {
-		if s.cfg.SandboxRuntime != "docker" && s.cfg.SandboxRuntime != "podman" {
-			err := errors.New("external model providers require a Docker or Podman worker so credentials remain outside the worker")
+		if s.cfg.RunnerURL == "" && s.cfg.SandboxRuntime != "docker" && s.cfg.SandboxRuntime != "podman" {
+			err := errors.New("external model providers require an isolated runner so credentials remain outside the worker")
 			latest, loadErr := s.loadExperiment(x.ID)
 			if loadErr == nil {
 				latest = s.status(latest, "failed", err.Error())
 				latest.Error = err.Error()
-				_ = s.saveExperiment(latest)
+				if finalizeErr := s.finalizeWorkerExperiment(latest, "分析任务失败", fencingToken); finalizeErr != nil {
+					log.Printf("finalize experiment %s failed; terminal event suppressed: %v", x.ID, finalizeErr)
+				}
 			}
 			return
 		}
@@ -1394,7 +2811,9 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 			if loadErr == nil {
 				latest = s.status(latest, "failed", err.Error())
 				latest.Error = err.Error()
-				_ = s.saveExperiment(latest)
+				if finalizeErr := s.finalizeWorkerExperiment(latest, "分析任务失败", fencingToken); finalizeErr != nil {
+					log.Printf("finalize experiment %s failed; terminal event suppressed: %v", x.ID, finalizeErr)
+				}
 			}
 			return
 		}
@@ -1402,7 +2821,7 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 		brokerCancel = cancel
 		go broker.run(brokerContext)
 		workerBrokerRoot := brokerRoot
-		if s.cfg.SandboxRuntime == "docker" || s.cfg.SandboxRuntime == "podman" {
+		if s.cfg.RunnerURL != "" || s.cfg.SandboxRuntime == "docker" || s.cfg.SandboxRuntime == "podman" {
 			relativeBroker, relativeErr := filepath.Rel(s.cfg.Workspace, brokerRoot)
 			if relativeErr != nil || relativeBroker == ".." || strings.HasPrefix(relativeBroker, ".."+string(filepath.Separator)) {
 				cancel()
@@ -1420,24 +2839,24 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 			"REVERSE_ANALYZER_PROVIDER_MAX_OUTPUT_TOKENS=" + env("REVERSE_ANALYZER_PROVIDER_MAX_OUTPUT_TOKENS", "4096"),
 		}
 		envNames = []string{"REVERSE_ANALYZER_PROVIDER", "REVERSE_ANALYZER_WORKER_NETWORK", "REVERSE_ANALYZER_OPENAI_ENABLED", "OPENAI_MODEL", "REVERSE_ANALYZER_PROVIDER_BROKER_DIR", "REVERSE_ANALYZER_PROVIDER_TIMEOUT", "REVERSE_ANALYZER_PROVIDER_MAX_OUTPUT_TOKENS"}
-		s.appendEvent(x.ID, "provider_broker_started", "running", "模型请求代理已启动，分析 worker 保持无网络", map[string]any{"provider": selected.Name, "model": selected.Model, "worker_network": "none", "broker": true})
+		if !workerEvent("provider_broker_started", "running", "模型请求代理已启动，分析 worker 保持无网络", map[string]any{"provider": selected.Name, "model": selected.Model, "worker_network": "none", "broker": true}) {
+			cancel()
+			return
+		}
 	}
 	if brokerCancel != nil {
 		defer brokerCancel()
 	}
-	cmd := s.workerCommandWithNetwork(ctx, args, envNames, workerNetwork)
-	cmd.Dir = s.cfg.Workspace
-	cmd.Env = append(os.Environ(), processEnv...)
-	if fallback {
-		s.appendEvent(x.ID, "provider_fallback", "running", "请求的 Provider 不可用，已回退到 "+selected.Name, map[string]any{"requested": requested, "selected": selected.Name})
+	if fallback && !workerEvent("provider_fallback", "running", "请求的 Provider 不可用，已回退到 "+selected.Name, map[string]any{"requested": requested, "selected": selected.Name}) {
+		return
 	}
-	pipe, _ := cmd.StdoutPipe()
-	cmd.Stderr = cmd.Stdout
-	err := cmd.Start()
+	execution, err := s.startWorkerExecution(ctx, args, processEnv, envNames, workerNetwork)
 	if err == nil {
 		progressDone := make(chan struct{})
 		startedAt := time.Now()
-		s.appendEvent(x.ID, "progress", "running", "分析引擎已启动，正在准备输入", map[string]any{"percent": 28, "estimated": true, "elapsed_seconds": 0})
+		if !workerEvent("progress", "running", "分析引擎已启动，正在准备输入", map[string]any{"percent": 28, "estimated": true, "elapsed_seconds": 0}) {
+			return
+		}
 		go func() {
 			ticker := time.NewTicker(5 * time.Second)
 			defer ticker.Stop()
@@ -1445,14 +2864,19 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 				select {
 				case <-progressDone:
 					return
+				case <-ctx.Done():
+					return
 				case <-ticker.C:
 					seconds := int(time.Since(startedAt).Seconds())
 					percent := min(88, 28+step*2)
-					s.appendEvent(x.ID, "progress", "running", fmt.Sprintf("分析引擎运行中，已用时 %d 秒", seconds), map[string]any{"percent": percent, "estimated": true, "elapsed_seconds": seconds})
+					if !workerEvent("progress", "running", fmt.Sprintf("分析引擎运行中，已用时 %d 秒", seconds), map[string]any{"percent": percent, "estimated": true, "elapsed_seconds": seconds}) {
+						return
+					}
 				}
 			}
 		}()
-		scanner := bufio.NewScanner(pipe)
+		defer execution.Output.Close()
+		scanner := bufio.NewScanner(execution.Output)
 		scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 		outputPath := filepath.Join(out, "worker-output.json")
 		outputFile, outputErr := os.OpenFile(outputPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
@@ -1474,13 +2898,12 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 			_ = outputWriter.Flush()
 			_ = outputFile.Close()
 		}
-		err = cmd.Wait()
+		err = execution.Wait()
 		close(progressDone)
-		s.appendEvent(x.ID, "result_summary", "running", fmt.Sprintf("执行日志已归档：%d 行，%s", outputLines, byteSize(outputBytes)), map[string]any{"output_lines": outputLines, "log_bytes": outputBytes, "artifact": filepath.ToSlash(filepath.Join("experiments", x.ID, "analysis", "worker-output.json"))})
+		if !workerEvent("result_summary", "running", fmt.Sprintf("执行日志已归档：%d 行，%s", outputLines, byteSize(outputBytes)), map[string]any{"output_lines": outputLines, "log_bytes": outputBytes, "artifact": filepath.ToSlash(filepath.Join("experiments", x.ID, "analysis", "worker-output.json"))}) {
+			return
+		}
 	}
-	s.mu.Lock()
-	delete(s.running, x.ID)
-	s.mu.Unlock()
 	latest, e := s.loadExperiment(x.ID)
 	if e != nil {
 		return
@@ -1512,7 +2935,9 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 		latest.Reconstruction.StructureComplete, _ = readiness["structure_complete"].(bool)
 		latest.Reconstruction.DependenciesLocked, _ = readiness["dependencies_locked"].(bool)
 		latest.Reconstruction = reconstructionState(latest.Reconstruction)
-		s.appendEvent(x.ID, "project_readiness", "completed", "工程结构与依赖锁定状态已记录", readiness)
+		if !workerEvent("project_readiness", "completed", "工程结构与依赖锁定状态已记录", readiness) {
+			return
+		}
 	}
 	if buildState, found := loadAutomatedBuildResult(out); found {
 		gateObserved = true
@@ -1524,7 +2949,9 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 		latest.Reconstruction = applyAutomatedBuildState(latest.Reconstruction, buildState)
 		latest.Reconstruction = reconstructionState(latest.Reconstruction)
 		eventType := "automated_build_" + strings.ReplaceAll(fmt.Sprint(buildState["status"]), "-", "_")
-		s.appendEvent(x.ID, eventType, fmt.Sprint(buildState["status"]), "隔离构建结果已记录", buildState)
+		if !workerEvent(eventType, fmt.Sprint(buildState["status"]), "隔离构建结果已记录", buildState) {
+			return
+		}
 	}
 	if behaviorState, found := loadBehaviorValidationResult(out); found {
 		gateObserved = true
@@ -1535,7 +2962,9 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 		latest.Metadata["behavior_validation"] = behaviorState
 		latest.Reconstruction = applyBehaviorValidationState(latest.Reconstruction, behaviorState)
 		eventType := "behavior_" + strings.ReplaceAll(fmt.Sprint(behaviorState["status"]), "-", "_")
-		s.appendEvent(x.ID, eventType, fmt.Sprint(behaviorState["status"]), "原程序与重构程序行为对比结果已记录", behaviorState)
+		if !workerEvent(eventType, fmt.Sprint(behaviorState["status"]), "原程序与重构程序行为对比结果已记录", behaviorState) {
+			return
+		}
 	}
 	if repairState, found := loadRepairLoopSummary(out, "build"); found {
 		exposeArtifactPaths(repairState, out, s.cfg.Workspace)
@@ -1543,7 +2972,9 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 			latest.Metadata = map[string]any{}
 		}
 		latest.Metadata["build_repair_loop"] = repairState
-		s.appendEvent(x.ID, "build_repair_recorded", fmt.Sprint(repairState["status"]), "编译修复循环已记录", repairState)
+		if !workerEvent("build_repair_recorded", fmt.Sprint(repairState["status"]), "编译修复循环已记录", repairState) {
+			return
+		}
 	}
 	if repairState, found := loadRepairLoopSummary(out, "behavior"); found {
 		exposeArtifactPaths(repairState, out, s.cfg.Workspace)
@@ -1551,8 +2982,15 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 			latest.Metadata = map[string]any{}
 		}
 		latest.Metadata["behavior_repair_loop"] = repairState
-		s.appendEvent(x.ID, "behavior_repair_recorded", fmt.Sprint(repairState["status"]), "行为修复循环已记录", repairState)
+		if !workerEvent("behavior_repair_recorded", fmt.Sprint(repairState["status"]), "行为修复循环已记录", repairState) {
+			return
+		}
 	}
+	providerUsageName := selected.Name
+	providerUsageRequests := int64(1)
+	providerUsageFailed := err != nil || ctx.Err() == context.DeadlineExceeded
+	providerUsageInputTokens := int64(0)
+	providerUsageOutputTokens := int64(0)
 	modelState, modelFound := loadModelReconstruction(out)
 	if modelFound {
 		exposeArtifactPaths(modelState, out, s.cfg.Workspace)
@@ -1565,22 +3003,33 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 		inputTokens := int64(numberValue(modelState["input_tokens"]))
 		outputTokens := int64(numberValue(modelState["output_tokens"]))
 		failed := status == "failed"
-		s.recordProviderUsage(fmt.Sprint(modelState["provider"]), calls, failed, inputTokens, outputTokens)
+		providerUsageName = fmt.Sprint(modelState["provider"])
+		providerUsageRequests = calls
+		providerUsageFailed = failed
+		providerUsageInputTokens = inputTokens
+		providerUsageOutputTokens = outputTokens
 		eventType := "model_completed"
 		if status != "executed" {
 			eventType = "model_" + strings.ReplaceAll(status, "-", "_")
 			latest.Reconstruction.BlockingReasons = append(latest.Reconstruction.BlockingReasons, map[string]string{"failed": "model_reconstruction_failed", "dependency-gated": "model_provider_not_ready"}[status])
 			latest.Reconstruction.CompleteBuildable = false
 		}
-		s.appendEvent(x.ID, eventType, status, "模型重构阶段已记录", modelState)
-	} else {
-		s.recordProvider(selected.Name, err != nil || ctx.Err() == context.DeadlineExceeded)
+		if !workerEvent(eventType, status, "模型重构阶段已记录", modelState) {
+			return
+		}
 	}
 	if gateObserved && !latest.Reconstruction.CompleteBuildable && latest.Status == "completed" {
 		latest = s.status(latest, "partial", "reconstruction gates remain incomplete")
 	}
-	_ = s.saveExperiment(latest)
-	s.appendEvent(x.ID, latest.Status, latest.Status, map[string]string{"completed": "分析任务已完成", "partial": "分析已结束，完整构建门禁尚未通过", "failed": "分析任务失败"}[latest.Status], nil)
+	eventMessage := map[string]string{"completed": "分析任务已完成", "partial": "分析已结束，完整构建门禁尚未通过", "failed": "分析任务失败", "cancelled": "分析任务已取消"}[latest.Status]
+	if eventMessage == "" {
+		eventMessage = "分析任务状态已更新"
+	}
+	if finalizeErr := s.finalizeWorkerExperiment(latest, eventMessage, fencingToken); finalizeErr != nil {
+		log.Printf("finalize experiment %s failed; terminal event suppressed: %v", x.ID, finalizeErr)
+		return
+	}
+	s.recordProviderUsage(providerUsageName, providerUsageRequests, providerUsageFailed, providerUsageInputTokens, providerUsageOutputTokens)
 }
 
 func workerFailureDiagnostics(path string) string {
@@ -2256,6 +3705,69 @@ func byteSize(size int64) string {
 	return fmt.Sprintf("%.1f MB", float64(size)/(1024*1024))
 }
 
+func (s *Server) startWorkerExecution(ctx context.Context, pythonArgs, processEnv, envNames []string, network string) (workerExecution, error) {
+	if s.cfg.RunnerURL != "" {
+		environment := map[string]string{}
+		for _, assignment := range processEnv {
+			name, value, found := strings.Cut(assignment, "=")
+			if found {
+				environment[name] = value
+			}
+		}
+		return s.startRunnerJob(ctx, runnerJobRequest{Kind: "analysis", Args: pythonArgs, Env: environment, Network: network})
+	}
+	if s.cfg.Production {
+		return workerExecution{}, errors.New("isolated runner is not configured")
+	}
+	cmd := s.workerCommandWithNetwork(ctx, pythonArgs, envNames, network)
+	cmd.Dir = s.cfg.Workspace
+	cmd.Env = append(os.Environ(), processEnv...)
+	output, err := cmd.StdoutPipe()
+	if err != nil {
+		return workerExecution{}, err
+	}
+	cmd.Stderr = cmd.Stdout
+	if err = cmd.Start(); err != nil {
+		return workerExecution{}, err
+	}
+	return workerExecution{Output: output, Wait: cmd.Wait}, nil
+}
+
+func (s *Server) startRunnerJob(ctx context.Context, job runnerJobRequest) (workerExecution, error) {
+	if s.cfg.RunnerURL == "" || s.cfg.RunnerToken == "" {
+		return workerExecution{}, errors.New("isolated runner is not configured")
+	}
+	payload, err := json.Marshal(job)
+	if err != nil {
+		return workerExecution{}, err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.RunnerURL+"/v1/jobs/run", bytes.NewReader(payload))
+	if err != nil {
+		return workerExecution{}, err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Runner-Token", s.cfg.RunnerToken)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return workerExecution{}, err
+	}
+	if response.StatusCode != http.StatusOK {
+		defer response.Body.Close()
+		message, _ := io.ReadAll(io.LimitReader(response.Body, 64<<10))
+		return workerExecution{}, fmt.Errorf("runner rejected job: %s", strings.TrimSpace(string(message)))
+	}
+	return workerExecution{Output: response.Body, Wait: func() error {
+		if code := strings.TrimSpace(response.Trailer.Get("X-Runner-Exit-Code")); code != "" && code != "0" {
+			message := strings.TrimSpace(response.Trailer.Get("X-Runner-Error"))
+			if message == "" {
+				message = "runner job exited with code " + code
+			}
+			return errors.New(message)
+		}
+		return nil
+	}}, nil
+}
+
 func (s *Server) workerCommand(ctx context.Context, pythonArgs, envNames []string) *exec.Cmd {
 	return s.workerCommandWithNetwork(ctx, pythonArgs, envNames, "none")
 }
@@ -2317,7 +3829,19 @@ func (s *Server) cancelAudited(id string, r *http.Request, who *identity) (Exper
 		if err != nil || rows != 1 {
 			return x, errors.New("job cancellation was already claimed")
 		}
-		if _, err = insertEventTx(tx, id, "cancelled", "cancelled", "任务已取消", nil); err != nil {
+		cancelledEvent, err := insertEventRecordTx(tx, id, "cancelled", "cancelled", "任务已取消", nil)
+		if err != nil {
+			return x, err
+		}
+		x = s.ensureOrchestrationState(x, []Event{cancelledEvent})
+		payload, err = json.Marshal(x)
+		if err != nil {
+			return x, err
+		}
+		if _, err = tx.Exec(`UPDATE experiments SET updated_at=$1,payload=$2::jsonb WHERE id=$3 AND workspace_id=$4 AND status='cancelled'`, x.UpdatedAt, string(payload), id, s.cfg.Workspace); err != nil {
+			return x, err
+		}
+		if _, err = tx.Exec(`DELETE FROM worker_leases WHERE experiment_id=$1 AND workspace_id=$2`, id, s.cfg.Workspace); err != nil {
 			return x, err
 		}
 		if err = tx.Commit(); err != nil {
@@ -2906,7 +4430,11 @@ func (s *Server) catalog(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, payload)
 		return
 	}
-	skills := files(filepath.Join(s.cfg.Workspace, "reverse-skills"), "SKILL.md")
+	skillsRoot := strings.TrimSpace(os.Getenv("REVERSE_ANALYZER_SKILLS_DIR"))
+	if skillsRoot == "" {
+		skillsRoot = filepath.Join(s.cfg.Workspace, "reverse-skills")
+	}
+	skills := files(skillsRoot, "SKILL.md")
 	scripts := extensions(filepath.Join(s.cfg.Workspace, "scripts"), map[string]bool{".py": true, ".ps1": true, ".sh": true, ".cmd": true, ".bat": true})
 	deps := []map[string]any{}
 	var manifest map[string]any
@@ -3068,34 +4596,36 @@ func (s *Server) status(x Experiment, status string, detail any) Experiment {
 	x.Status = status
 	x.UpdatedAt = now()
 	x.History = append(x.History, map[string]any{"timestamp": x.UpdatedAt, "status": status, "detail": detail})
+	if x.Orchestration != nil {
+		x.Orchestration.Flow.Status = status
+		x.Orchestration.Flow.UpdatedAt = x.UpdatedAt
+		x.Orchestration.Tasks = ensureOrchestrationTasks(x.Orchestration.Tasks, x)
+		x.Orchestration.Tasks[0].Status = status
+		x.Orchestration.Tasks[0].Result = orchestrationResult(x)
+		x.Orchestration.UpdatedAt = x.UpdatedAt
+	}
 	return x
 }
+
+func ensureOrchestrationTasks(tasks []OrchestrationTask, experiment Experiment) []OrchestrationTask {
+	if len(tasks) > 0 {
+		return tasks
+	}
+	return newOrchestrationState(experiment).Tasks
+}
 func (s *Server) appendEvent(id, kind, status, message string, data map[string]any) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.db != nil && s.dbErr == nil {
-		tx, err := s.db.Begin()
+		event, err := s.appendDatabaseEvent(id, kind, status, message, data, nil)
 		if err != nil {
-			log.Printf("append event failed for experiment %s", id)
+			log.Printf("append event failed for experiment %s: %v", id, err)
 			return
 		}
-		defer tx.Rollback()
-		if _, err = tx.Exec(`SELECT 1 FROM experiments WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, id, s.cfg.Workspace); err != nil {
-			log.Printf("append event rejected for experiment %s", id)
-			return
-		}
-		sequence, err := insertEventTx(tx, id, kind, status, message, data)
-		if err != nil {
-			log.Printf("append event insert failed for experiment %s", id)
-			return
-		}
-		if err = tx.Commit(); err != nil {
-			log.Printf("append event commit failed for experiment %s", id)
-			return
-		}
-		s.eventSeq[id] = sequence
+		s.mu.Lock()
+		s.eventSeq[id] = event.Sequence
+		s.mu.Unlock()
 		return
 	}
+	s.mu.Lock()
 	sequence := s.eventSeq[id]
 	if sequence == 0 {
 		existing, _ := s.eventsUnlocked(id)
@@ -3110,26 +4640,111 @@ func (s *Server) appendEvent(id, kind, status, message string, data map[string]a
 	_ = os.MkdirAll(filepath.Dir(path), 0755)
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err == nil {
-		defer f.Close()
 		b, _ := json.Marshal(event)
 		_, _ = f.Write(append(b, '\n'))
+		_ = f.Close()
+	}
+	s.mu.Unlock()
+	s.refreshOrchestrationState(id)
+}
+
+func (s *Server) appendWorkerEvent(id, kind, status, message string, data map[string]any, fencingToken int64) error {
+	if s.db == nil {
+		s.appendEvent(id, kind, status, message, data)
+		return nil
+	}
+	event, err := s.appendDatabaseEvent(id, kind, status, message, data, &workerLeaseClaim{ownerID: s.workerOwner, fencingToken: fencingToken})
+	if err == nil {
+		s.mu.Lock()
+		s.eventSeq[id] = event.Sequence
+		s.mu.Unlock()
+	}
+	return err
+}
+
+func (s *Server) appendDatabaseEvent(id, kind, status, message string, data map[string]any, claim *workerLeaseClaim) (Event, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return Event{}, err
+	}
+	defer tx.Rollback()
+	var payload []byte
+	var experimentStatus string
+	if err = tx.QueryRow(`SELECT status,payload FROM experiments WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, id, s.cfg.Workspace).Scan(&experimentStatus, &payload); err != nil {
+		return Event{}, err
+	}
+	if claim != nil {
+		if experimentStatus != "running" {
+			return Event{}, errors.New("worker event rejected by terminal status")
+		}
+		var valid bool
+		if err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM worker_leases WHERE experiment_id=$1 AND workspace_id=$2 AND owner_id=$3 AND fencing_token=$4 AND expires_at>now())`, id, s.cfg.Workspace, claim.ownerID, claim.fencingToken).Scan(&valid); err != nil {
+			return Event{}, err
+		}
+		if !valid {
+			return Event{}, errors.New("worker event rejected by fencing token")
+		}
+	}
+	var experiment Experiment
+	if err = json.Unmarshal(payload, &experiment); err != nil {
+		return Event{}, err
+	}
+	event, err := insertEventRecordTx(tx, id, kind, status, message, data)
+	if err != nil {
+		return Event{}, err
+	}
+	experiment = s.ensureOrchestrationState(experiment, []Event{event})
+	payload, err = json.Marshal(experiment)
+	if err != nil {
+		return Event{}, err
+	}
+	result, err := tx.Exec(`UPDATE experiments SET status=$1,updated_at=$2,payload=$3::jsonb WHERE id=$4 AND workspace_id=$5`, experiment.Status, experiment.UpdatedAt, string(payload), id, s.cfg.Workspace)
+	if err != nil {
+		return Event{}, err
+	}
+	if rows, rowsErr := result.RowsAffected(); rowsErr != nil || rows != 1 {
+		return Event{}, errors.New("event orchestration projection was not persisted")
+	}
+	if err = tx.Commit(); err != nil {
+		return Event{}, err
+	}
+	return event, nil
+}
+
+func (s *Server) refreshOrchestrationState(id string) {
+	experiment, err := s.loadExperiment(id)
+	if err != nil {
+		return
+	}
+	events, err := s.events(id)
+	if err != nil {
+		return
+	}
+	experiment = s.ensureOrchestrationState(experiment, events)
+	if err := s.saveExperiment(experiment); err != nil {
+		log.Printf("persist orchestration state failed for experiment %s: %v", id, err)
 	}
 }
 
 func insertEventTx(tx *sql.Tx, id, kind, status, message string, data map[string]any) (int64, error) {
+	event, err := insertEventRecordTx(tx, id, kind, status, message, data)
+	return event.Sequence, err
+}
+
+func insertEventRecordTx(tx *sql.Tx, id, kind, status, message string, data map[string]any) (Event, error) {
 	var sequence int64
 	if err := tx.QueryRow(`SELECT COALESCE(MAX(sequence),0)+1 FROM flow_events WHERE experiment_id=$1`, id).Scan(&sequence); err != nil {
-		return 0, err
+		return Event{}, err
 	}
 	event := Event{sequence, now(), kind, status, message, data}
 	payload, err := json.Marshal(event)
 	if err != nil {
-		return 0, err
+		return Event{}, err
 	}
 	if _, err = tx.Exec(`INSERT INTO flow_events(experiment_id,sequence,payload) VALUES($1,$2,$3::jsonb)`, id, sequence, string(payload)); err != nil {
-		return 0, err
+		return Event{}, err
 	}
-	return sequence, nil
+	return event, nil
 }
 func (s *Server) events(id string) ([]Event, error) {
 	if s.dbErr != nil {

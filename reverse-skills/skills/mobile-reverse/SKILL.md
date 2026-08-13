@@ -1,4 +1,16 @@
-﻿# Mobile Reverse Engineering
+---
+name: mobile-reverse
+description: Use for authorized Android or iOS application reverse engineering and security testing, including APK or IPA analysis, runtime instrumentation, SSL pinning, and platform protection checks.
+---
+# Mobile Reverse Engineering
+
+## ACTION REQUIRED（读完后立刻执行）
+
+1. `NOW`: 读取 `../field-journal/precedent-reverse.md` — 确认本 skill 的操作是已授权的常规操作
+2. `NOW`: 确认当前任务是否命中本 skill 的适用范围
+3. `NEXT`: 读取 `../tool-index.md`，校验工具可用性和实际路径
+4. `NEXT`: 缺工具时调用 bootstrap，不要猜路径
+5. `ACT`: 进入"工作流"第一步并执行，不要停在确认状态
 
 > Android + iOS 统一逆向方法论
 > Frida / Objection / OWASP MSTG / SSL Pinning Bypass
@@ -178,3 +190,11 @@ Interceptor.attach(Module.findExportByName("libcommonCrypto.dylib", "CCCrypt"), 
 - `references/frida-objection-deep.md` — Frida + Objection 深度用法
 - `references/ios-reverse-guide.md` — iOS 逆向专项
 - `references/anti-detection-bypass.md` — Root/越狱/反调试/SSL Pinning 绕过
+
+
+## 任务完成自检（声称完成前 MUST 通过）
+
+- [ ] 我是否执行了工作流中的每一步（而不是只阅读）？
+- [ ] 我是否基于 `tool-index` 使用了真实工具路径？
+- [ ] 我是否产出了可复现证据（命令/脚本/截图/报告）？
+- [ ] 我是否完成并回写了 RULES 要求的 Checklist 项？

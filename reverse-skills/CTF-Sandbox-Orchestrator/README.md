@@ -53,6 +53,7 @@
 - Reverse / Pwn / Malware / Firmware / PCAP / 自定义协议重放
 - Windows / AD / Kerberos / DPAPI / 证书滥用 / Relay / Mailbox
 - Android / iOS / Crypto / Stego / Mobile Runtime
+- ZIP / PKZIP legacy encryption / `bkcrack` known-plaintext recovery
 
 ## 仓库结构
 

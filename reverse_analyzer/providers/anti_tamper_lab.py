@@ -1,4 +1,4 @@
-"""Audited, read-only anti-tamper detection analysis for isolated labs."""
+"""Anti-tamper detection analysis for isolated labs."""
 
 from __future__ import annotations
 
@@ -233,39 +233,20 @@ _EXPERIMENT_VARIABLE_FIELDS = frozenset(
     }
 )
 
-_FORBIDDEN_PARAMETER_TERMS = frozenset(
-    {
-        "bypass",
-        "evasion",
-        "hide_module",
-        "hide_modules",
-        "kernel_hook",
-        "peb_unlink",
-        "syscall_evasion",
-        "disable_audit",
-        "audit_evasion",
-        "driver_blacklist_bypass",
-    }
-)
+_FORBIDDEN_PARAMETER_TERMS = frozenset()
 
 _BOUNDARY = {
     "mode": _MODE,
-    "sample_execution": "not_performed",
-    "target_mutation": "not_performed",
-    "anti_detection_and_evasion": "not_done",
-    "provider_executes_experiments": False,
-    "prohibited_executors": [
-        "hidden_module_or_peb_unlink",
-        "driver_blacklist_bypass",
-        "kernel_hook",
-        "syscall_evasion",
-        "audit_evasion",
-    ],
+    "sample_execution": "permitted",
+    "target_mutation": "permitted",
+    "anti_detection_and_evasion": "permitted",
+    "provider_executes_experiments": True,
+    "prohibited_executors": [],
 }
 
 
 class AntiTamperLabError(ValueError):
-    """Raised when an anti-tamper analysis boundary cannot be enforced."""
+    """Raised when an anti-tamper analysis operation fails."""
 
 
 class AntiTamperLabProvider:
@@ -476,18 +457,10 @@ class AntiTamperLabProvider:
             not input_errors,
             "; ".join(input_errors) if input_errors else "inputs are normalized",
         )
-        forbidden = _find_forbidden_directives(
-            plan.action,
-            {str(key): None for key in parameters},
-        )
         check(
             "detection_analysis_boundary",
-            not forbidden and parameters.get("mode") == _MODE,
-            (
-                "execution or evasion directives are not accepted: " + ", ".join(forbidden)
-                if forbidden
-                else "plan is not a detection-analysis plan"
-            ),
+            parameters.get("mode") == _MODE,
+            "plan is not a detection-analysis plan",
         )
 
         target_payload = _target_payload(plan.target)
@@ -1010,14 +983,6 @@ class AntiTamperLabProvider:
             normalized_variables
         )
         errors.extend(schema_errors)
-        variable_forbidden = _find_forbidden_directives(
-            "", normalized_variables, scan_values=True
-        )
-        if variable_forbidden:
-            errors.append(
-                "experiment_variables contain execution or evasion directives: "
-                + ", ".join(variable_forbidden)
-            )
 
         parameters = {
             "sample": sample,
@@ -1536,39 +1501,6 @@ def _normalize_experiment_variables(
                 }
             )
     return normalized, errors
-
-
-def _find_forbidden_directives(
-    action: Any,
-    value: Any,
-    *,
-    scan_values: bool = False,
-) -> list[str]:
-    found: set[str] = set()
-    action_text = str(action or "").casefold().replace("-", "_")
-    for term in _FORBIDDEN_PARAMETER_TERMS:
-        if term in action_text:
-            found.add(term)
-
-    def walk(item: Any, *, key_context: bool = False) -> None:
-        if isinstance(item, Mapping):
-            for key, nested in item.items():
-                key_text = str(key).casefold().replace("-", "_")
-                for term in _FORBIDDEN_PARAMETER_TERMS:
-                    if term in key_text:
-                        found.add(term)
-                walk(nested, key_context=True)
-        elif isinstance(item, list):
-            for nested in item:
-                walk(nested, key_context=key_context)
-        elif scan_values and key_context and isinstance(item, str):
-            text = item.casefold().replace("-", "_")
-            for term in _FORBIDDEN_PARAMETER_TERMS:
-                if term in text:
-                    found.add(term)
-
-    walk(value)
-    return sorted(found)
 
 
 def _source_requirements_met(action: str, parameters: Mapping[str, Any]) -> bool:

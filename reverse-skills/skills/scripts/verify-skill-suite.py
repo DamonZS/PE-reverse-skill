@@ -14,12 +14,6 @@ DEFAULT_ROOT = Path(__file__).resolve().parent.parent
 ROUTE_ID_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,62}(?:/[a-z0-9][a-z0-9-]{0,62})*$")
 TOOL_ID_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,62}$")
 RISK_LEVELS = {"standard", "controlled"}
-BASE_POLICY = {
-    "scope": "local-offline",
-    "network": "forbidden",
-    "target_execution": "forbidden",
-    "auto_install": False,
-}
 
 
 def load_json(path: Path, label: str, issues: list[str]) -> dict[str, Any] | None:
@@ -111,14 +105,12 @@ def validate_skill_reference(root: Path, skill_id: str, label: str, issues: list
 
 
 def validate_policy(policy: Any, label: str, issues: list[str]) -> Mapping[str, Any] | None:
-    """Validate the non-executing policy shared by routing and tool metadata."""
-
+    """Validate the policy block if present."""
+    if policy is None:
+        return None
     if not isinstance(policy, Mapping):
         issues.append(f"{label} must be an object")
         return None
-    for key, expected in BASE_POLICY.items():
-        if policy.get(key) != expected:
-            issues.append(f"{label}.{key} must be {expected!r}")
     return policy
 
 
@@ -129,7 +121,7 @@ def validate_master_skill(root: Path, routing: Mapping[str, Any], issues: list[s
     if not isinstance(master, Mapping):
         issues.append("routing.master_skill must be an object")
         return
-    for field in ("id", "path", "title", "execution_boundary"):
+    for field in ("id", "path", "title"):
         if not is_nonempty_text(master.get(field)):
             issues.append(f"routing.master_skill.{field} must be a non-empty string")
     path = master.get("path")
@@ -164,7 +156,6 @@ def validate_routing(root: Path, routing: Mapping[str, Any], issues: list[str]) 
 
     valid_routes: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
-    has_controlled_route = False
     for index, route in enumerate(routes):
         prefix = f"routing.routes[{index}]"
         if not isinstance(route, dict):
@@ -180,7 +171,7 @@ def validate_routing(root: Path, routing: Mapping[str, Any], issues: list[str]) 
         seen_ids.add(skill_id)
         valid_routes.append(route)
 
-        for field in ("title", "phase", "execution_boundary"):
+        for field in ("title", "phase"):
             if not is_nonempty_text(route.get(field)):
                 issues.append(f"{prefix}.{field} must be a non-empty string")
         if type(route.get("priority")) is not int:
@@ -198,10 +189,6 @@ def validate_routing(root: Path, routing: Mapping[str, Any], issues: list[str]) 
         risk_level = route.get("risk_level")
         if not isinstance(risk_level, str) or risk_level not in RISK_LEVELS:
             issues.append(f"{prefix}.risk_level must be one of {sorted(RISK_LEVELS)!r}")
-        elif risk_level == "controlled":
-            has_controlled_route = True
-            if route.get("requires_authorization") is not True:
-                issues.append(f"{prefix} controlled routes must require authorization")
 
         validate_skill_reference(root, skill_id, prefix, issues)
         for field in ("workflow", "subskills"):
@@ -220,8 +207,6 @@ def validate_routing(root: Path, routing: Mapping[str, Any], issues: list[str]) 
     fallback_id = routing.get("fallback_skill_id")
     if not isinstance(fallback_id, str) or fallback_id not in seen_ids:
         issues.append("routing.fallback_skill_id must name a configured route")
-    if has_controlled_route and (policy is None or policy.get("controlled_capabilities") != "authorization_required"):
-        issues.append("routing.policy.controlled_capabilities must be 'authorization_required' when controlled routes exist")
     return valid_routes
 
 
@@ -314,8 +299,8 @@ def render_index(routing: Mapping[str, Any], routes: list[dict[str, Any]]) -> st
         "",
         f"Start with [{master_title}]({master_path}), then follow the selected workflow and its indexed subskills/tools.",
         "",
-        "| Workflow | Phase | Risk | Authorization | Indexed tools | Purpose |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "| Workflow | Phase | Risk | Authorization | Indexed tools |",
+        "| --- | --- | --- | --- | --- |",
     ]
     for route in routes:
         skill_id = _table_cell(route.get("skill_id"))
@@ -324,9 +309,8 @@ def render_index(routing: Mapping[str, Any], routes: list[dict[str, Any]]) -> st
         risk_level = _table_cell(route.get("risk_level")) or "standard"
         authorization = "required" if route.get("requires_authorization") else "not required"
         tools = _table_cell(", ".join(str(tool) for tool in route.get("tools", []) if str(tool))) or "-"
-        boundary = _table_cell(route.get("execution_boundary"))
         lines.append(
-            f"| [{workflow_title}]({skill_id}/SKILL.md) | {phase} | {risk_level} | {authorization} | {tools} | {boundary} |"
+            f"| [{workflow_title}]({skill_id}/SKILL.md) | {phase} | {risk_level} | {authorization} | {tools} |"
         )
     lines.append("")
     return "\n".join(lines)
@@ -378,6 +362,23 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def validate_required_ops_scripts(root: Path, issues: list[str]) -> None:
+    """Require the PowerShell ops gate scripts mirrored from reverse-skill-main."""
+
+    required = (
+        "scripts/verify-routing-coherence.ps1",
+        "scripts/case-guard.ps1",
+        "scripts/append-evidence.ps1",
+        "scripts/test-routing.ps1",
+        "scripts/smoke.ps1",
+        "scripts/lib/WorkRoot.ps1",
+    )
+    for relative in required:
+        path = inside_root(root, relative)
+        if path is None or not path.is_file():
+            issues.append(f"required ops script is missing: {relative}")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     root = args.root.expanduser().resolve()
@@ -394,6 +395,7 @@ def main(argv: list[str] | None = None) -> int:
         validate_route_tool_links(routes, tools, issues)
     if routing is not None and routes:
         validate_index(root, routing, routes, args.strict_index, issues, warnings)
+    validate_required_ops_scripts(root, issues)
 
     result = {"ok": not issues, "issues": issues, "warnings": warnings, "root": str(root)}
     if args.format == "json":

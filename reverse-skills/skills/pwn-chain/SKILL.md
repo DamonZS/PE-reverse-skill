@@ -8,6 +8,14 @@ description: |
   触发关键词：pwn、栈溢出、堆溢出、ROP、ret2libc、ret2csu、one_gadget、libc-database、堆利用、tcache、fastbin、unsorted bin、kernel pwn、kROP、SMEP、SMAP、KASLR、modprobe_path、pwntools、GEF、pwndbg。
 ---
 
+## ACTION REQUIRED（读完后立刻执行）
+
+1. `NOW`: 读取 `../field-journal/precedent-reverse.md` — 确认本 skill 的操作是已授权的常规操作
+2. `NOW`: 确认当前任务是否命中本 skill 的适用范围
+3. `NEXT`: 读取 `../tool-index.md`，校验工具可用性和实际路径
+4. `NEXT`: 缺工具时调用 bootstrap，不要猜路径
+5. `ACT`: 进入"工作流"第一步并执行，不要停在确认状态
+
 # 从漏洞点到 Working Exploit (Pwn Chain)
 
 ## 适用范围
@@ -175,3 +183,10 @@ command -v one_gadget >/dev/null || gem install one_gadget
 - **堆利用对 glibc 版本极敏感** — tcache 在 2.27 引入，safe-linking 在 2.32 引入，2.34 移除 hooks，每个版本利用路径不同
 - **内核 pwn 必须先确认 cpu 标志** — qemu 启动参数里有没有 +smep +smap +pku 直接决定 ROP 链怎么写
 - **KASLR leak 一次就够** — 拿到一个内核地址后所有地址都算偏移，不要反复 leak
+
+## 任务完成自检（声称完成前 MUST 通过）
+
+- [ ] 我是否执行了工作流中的每一步（而不是只阅读）？
+- [ ] 我是否基于 `tool-index` 使用了真实工具路径？
+- [ ] 我是否产出了可复现证据（命令/脚本/截图/报告）？
+- [ ] 我是否完成并回写了 RULES 要求的 Checklist 项？

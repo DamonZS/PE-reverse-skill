@@ -8,6 +8,14 @@ description: |
 
 面向 `radare2` CLI 的二进制分析技能。重点是直接用命令行完成侦察、分析、定位、导出和轻量修改，不依赖 GUI。
 
+## ACTION REQUIRED（读完后立刻执行）
+
+1. `NOW`: 读取 `../field-journal/precedent-reverse.md` — 确认本 skill 的操作是已授权的常规操作
+2. `NOW`: 确认当前任务是否命中本 skill 的适用范围
+3. `NEXT`: 读取 `../tool-index.md`，校验工具可用性和实际路径
+4. `NEXT`: 缺工具时调用 bootstrap，不要猜路径
+5. `ACT`: 进入"工作流"第一步并执行，不要停在确认状态
+
 ## 适用范围
 
 当用户有这些意图时应优先使用本 skill：
@@ -112,6 +120,19 @@ ERROR: Cannot find ...\share\format\dll\*.sdb
 
 适合刚拿到一个二进制文件时。
 
+### 硬门禁（MUST — 未满足禁止进入工作流 2 及后续）
+
+对 PE/ELF/Mach-O 等含导入表的二进制，**MUST** 先完成导入表检查并落成 Evidence，再进入函数级分析或动态步骤：
+
+1. 执行 `rabin2 -i <sample>`（或 `recon.ps1` 输出中的 imports 段）
+2. 将完整/分类后的导入表结果写入 Evidence（建议 id：`E-imports` 或 `E-triage-imports`），至少包含：
+   - 复现命令（`repro_command`）
+   - 关键导入分类摘要：网络 / 文件 / 加密 / 进程注入 / 注册表 / 其他可疑 API
+   - 若导入表为空、解析失败或工具报错：仍 MUST 记录失败现象与原始输出为 Evidence，**不得静默跳过**
+3. 用户明确要求「重做导入表检查 / 重新检查导入表」时：MUST 重做本硬门步骤本身，**禁止改换为其他步骤冒充完成**
+
+未记录导入表 Evidence 前：MUST NOT 声称「基础侦察完成」，MUST NOT 进入工作流 2+ 的深挖结论。
+
 优先直接运行内置脚本：
 
 ```powershell
@@ -132,7 +153,7 @@ rabin2 -E sample.exe
 - 文件格式、位数、架构、平台
 - 入口点地址
 - 可疑字符串：URL、路径、报错、注册表、命令行参数
-- 导入函数：网络、文件、加密、进程注入、注册表操作
+- 导入函数：网络、文件、加密、进程注入、注册表操作（**MUST 落 Evidence，见上方硬门禁**）
 
 ## 工作流 2：交互式分析函数
 
@@ -286,12 +307,12 @@ rax2 -s hello
 
 1. `rabin2 -I` 看格式、架构、入口点
 2. `rabin2 -z` 看字符串
-3. `rabin2 -i` 看导入函数
-4. 如需交互分析，再进 `r2`
+3. `rabin2 -i` 看导入函数 — **MUST + Evidence（硬门，见工作流 1）**
+4. 如需交互分析，再进 `r2`（仅当步骤 3 的 Evidence 已落盘）
 5. 先 `aaa`，再 `afl` / `iz` / `pdf`
 6. 通过字符串引用、导入调用、入口流程逐步定位关键函数
 
-这个顺序的好处是噪音低，能尽快建立方向感。
+这个顺序的好处是噪音低，能尽快建立方向感。步骤 3 不是可选优化，是进入深挖前的硬门。
 
 ## Windows 注意事项
 
@@ -348,6 +369,7 @@ rax2 -s hello
 - 不要把 `radare2` 当成只有 `aaa` 一个命令的工具
 - 不要在未说明风险时直接写模式打开用户文件
 - 不要在还没做基础侦察前就下结论
+- **禁止跳过导入表检查**（`rabin2 -i` / recon imports）：未写入 Evidence 不得进入下一步；用户要求重做导入表时禁止改做其他步骤
 - 不要把网页 JS 逆向误导到这个 skill；那是 `reverse-engineering` 的范围
 
 ## 参考资料
@@ -394,3 +416,12 @@ rax2 -s hello
 如果自动安装失败（网络不通、GitHub API 限流等），脚本会抛出明确错误并附带手动安装链接。
 
 手动安装：从 https://github.com/radareorg/radare2/releases 下载 `radare2-*-w64.zip`，解压到 `%USERPROFILE%\Tools\radare2\` 并确保 `bin\` 目录在 PATH 中。
+
+
+## 任务完成自检（声称完成前 MUST 通过）
+
+- [ ] 我是否执行了工作流中的每一步（而不是只阅读）？
+- [ ] 导入表检查是否已执行且写入 Evidence（E-imports / E-triage-imports）？若用户要求重做，是否重做了同一步而非换步骤？
+- [ ] 我是否基于 `tool-index` 使用了真实工具路径？
+- [ ] 我是否产出了可复现证据（命令/脚本/截图/报告）？
+- [ ] 我是否完成并回写了 RULES 要求的 Checklist 项？

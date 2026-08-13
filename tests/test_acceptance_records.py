@@ -616,7 +616,24 @@ class AcceptanceRecordTests(unittest.TestCase):
             )
 
     def test_windows_uia_fixture_contract_retains_hash_backed_live_proof(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
+        ready = {
+            "schema_version": 2,
+            "acceptance_fixtures": [
+                {
+                    "id": "p7-windows-uia-live",
+                    "status": "ready_to_run",
+                    "configured_gates": ["REVERSE_ANALYZER_RUN_WINDOWS_UIA_LIVE"],
+                    "missing_gates": [],
+                    "workflow_states": {"windows_uia": "verified"},
+                }
+            ],
+            "workflows": {},
+            "summary": {},
+        }
+        with tempfile.TemporaryDirectory() as temporary, mock.patch(
+            "reverse_analyzer.acceptance.validate_external_environment",
+            return_value=ready,
+        ):
             def runner(command, **kwargs):  # type: ignore[no-untyped-def]
                 run_dir = Path(kwargs["env"]["REVERSE_ANALYZER_ACCEPTANCE_RUN_DIR"])
                 artifact_dir = run_dir / "gui-uia"

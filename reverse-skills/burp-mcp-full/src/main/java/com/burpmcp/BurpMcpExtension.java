@@ -31,13 +31,17 @@ public class BurpMcpExtension implements BurpExtension {
 
         api.extension().setName("MCP Full Control");
 
+        int port = resolvePort(logging);
         try {
-            server = new McpHttpServer(api, 9876);
+            server = new McpHttpServer(api, port);
             server.start();
-            logging.logToOutput("[MCP] Server started on http://127.0.0.1:9876");
+            logging.logToOutput("[MCP] Server started on http://127.0.0.1:" + port);
+            logging.logToOutput("[MCP] Configure port via -Dburp.mcp.port=<n> or BURP_MCP_PORT env var (default 9876)");
+            logging.logToOutput("[MCP] Auth token: ~/.burp-mcp-token (override with -Dburp.mcp.token or BURP_MCP_TOKEN)");
             logging.logToOutput("[MCP] Tools: proxy_history, send_request, intruder_attack, repeater, scanner, sitemap, intercept, encode/decode");
         } catch (Exception e) {
-            logging.logToError("[MCP] Failed to start server: " + e.getMessage());
+            logging.logToError("[MCP] Failed to start server on port " + port + ": " + e.getMessage());
+            logging.logToError("[MCP] If port is in use, set -Dburp.mcp.port=<other> and restart Burp.");
         }
 
         api.extension().registerUnloadingHandler(() -> {
@@ -46,5 +50,22 @@ public class BurpMcpExtension implements BurpExtension {
                 logging.logToOutput("[MCP] Server stopped");
             }
         });
+    }
+
+    private int resolvePort(Logging logging) {
+        String prop = System.getProperty("burp.mcp.port");
+        String env = System.getenv("BURP_MCP_PORT");
+        String raw = prop != null ? prop : env;
+        if (raw == null || raw.isBlank()) return 9876;
+        try {
+            int p = Integer.parseInt(raw.trim());
+            if (p < 1 || p > 65535) throw new IllegalArgumentException("out of range");
+            if (prop != null) logging.logToOutput("[MCP] Port from -Dburp.mcp.port: " + p);
+            else logging.logToOutput("[MCP] Port from BURP_MCP_PORT: " + p);
+            return p;
+        } catch (Exception e) {
+            logging.logToError("[MCP] Invalid port '" + raw + "', falling back to 9876. " + e.getMessage());
+            return 9876;
+        }
     }
 }

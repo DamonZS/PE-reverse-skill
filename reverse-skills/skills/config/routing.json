@@ -7,257 +7,2316 @@
   "master_skill": {
     "id": "master",
     "path": "SKILL.md",
-    "title": "Intelligent Reverse Task Router",
-    "execution_boundary": "Read-only route planning; the master skill never executes a target or provider."
+    "title": "Intelligent Reverse Task Router"
   },
-  "fallback_skill_id": "pe-triage",
-  "policy": {
-    "scope": "local-offline",
-    "network": "forbidden",
-    "target_execution": "forbidden",
-    "auto_install": false,
-    "controlled_capabilities": "authorization_required"
-  },
+  "fallback_skill_id": "reverse-engineering",
   "routes": [
     {
       "skill_id": "pe-triage",
       "title": "PE Triage",
       "phase": "intake",
-      "priority": 100,
-      "keywords": ["triage", "intake", "inventory", "header", "imports"],
-      "extensions": [".exe", ".dll", ".sys", ".ocx"],
-      "input_kinds": ["local-file"],
+      "priority": 10,
+      "keywords": [
+        "triage",
+        "intake",
+        "inventory",
+        "header",
+        "imports"
+      ],
+      "extensions": [
+        ".exe",
+        ".dll",
+        ".sys",
+        ".ocx"
+      ],
+      "input_kinds": [
+        "local-file"
+      ],
       "interfaces": [],
       "packages": [],
       "url_keywords": [],
-      "workflow": ["pe-triage"],
-      "subskills": ["case-review"],
+      "workflow": [
+        "pe-triage"
+      ],
+      "subskills": [
+        "case-review"
+      ],
       "capability_candidates": [],
-      "tools": ["master-route", "case-init"],
-      "scripts": ["scripts/case-init.py", "scripts/master-route.py"],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/case-init.py",
+        "scripts/master-route.py"
+      ],
       "requires_authorization": false,
-      "risk_level": "standard",
-      "execution_boundary": "Local, offline, static intake only; do not execute the target, use a network, or install tools."
+      "risk_level": "standard"
     },
     {
       "skill_id": "interface-analysis",
       "title": "Interface and Endpoint Analysis",
       "phase": "interface",
       "priority": 160,
-      "keywords": ["api", "interface", "endpoint", "openapi", "swagger", "graphql", "websocket", "url"],
-      "extensions": [".har", ".postman", ".json", ".yaml", ".yml"],
-      "input_kinds": ["url-descriptor", "interface-descriptor", "local-file", "package-descriptor"],
-      "interfaces": ["rest", "graphql", "websocket", "grpc", "http"],
-      "packages": ["openapi", "postman", "har"],
-      "url_keywords": ["api", "graphql", "swagger", "openapi", "ws"],
-      "workflow": ["interface-analysis"],
-      "subskills": ["api-security", "js-reverse", "case-review"],
+      "keywords": [
+        "api",
+        "interface",
+        "endpoint",
+        "openapi",
+        "swagger",
+        "graphql",
+        "websocket",
+        "url"
+      ],
+      "extensions": [
+        ".har",
+        ".postman",
+        ".json",
+        ".yaml",
+        ".yml"
+      ],
+      "input_kinds": [
+        "url-descriptor",
+        "interface-descriptor",
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [
+        "rest",
+        "graphql",
+        "websocket",
+        "grpc",
+        "http"
+      ],
+      "packages": [
+        "openapi",
+        "postman",
+        "har"
+      ],
+      "url_keywords": [
+        "api",
+        "graphql",
+        "swagger",
+        "openapi",
+        "ws"
+      ],
+      "workflow": [
+        "interface-analysis"
+      ],
+      "subskills": [
+        "api-security",
+        "js-reverse",
+        "case-review"
+      ],
       "capability_candidates": [],
-      "tools": ["master-route", "case-init"],
-      "scripts": ["scripts/master-route.py"],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py"
+      ],
       "requires_authorization": false,
-      "risk_level": "standard",
-      "execution_boundary": "Classify a URL or local interface descriptor without fetching it; use local captures and supplied files only."
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "browser-extension-reverse",
+      "title": "Browser Extension Reverse",
+      "phase": "package",
+      "priority": 165,
+      "keywords": [
+        "browser extension",
+        "chrome extension",
+        "firefox extension",
+        "crx",
+        "xpi",
+        "manifest v3",
+        "mv3"
+      ],
+      "extensions": [
+        ".crx",
+        ".xpi"
+      ],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [
+        "browser-extension",
+        "chrome-extension",
+        "firefox-extension"
+      ],
+      "packages": [
+        "browser-extension",
+        "chrome-extension",
+        "firefox-extension"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "browser-extension-reverse"
+      ],
+      "subskills": [
+        "reverse-engineering",
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "protocol-reverse",
+      "title": "Protocol Reverse",
+      "phase": "protocol",
+      "priority": 158,
+      "keywords": [
+        "protocol reverse",
+        "protocol",
+        "protobuf",
+        "grpc",
+        "pcap",
+        "wireshark",
+        "traffic analysis"
+      ],
+      "extensions": [
+        ".pcap",
+        ".pcapng",
+        ".proto"
+      ],
+      "input_kinds": [
+        "local-file",
+        "interface-descriptor",
+        "package-descriptor"
+      ],
+      "interfaces": [
+        "protocol",
+        "protobuf",
+        "grpc"
+      ],
+      "packages": [
+        "protocol",
+        "protobuf",
+        "grpc",
+        "pcap"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "protocol-reverse"
+      ],
+      "subskills": [
+        "reverse-engineering",
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
     },
     {
       "skill_id": "apk-reverse",
       "title": "Android Package Analysis",
       "phase": "package",
       "priority": 150,
-      "keywords": ["apk", "android", "mobile", "manifest", "smali", "dex", "package"],
-      "extensions": [".apk", ".aab"],
-      "input_kinds": ["local-file", "package-descriptor"],
-      "interfaces": ["android"],
-      "packages": ["android", "apk"],
+      "keywords": [
+        "apk",
+        "android",
+        "mobile",
+        "manifest",
+        "smali",
+        "dex",
+        "package",
+        "加固",
+        "反编译",
+        "root检测",
+        "证书校验",
+        "frida hook android",
+        "frida hook apk",
+        "安卓 动态调试",
+        "android 动态调试"
+      ],
+      "extensions": [
+        ".apk",
+        ".aab"
+      ],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [
+        "android"
+      ],
+      "packages": [
+        "android",
+        "apk"
+      ],
       "url_keywords": [],
-      "workflow": ["apk-reverse"],
-      "subskills": ["reverse-engineering", "case-review"],
+      "workflow": [
+        "apk-reverse"
+      ],
+      "subskills": [
+        "reverse-engineering",
+        "case-review"
+      ],
       "capability_candidates": [],
-      "tools": ["master-route", "case-init"],
-      "scripts": ["scripts/master-route.py"],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py"
+      ],
       "requires_authorization": false,
-      "risk_level": "standard",
-      "execution_boundary": "Plan offline package inspection only; do not install, attach to, or interact with a device."
+      "risk_level": "standard"
     },
     {
       "skill_id": "mobile-reverse",
       "title": "iOS and Mobile Package Analysis",
       "phase": "package",
       "priority": 145,
-      "keywords": ["ios", "ipa", "mobile", "objection", "jailbreak", "package"],
-      "extensions": [".ipa", ".app"],
-      "input_kinds": ["local-file", "package-descriptor"],
-      "interfaces": ["ios", "mobile"],
-      "packages": ["ios", "ipa"],
+      "keywords": [
+        "ios",
+        "ipa",
+        "mobile",
+        "objection",
+        "jailbreak",
+        "package",
+        "iphone",
+        "jailbreak detection",
+        "越狱检测",
+        "越狱检测绕过"
+      ],
+      "extensions": [
+        ".ipa",
+        ".app"
+      ],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [
+        "ios",
+        "mobile"
+      ],
+      "packages": [
+        "ios",
+        "ipa"
+      ],
       "url_keywords": [],
-      "workflow": ["mobile-reverse"],
-      "subskills": ["reverse-engineering", "case-review"],
+      "workflow": [
+        "mobile-reverse"
+      ],
+      "subskills": [
+        "reverse-engineering",
+        "case-review"
+      ],
       "capability_candidates": [],
-      "tools": ["master-route", "case-init"],
-      "scripts": ["scripts/master-route.py"],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py"
+      ],
       "requires_authorization": false,
-      "risk_level": "standard",
-      "execution_boundary": "Plan offline package inspection only; device interaction remains outside the router."
+      "risk_level": "standard"
     },
     {
       "skill_id": "dotnet-analysis",
       "title": ".NET Package and Assembly Analysis",
       "phase": "package",
       "priority": 155,
-      "keywords": ["dotnet", "csharp", "clr", "assembly", "confuser", "smartassembly", "babel"],
-      "extensions": [".nupkg"],
-      "input_kinds": ["local-file", "package-descriptor"],
-      "interfaces": ["dotnet", "clr"],
-      "packages": ["dotnet", "nuget"],
+      "keywords": [
+        "dotnet",
+        "csharp",
+        "clr",
+        "assembly",
+        "confuser",
+        "smartassembly",
+        "babel",
+        ".net",
+        "dnspy",
+        "de4dot",
+        "confuserex",
+        "脱壳",
+        "脱混淆",
+        "c#"
+      ],
+      "extensions": [
+        ".nupkg"
+      ],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [
+        "dotnet",
+        "clr"
+      ],
+      "packages": [
+        "dotnet",
+        "nuget"
+      ],
       "url_keywords": [],
-      "workflow": ["dotnet-analysis"],
-      "subskills": ["pe-triage", "pe-static-analysis", "source-reconstruction", "case-review"],
+      "workflow": [
+        "dotnet-analysis"
+      ],
+      "subskills": [
+        "dotnet-reverse",
+        "pe-triage",
+        "pe-static-analysis",
+        "source-reconstruction",
+        "case-review"
+      ],
       "capability_candidates": [],
-      "tools": ["master-route", "case-init"],
-      "scripts": ["scripts/master-route.py"],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py"
+      ],
       "requires_authorization": false,
-      "risk_level": "standard",
-      "execution_boundary": "Plan offline CLR metadata and assembly analysis; preserve the original artifact and do not patch it."
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "reverse-engineering/dsl-vm-reverse",
+      "title": "DSL VM Reverse",
+      "phase": "reasoning",
+      "priority": 172,
+      "keywords": [
+        "dsl vm",
+        "custom vm",
+        "opcode vm",
+        "fireye",
+        "virtual machine obfuscation",
+        "自定义虚拟机",
+        "指令集逆向",
+        "虚拟机",
+        "opcode"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [
+        "dsl-vm",
+        "custom-vm"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "reverse-engineering/dsl-vm-reverse"
+      ],
+      "subskills": [
+        "reverse-engineering",
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "code-audit",
+      "title": "Code Audit and SAST",
+      "phase": "audit",
+      "priority": 148,
+      "keywords": [
+        "code audit",
+        "sast",
+        "semgrep",
+        "codeql",
+        "source review",
+        "whitebox"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [
+        "source-code",
+        "sast"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "code-audit"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "digital-forensics",
+      "title": "Digital Forensics",
+      "phase": "forensics",
+      "priority": 144,
+      "keywords": [
+        "forensics",
+        "memory dump",
+        "timeline",
+        "volatility",
+        "incident response",
+        "disk image",
+        "内存取证",
+        "应急响应",
+        "手机取证",
+        "磁盘取证",
+        "dump内存",
+        "取证",
+        "dump 内存 分析",
+        "内存 分析"
+      ],
+      "extensions": [
+        ".dmp",
+        ".raw",
+        ".evtx"
+      ],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [
+        "forensics",
+        "memory-dump",
+        "disk-image"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "digital-forensics"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "ghidra-reverse",
+      "title": "Ghidra Reverse",
+      "phase": "reasoning",
+      "priority": 168,
+      "keywords": [
+        "ghidra",
+        "analyzeheadless",
+        "ghidra mcp",
+        "open source decompiler",
+        "headless decompile",
+        "ghidra headless decompile",
+        "无 ida",
+        "无ida"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [
+        "ghidra"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "ghidra-reverse"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "go-rust-reverse",
+      "title": "Go and Rust Reverse",
+      "phase": "reasoning",
+      "priority": 136,
+      "keywords": [
+        "golang",
+        "rust",
+        "go binary",
+        "goresym",
+        "stripped go",
+        "rust binary",
+        "go",
+        "go二进制",
+        "golang binary",
+        "stripped",
+        "go malware"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [
+        "golang",
+        "rust"
+      ],
+      "packages": [
+        "golang",
+        "rust"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "go-rust-reverse"
+      ],
+      "subskills": [
+        "reverse-engineering",
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "macos-reverse",
+      "title": "macOS Reverse",
+      "phase": "reasoning",
+      "priority": 134,
+      "keywords": [
+        "macos",
+        "mach-o",
+        "codesign",
+        "objective-c",
+        "swift reverse",
+        "xpc",
+        "mac",
+        "mac逆向"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [
+        "macos"
+      ],
+      "packages": [
+        "mach-o",
+        "macos"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "macos-reverse"
+      ],
+      "subskills": [
+        "reverse-engineering",
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "cloud-k8s",
+      "title": "Cloud and Kubernetes Security",
+      "phase": "cloud",
+      "priority": 128,
+      "keywords": [
+        "kubernetes",
+        "k8s",
+        "container escape",
+        "docker escape",
+        "cloud security",
+        "imds",
+        "rbac",
+        "云安全",
+        "存储桶",
+        "s3 bucket",
+        "k8s渗透"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor",
+        "interface-descriptor"
+      ],
+      "interfaces": [
+        "kubernetes",
+        "cloud"
+      ],
+      "packages": [
+        "k8s",
+        "kubernetes",
+        "docker",
+        "cloud"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "cloud-k8s"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "windows-ad",
+      "title": "Windows and AD Security",
+      "phase": "identity",
+      "priority": 126,
+      "keywords": [
+        "active directory",
+        "ad cs",
+        "bloodhound",
+        "kerberoast",
+        "as-rep",
+        "certipy",
+        "ntlm relay",
+        "dcsync",
+        "域渗透",
+        "kerberos攻击",
+        "域控攻击",
+        "mimikatz",
+        "抓取凭证",
+        "域渗透 kerberos 攻击",
+        "windows ad 域渗透 kerberos",
+        "ad 域控攻击",
+        "windows ad",
+        "kerberos"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor",
+        "interface-descriptor"
+      ],
+      "interfaces": [
+        "windows-ad",
+        "kerberos"
+      ],
+      "packages": [
+        "active-directory",
+        "ad",
+        "windows-ad"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "windows-ad"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "database-security",
+      "title": "Database Security",
+      "phase": "audit",
+      "priority": 124,
+      "keywords": [
+        "database security",
+        "mysql",
+        "postgres",
+        "mongodb",
+        "redis security",
+        "mssql"
+      ],
+      "extensions": [
+        ".sql"
+      ],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor",
+        "interface-descriptor"
+      ],
+      "interfaces": [
+        "database"
+      ],
+      "packages": [
+        "mysql",
+        "postgres",
+        "mongodb",
+        "redis",
+        "mssql"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "database-security"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "identity-federation",
+      "title": "Identity Federation",
+      "phase": "identity",
+      "priority": 122,
+      "keywords": [
+        "saml",
+        "oidc",
+        "openid connect",
+        "oauth2",
+        "sso",
+        "identity federation",
+        "联邦身份",
+        "单点登录"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor",
+        "interface-descriptor"
+      ],
+      "interfaces": [
+        "saml",
+        "oidc",
+        "oauth2",
+        "sso"
+      ],
+      "packages": [
+        "saml",
+        "oidc",
+        "oauth2"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "identity-federation"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "threat-hunting",
+      "title": "Threat Hunting",
+      "phase": "defense",
+      "priority": 120,
+      "keywords": [
+        "threat hunting",
+        "sigma",
+        "blue team",
+        "detection engineering",
+        "threat hunt",
+        "威胁狩猎",
+        "检测工程",
+        "检测规则"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [
+        "threat-hunting",
+        "blue-team"
+      ],
+      "packages": [
+        "sigma",
+        "detection-engineering"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "threat-hunting"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "ot-ics",
+      "title": "OT and ICS Security",
+      "phase": "industrial",
+      "priority": 118,
+      "keywords": [
+        "ot",
+        "ics",
+        "scada",
+        "plc",
+        "modbus",
+        "dnp3",
+        "s7comm",
+        "purdue",
+        "ot 安全评估",
+        "工控",
+        "安全评估"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor",
+        "interface-descriptor"
+      ],
+      "interfaces": [
+        "ot",
+        "ics",
+        "scada"
+      ],
+      "packages": [
+        "ot",
+        "ics",
+        "scada"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "ot-ics"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "wifi-wireless",
+      "title": "Wi-Fi and Wireless Security",
+      "phase": "wireless",
+      "priority": 116,
+      "keywords": [
+        "wifi",
+        "wi-fi",
+        "aircrack",
+        "airmon",
+        "wpa handshake",
+        "wireless pentest"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [
+        "wifi",
+        "wireless"
+      ],
+      "packages": [
+        "wifi",
+        "wireless"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "wifi-wireless"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "radio-sdr",
+      "title": "RF and SDR Research",
+      "phase": "wireless",
+      "priority": 114,
+      "keywords": [
+        "sdr",
+        "hackrf",
+        "rtl-sdr",
+        "gnu radio",
+        "urh",
+        "rf research",
+        "bluetooth",
+        "ble",
+        "射频",
+        "蓝牙"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [
+        "rf",
+        "sdr"
+      ],
+      "packages": [
+        "rf",
+        "sdr"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "radio-sdr"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "thick-client",
+      "title": "Thick Client Security",
+      "phase": "client",
+      "priority": 112,
+      "keywords": [
+        "thick client",
+        "desktop client",
+        "electron app",
+        "winforms",
+        "wpf",
+        "厚客户端",
+        "安全测试",
+        "electron app逆向"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [
+        "desktop-client"
+      ],
+      "packages": [
+        "electron",
+        "desktop-client"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "thick-client"
+      ],
+      "subskills": [
+        "reverse-engineering",
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "email-security",
+      "title": "Email Security",
+      "phase": "defense",
+      "priority": 110,
+      "keywords": [
+        "phishing",
+        "spf",
+        "dkim",
+        "dmarc",
+        "bec",
+        "email security",
+        "钓鱼邮件",
+        "邮件分析"
+      ],
+      "extensions": [
+        ".eml"
+      ],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [
+        "email"
+      ],
+      "packages": [
+        "email",
+        "phishing"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "email-security"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "hardware-security",
+      "title": "Hardware Security",
+      "phase": "hardware",
+      "priority": 108,
+      "keywords": [
+        "uart",
+        "jtag",
+        "swd",
+        "flashrom",
+        "debug pad",
+        "hardware debug",
+        "usb设备",
+        "usb",
+        "设备逆向"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [
+        "hardware",
+        "uart",
+        "jtag"
+      ],
+      "packages": [
+        "hardware",
+        "uart",
+        "jtag"
+      ],
+      "url_keywords": [],
+      "workflow": [
+        "hardware-security"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
     },
     {
       "skill_id": "package-analysis",
       "title": "Generic Package and Archive Analysis",
       "phase": "package",
       "priority": 90,
-      "keywords": ["package", "archive", "jar", "asar", "npm", "nuget", "wheel", "whl", "tgz", "zip"],
-      "extensions": [".jar", ".asar", ".whl", ".tgz", ".zip", ".nupkg"],
-      "input_kinds": ["local-file", "package-descriptor"],
+      "keywords": [
+        "package",
+        "archive",
+        "jar",
+        "asar",
+        "npm",
+        "nuget",
+        "wheel",
+        "whl",
+        "tgz",
+        "zip"
+      ],
+      "extensions": [
+        ".jar",
+        ".asar",
+        ".whl",
+        ".tgz",
+        ".zip",
+        ".nupkg"
+      ],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
       "interfaces": [],
-      "packages": ["npm", "electron", "nuget", "python", "java", "archive"],
+      "packages": [
+        "npm",
+        "electron",
+        "nuget",
+        "python",
+        "java",
+        "archive"
+      ],
       "url_keywords": [],
-      "workflow": ["package-analysis"],
-      "subskills": ["reverse-engineering", "source-reconstruction", "case-review"],
+      "workflow": [
+        "package-analysis"
+      ],
+      "subskills": [
+        "reverse-engineering",
+        "source-reconstruction",
+        "case-review"
+      ],
       "capability_candidates": [],
-      "tools": ["master-route", "case-init"],
-      "scripts": ["scripts/master-route.py"],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py"
+      ],
       "requires_authorization": false,
-      "risk_level": "standard",
-      "execution_boundary": "Classify and inspect supplied package bytes offline; do not resolve dependencies, install packages, or execute contents."
+      "risk_level": "standard"
     },
     {
       "skill_id": "protection-review",
       "title": "License, Integrity, Anti-Tamper, and Anti-Cheat Review",
       "phase": "protection",
       "priority": 180,
-      "keywords": ["license", "licensing", "drm", "anti-tamper", "antitamper", "anti-cheat", "anticheat", "integrity", "protection", "obfuscation"],
-      "extensions": [".exe", ".dll", ".sys", ".apk", ".ipa"],
-      "input_kinds": ["local-file", "package-descriptor", "interface-descriptor"],
-      "interfaces": ["windows-game", "license", "integrity"],
-      "packages": ["windows-game", "dotnet", "license", "anti-cheat"],
+      "keywords": [
+        "license",
+        "licensing",
+        "drm",
+        "anti-tamper",
+        "antitamper",
+        "anti-cheat",
+        "anticheat",
+        "integrity",
+        "protection",
+        "obfuscation"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor",
+        "interface-descriptor"
+      ],
+      "interfaces": [
+        "windows-game",
+        "license",
+        "integrity"
+      ],
+      "packages": [
+        "windows-game",
+        "dotnet",
+        "license",
+        "anti-cheat"
+      ],
       "url_keywords": [],
-      "workflow": ["protection-review"],
-      "subskills": ["pe-triage", "pe-static-analysis", "source-reconstruction", "case-review"],
-      "capability_candidates": ["anti_tamper_lab"],
-      "tools": ["master-route", "case-init", "review-case"],
-      "scripts": ["scripts/master-route.py", "scripts/case-init.py", "scripts/review-case.py"],
-      "requires_authorization": true,
-      "risk_level": "controlled",
-      "execution_boundary": "Authorization-gated analysis and evidence planning only; no license bypass, patch, injection, or anti-cheat evasion is automated."
+      "workflow": [
+        "protection-review"
+      ],
+      "subskills": [
+        "pe-triage",
+        "pe-static-analysis",
+        "source-reconstruction",
+        "case-review"
+      ],
+      "capability_candidates": [
+        "anti_tamper_lab"
+      ],
+      "tools": [
+        "master-route",
+        "case-init",
+        "review-case"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py",
+        "scripts/review-case.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
     },
     {
       "skill_id": "edr-defense-review",
       "title": "EDR and Endpoint Telemetry Defense Review",
       "phase": "protection",
       "priority": 175,
-      "keywords": ["edr", "defender", "endpoint", "telemetry", "etw", "amsi", "security product", "detection"],
-      "extensions": [".exe", ".dll", ".sys", ".evtx"],
-      "input_kinds": ["local-file", "interface-descriptor"],
-      "interfaces": ["windows-endpoint", "edr"],
-      "packages": ["edr"],
+      "keywords": [
+        "edr",
+        "defender",
+        "endpoint",
+        "telemetry",
+        "etw",
+        "amsi",
+        "security product",
+        "detection"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "interface-descriptor"
+      ],
+      "interfaces": [
+        "windows-endpoint",
+        "edr"
+      ],
+      "packages": [
+        "edr"
+      ],
       "url_keywords": [],
-      "workflow": ["edr-defense-review"],
-      "subskills": ["pe-static-analysis", "reverse-engineering", "malware-analysis", "case-review"],
+      "workflow": [
+        "edr-defense-review"
+      ],
+      "subskills": [
+        "pe-static-analysis",
+        "reverse-engineering",
+        "malware-analysis",
+        "case-review"
+      ],
       "capability_candidates": [],
-      "tools": ["master-route", "case-init", "review-case"],
-      "scripts": ["scripts/master-route.py", "scripts/case-init.py", "scripts/review-case.py"],
-      "requires_authorization": true,
-      "risk_level": "controlled",
-      "execution_boundary": "Authorization-gated defensive analysis of hooks, telemetry, and detection coverage; no unhook, evasion, injection, or disable action is automated."
+      "tools": [
+        "master-route",
+        "case-init",
+        "review-case"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py",
+        "scripts/review-case.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
     },
     {
       "skill_id": "pe-static-analysis",
       "title": "PE Static Analysis",
       "phase": "structure",
       "priority": 90,
-      "keywords": ["static", "metadata", "sections", "exports", "strings"],
-      "extensions": [".exe", ".dll", ".sys", ".ocx"],
-      "input_kinds": ["local-file"],
+      "keywords": [
+        "static",
+        "metadata",
+        "sections",
+        "exports",
+        "strings"
+      ],
+      "extensions": [
+        ".exe",
+        ".dll",
+        ".sys",
+        ".ocx"
+      ],
+      "input_kinds": [
+        "local-file"
+      ],
       "interfaces": [],
       "packages": [],
       "url_keywords": [],
-      "workflow": ["pe-triage", "pe-static-analysis"],
-      "subskills": ["case-review"],
+      "workflow": [
+        "pe-triage",
+        "pe-static-analysis"
+      ],
+      "subskills": [
+        "case-review"
+      ],
       "capability_candidates": [],
-      "tools": ["master-route"],
-      "scripts": ["scripts/master-route.py"],
+      "tools": [
+        "master-route"
+      ],
+      "scripts": [
+        "scripts/master-route.py"
+      ],
       "requires_authorization": false,
-      "risk_level": "standard",
-      "execution_boundary": "Use already-installed local static tooling only; do not execute the target, use a network, or install tools."
+      "risk_level": "standard"
     },
     {
       "skill_id": "pe-deep-analysis",
       "title": "PE Deep Analysis",
       "phase": "reasoning",
       "priority": 80,
-      "keywords": ["deep", "control flow", "data flow", "disassembly", "decode"],
-      "extensions": [".exe", ".dll", ".sys", ".ocx"],
-      "input_kinds": ["local-file"],
+      "keywords": [
+        "deep",
+        "control flow",
+        "data flow",
+        "disassembly",
+        "decode"
+      ],
+      "extensions": [
+        ".exe",
+        ".dll",
+        ".sys",
+        ".ocx"
+      ],
+      "input_kinds": [
+        "local-file"
+      ],
       "interfaces": [],
       "packages": [],
       "url_keywords": [],
-      "workflow": ["pe-triage", "pe-static-analysis", "pe-deep-analysis"],
-      "subskills": ["reverse-engineering", "case-review"],
+      "workflow": [
+        "pe-triage",
+        "pe-static-analysis",
+        "pe-deep-analysis"
+      ],
+      "subskills": [
+        "reverse-engineering",
+        "case-review"
+      ],
       "capability_candidates": [],
-      "tools": ["master-route"],
-      "scripts": ["scripts/master-route.py"],
+      "tools": [
+        "master-route"
+      ],
+      "scripts": [
+        "scripts/master-route.py"
+      ],
       "requires_authorization": false,
-      "risk_level": "standard",
-      "execution_boundary": "Reason from local static evidence only; do not execute, emulate, debug, patch, or network-enable the target."
+      "risk_level": "standard"
     },
     {
       "skill_id": "source-reconstruction",
       "title": "Source Reconstruction",
       "phase": "reconstruction",
       "priority": 70,
-      "keywords": ["source", "pseudocode", "reconstruct", "types", "decompile"],
-      "extensions": [".exe", ".dll", ".sys", ".ocx"],
-      "input_kinds": ["local-file"],
+      "keywords": [
+        "source",
+        "pseudocode",
+        "reconstruct",
+        "types",
+        "decompile"
+      ],
+      "extensions": [
+        ".exe",
+        ".dll",
+        ".sys",
+        ".ocx"
+      ],
+      "input_kinds": [
+        "local-file"
+      ],
       "interfaces": [],
       "packages": [],
       "url_keywords": [],
-      "workflow": ["pe-triage", "pe-static-analysis", "pe-deep-analysis", "source-reconstruction"],
-      "subskills": ["case-review"],
+      "workflow": [
+        "pe-triage",
+        "pe-static-analysis",
+        "pe-deep-analysis",
+        "source-reconstruction"
+      ],
+      "subskills": [
+        "case-review"
+      ],
       "capability_candidates": [],
-      "tools": ["master-route"],
-      "scripts": ["scripts/master-route.py"],
+      "tools": [
+        "master-route"
+      ],
+      "scripts": [
+        "scripts/master-route.py"
+      ],
       "requires_authorization": false,
-      "risk_level": "standard",
-      "execution_boundary": "Write evidence-labeled reconstruction only; do not claim original source recovery, execute the target, or use a network."
+      "risk_level": "standard"
     },
     {
       "skill_id": "case-review",
       "title": "Case Review",
       "phase": "review",
-      "priority": 60,
-      "keywords": ["review", "qa", "case", "evidence", "report"],
-      "extensions": [".json", ".md"],
-      "input_kinds": ["local-file"],
+      "priority": 30,
+      "keywords": [
+        "review",
+        "qa",
+        "case",
+        "evidence",
+        "report",
+        "case review",
+        "evidence chain",
+        "traceability"
+      ],
+      "extensions": [
+        ".json",
+        ".md"
+      ],
+      "input_kinds": [
+        "local-file"
+      ],
       "interfaces": [],
       "packages": [],
       "url_keywords": [],
-      "workflow": ["case-review"],
+      "workflow": [
+        "case-review"
+      ],
       "subskills": [],
       "capability_candidates": [],
-      "tools": ["master-route", "review-case", "verify-skill-suite"],
-      "scripts": ["scripts/review-case.py", "scripts/verify-skill-suite.py"],
+      "tools": [
+        "master-route",
+        "review-case",
+        "verify-skill-suite"
+      ],
+      "scripts": [
+        "scripts/review-case.py",
+        "scripts/verify-skill-suite.py"
+      ],
       "requires_authorization": false,
-      "risk_level": "standard",
-      "execution_boundary": "Review local case records only; do not execute a target, access a network, or install tools."
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "js-reverse",
+      "title": "JS and Frontend Reverse",
+      "phase": "web",
+      "priority": 170,
+      "keywords": [
+        "js reverse",
+        "webpack",
+        "frontend sign",
+        "encrypted param",
+        "jshookmcp",
+        "cdp hook",
+        "前端签名",
+        "加密参数",
+        "js逆向",
+        "抓包",
+        "重放",
+        "请求重放",
+        "app抓包",
+        "https抓包",
+        "加密",
+        "解密"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "js-reverse"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "ida-reverse",
+      "title": "IDA Reverse",
+      "phase": "reasoning",
+      "priority": 166,
+      "keywords": [
+        "ida",
+        "decompile",
+        "disassembly",
+        "反编译",
+        "反汇编",
+        "binary analysis",
+        "r2 disassemble",
+        "so文件",
+        "native分析",
+        "so 文件 native 分析"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "ida-reverse"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "radare2",
+      "title": "radare2 Reverse",
+      "phase": "reasoning",
+      "priority": 164,
+      "keywords": [
+        "radare2",
+        "cutter",
+        "radare2 analyze"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "radare2"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "firmware-pentest",
+      "title": "Firmware and IoT Pentest",
+      "phase": "firmware",
+      "priority": 162,
+      "keywords": [
+        "firmware",
+        "binwalk",
+        "iot",
+        "unblob",
+        "emba",
+        "firmadyne",
+        "固件",
+        "嵌入式",
+        "路由器固件"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "firmware-pentest"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "malware-analysis",
+      "title": "Malware Analysis",
+      "phase": "malware",
+      "priority": 160,
+      "keywords": [
+        "malware",
+        "yara",
+        "ransomware",
+        "恶意样本",
+        "木马",
+        "病毒样本",
+        "sandbox malware",
+        "ioc",
+        "webshell",
+        "webshell检测",
+        "沙箱"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "malware-analysis"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "attack-chain",
+      "title": "Attack Chain",
+      "phase": "offense",
+      "priority": 158,
+      "keywords": [
+        "attack chain",
+        "full pentest",
+        "red team",
+        "lateral movement",
+        "红队",
+        "横向移动",
+        "内网渗透",
+        "完整渗透",
+        "从外网打到域控",
+        "打到域控"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "attack-chain"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "pentest-tools",
+      "title": "Pentest Tools",
+      "phase": "offense",
+      "priority": 156,
+      "keywords": [
+        "nmap",
+        "nuclei",
+        "sqlmap",
+        "ffuf",
+        "burpsuite",
+        "渗透测试",
+        "端口扫描",
+        "漏洞扫描",
+        "bug bounty",
+        "metasploit",
+        "msf",
+        "linux提权",
+        "权限提升",
+        "hashcat",
+        "风险评估",
+        "sql 注入",
+        "pentest report",
+        "write pentest report",
+        "渗透测试报告",
+        "安全评估 报告",
+        "linux 提权"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "pentest-tools"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "api-security",
+      "title": "API Security",
+      "phase": "api",
+      "priority": 154,
+      "keywords": [
+        "api security",
+        "graphql",
+        "bola",
+        "bfla",
+        "oauth attack",
+        "接口安全",
+        "越权",
+        "未授权访问",
+        "接口",
+        "idor"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "api-security"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "supply-chain-security",
+      "title": "Supply Chain Security",
+      "phase": "supply-chain",
+      "priority": 152,
+      "keywords": [
+        "sbom",
+        "supply chain",
+        "trivy",
+        "gitleaks",
+        "供应链",
+        "依赖扫描"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "supply-chain-security"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "llm-security",
+      "title": "LLM and Agent Security",
+      "phase": "ai-security",
+      "priority": 150,
+      "keywords": [
+        "llm",
+        "prompt injection",
+        "jailbreak",
+        "agent security",
+        "garak",
+        "提示词注入",
+        "模型越狱",
+        "llm越狱"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "llm-security"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "binary-diff",
+      "title": "Binary Diff",
+      "phase": "diff",
+      "priority": 148,
+      "keywords": [
+        "bindiff",
+        "symbol migration",
+        "pdb",
+        "符号迁移",
+        "版本对比"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "binary-diff"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "patch-diff-exploit",
+      "title": "Patch Diff Exploit",
+      "phase": "diff",
+      "priority": 146,
+      "keywords": [
+        "n-day",
+        "patch diff",
+        "补丁差分",
+        "补丁分析",
+        "cve复现"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "patch-diff-exploit"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "pwn-chain",
+      "title": "Pwn Chain",
+      "phase": "exploit",
+      "priority": 144,
+      "keywords": [
+        "pwn",
+        "rop",
+        "ret2libc",
+        "heap overflow",
+        "stack overflow",
+        "buffer overflow",
+        "栈溢出",
+        "堆溢出",
+        "exploit"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "pwn-chain"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "edr-bypass-re",
+      "title": "EDR Bypass Reverse",
+      "phase": "defense-evasion",
+      "priority": 142,
+      "keywords": [
+        "edr bypass",
+        "syscall",
+        "amsi",
+        "etw patch",
+        "免杀",
+        "反病毒绕过"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "edr-bypass-re"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "browser-automation",
+      "title": "Browser and Desktop Automation",
+      "phase": "automation",
+      "priority": 140,
+      "keywords": [
+        "playwright",
+        "browser automation",
+        "desktop automation",
+        "浏览器自动化",
+        "桌面自动化",
+        "自动填表"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "browser-automation"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "docs-generator",
+      "title": "Docs Generator",
+      "phase": "reporting",
+      "priority": 40,
+      "keywords": [
+        "writeup",
+        "write report",
+        "generate report",
+        "写报告",
+        "渗透报告",
+        "逆向报告",
+        "report",
+        "报告"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "docs-generator"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "diagram-generator",
+      "title": "Diagram Generator",
+      "phase": "visualization",
+      "priority": 136,
+      "keywords": [
+        "diagram",
+        "mermaid",
+        "graphviz",
+        "plantuml",
+        "flowchart",
+        "流程图",
+        "架构图",
+        "攻击路径图"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "diagram-generator"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
+    },
+    {
+      "skill_id": "reverse-engineering",
+      "title": "General Reverse Engineering",
+      "phase": "reasoning",
+      "priority": 20,
+      "keywords": [
+        "reverse engineering",
+        "anti debug",
+        "deobfuscation",
+        "angr",
+        "gdb",
+        "反调试",
+        "通用逆向"
+      ],
+      "extensions": [],
+      "input_kinds": [
+        "local-file",
+        "package-descriptor"
+      ],
+      "interfaces": [],
+      "packages": [],
+      "url_keywords": [],
+      "workflow": [
+        "reverse-engineering"
+      ],
+      "subskills": [
+        "case-review"
+      ],
+      "capability_candidates": [],
+      "tools": [
+        "master-route",
+        "case-init"
+      ],
+      "scripts": [
+        "scripts/master-route.py",
+        "scripts/case-init.py"
+      ],
+      "requires_authorization": false,
+      "risk_level": "standard"
     }
   ]
 }

@@ -5,6 +5,13 @@ description: generate, refine, validate, and render diagrams from natural langua
 
 # Diagram Generator
 
+## ACTION REQUIRED（读完后立刻执行）
+
+1. `NOW`：确认当前任务是否命中本 skill 的适用范围
+2. `NOW`：读取 `../tool-index.md`，校验工具可用性和实际路径
+3. `NEXT`：缺工具时调用 bootstrap，不要猜路径
+4. `ACT`：进入"工作流"第一步并执行，不要停在确认状态
+
 ## Purpose
 
 Create clear, editable diagrams from messy or structured inputs. Prefer text-based diagram source first so the result can be reviewed, versioned, and refined. Render to files only when the user asks for an image/PDF or when a downloadable artifact would materially help.
@@ -171,3 +178,11 @@ For English user requests, respond in English. For Chinese user requests, respon
 - 攻击路径图可配合 `pentest-tools/` 的渗透报告
 
 **同级关联模块**: `docs-generator/`（报告中嵌入图表）
+
+
+## 任务完成自检（声称完成前 MUST 通过）
+
+- [ ] 我是否执行了工作流中的每一步（而不是只阅读）？
+- [ ] 我是否基于 `tool-index` 使用了真实工具路径？
+- [ ] 我是否产出了可复现证据（命令/脚本/截图/报告）？
+- [ ] 我是否完成并回写了 RULES 要求的 Checklist 项？

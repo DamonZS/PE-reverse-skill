@@ -45,6 +45,7 @@ All child `competition-*` skills are downstream-only modules. They should not be
 ### Crypto, Stego, Mobile
 
 - Encoding chain, crypto boundary, stego media, mobile trust boundary -> `$competition-crypto-mobile`
+- Encrypted ZIP/PKZIP, legacy ZipCrypto, known plaintext, `bkcrack` -> `$competition-zip-archive`
 - Image, audio, video, document, trailer, metadata stego -> `$competition-stego-media`
 - Android APK, Frida, signer logic, SSL pinning, native bridge -> `$competition-android-hooking`
 - iOS IPA, Objective-C or Swift runtime, Keychain, pinning, deeplink -> `$competition-ios-runtime`

@@ -1097,6 +1097,26 @@ func TestReconstructedSourceWorkspaceLifecycle(t *testing.T) {
 		}
 	}
 }
+
+func TestSafeProjectFileRejectsSymlinkEscape(t *testing.T) {
+	project := t.TempDir()
+	outside := t.TempDir()
+	outsideFile := filepath.Join(outside, "secret.txt")
+	if err := os.WriteFile(outsideFile, []byte("outside"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(project, "escape")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink creation unavailable: %v", err)
+	}
+	if _, err := safeProjectFile(project, "escape/secret.txt"); err == nil {
+		t.Fatal("symlink escape must be rejected")
+	}
+	if path, err := safeProjectFile(project, "src/new.c"); err != nil || path != filepath.Join(project, "src", "new.c") {
+		t.Fatalf("normal new file rejected: %s err=%v", path, err)
+	}
+}
+
 func TestRegistryRBAC(t *testing.T) {
 	s, root := testServer(t, "")
 	dir := filepath.Join(root, ".reverse_analyzer")
@@ -1111,6 +1131,159 @@ func TestRegistryRBAC(t *testing.T) {
 		t.Fatalf("viewer mutation=%d", w.Code)
 	}
 }
+func TestTerminalAndToolCallMethodsAndRBAC(t *testing.T) {
+	s, root := testServer(t, "")
+	authDir := filepath.Join(root, ".reverse_analyzer")
+	if err := os.MkdirAll(authDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	registry := tokenFile{Tokens: []tokenRecord{
+		{Subject: "reader", Role: "viewer", Workspace: root, TokenHash: tokenHash("read")},
+		{Subject: "operator", Role: "analyst", Workspace: root, TokenHash: tokenHash("operate")},
+	}}
+	content, _ := json.Marshal(registry)
+	if err := os.WriteFile(filepath.Join(authDir, "auth.json"), content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	id := strings.Repeat("e", 32)
+	x := Experiment{ID: id, Status: "completed", CreatedAt: now(), UpdatedAt: now(), Orchestration: &OrchestrationState{ToolCalls: []OrchestrationToolCall{{ID: "tool-1", Name: "fixture", Status: "failed"}}}}
+	if err := s.saveExperiment(x); err != nil {
+		t.Fatal(err)
+	}
+	project := filepath.Join(root, "experiments", id, "analysis", "reconstructed_archive_fixture")
+	if err := os.MkdirAll(project, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "CMakeLists.txt"), []byte("cmake_minimum_required(VERSION 3.10)\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if response := request(t, s, http.MethodGet, "/api/experiments/"+id+"/terminal", "read", nil); response.Code != http.StatusForbidden {
+		t.Fatalf("viewer terminal read=%d %s", response.Code, response.Body.String())
+	}
+	if response := request(t, s, http.MethodPut, "/api/experiments/"+id+"/terminal", "operate", map[string]any{"command": "echo no"}); response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("terminal PUT=%d %s", response.Code, response.Body.String())
+	}
+	if response := request(t, s, http.MethodGet, "/api/experiments/"+id+"/tool-calls/tool-1/retry", "operate", nil); response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("tool retry GET=%d %s", response.Code, response.Body.String())
+	}
+	if response := request(t, s, http.MethodPost, "/api/experiments/"+id+"/tool-calls/tool-1/retry", "read", nil); response.Code != http.StatusForbidden {
+		t.Fatalf("viewer tool retry=%d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestToolCallRetryCreatesDependencyGatedSuccessor(t *testing.T) {
+	s, _ := testServer(t, "secret")
+	id := strings.Repeat("d", 32)
+	original := OrchestrationToolCall{ID: "tool-original", Name: "historical-provider", Status: "failed", Result: "original failure", Timestamp: now()}
+	experiment := Experiment{ID: id, Name: "fixture", Status: "completed", CreatedAt: now(), UpdatedAt: now(), Orchestration: &OrchestrationState{ToolCalls: []OrchestrationToolCall{original}}}
+	if err := s.saveExperiment(experiment); err != nil {
+		t.Fatal(err)
+	}
+	response := request(t, s, http.MethodPost, "/api/experiments/"+id+"/tool-calls/"+original.ID+"/retry", "secret", nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("retry=%d %s", response.Code, response.Body.String())
+	}
+	current, err := s.loadExperiment(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(current.Orchestration.ToolCalls) != 2 {
+		t.Fatalf("tool calls=%d want=2", len(current.Orchestration.ToolCalls))
+	}
+	source := current.Orchestration.ToolCalls[0]
+	successor := current.Orchestration.ToolCalls[1]
+	if source.Status != "failed" || source.Result != "original failure" || source.RetryOf != "" {
+		t.Fatalf("original tool call mutated: %#v", source)
+	}
+	if successor.ID == source.ID || successor.RetryOf != source.ID || successor.RootID != source.ID || successor.Attempt != 2 {
+		t.Fatalf("invalid successor chain: source=%#v successor=%#v", source, successor)
+	}
+	if successor.Status != "dependency-gated" || successor.EndedAt == "" {
+		t.Fatalf("unknown tool must be dependency-gated: %#v", successor)
+	}
+	events, err := s.events(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current = s.ensureOrchestrationState(current, events)
+	if len(current.Orchestration.ToolCalls) != 2 {
+		t.Fatalf("control event created duplicate tool call: %#v", current.Orchestration.ToolCalls)
+	}
+}
+
+func TestToolCallCancelPreservesCancelledTerminalState(t *testing.T) {
+	s, _ := testServer(t, "secret")
+	started := make(chan struct{})
+	release := make(chan struct{})
+	s.toolExecutors["replayable-fixture"] = func(ctx context.Context, _ Experiment, _ OrchestrationToolCall) (string, error) {
+		close(started)
+		<-release
+		return "late completion", nil
+	}
+	id := strings.Repeat("c", 32)
+	original := OrchestrationToolCall{ID: "tool-replayable", RootID: "tool-replayable", Attempt: 1, Name: "replayable-fixture", Status: "failed", Result: "failed"}
+	experiment := Experiment{ID: id, Name: "fixture", Status: "completed", CreatedAt: now(), UpdatedAt: now(), Orchestration: &OrchestrationState{ToolCalls: []OrchestrationToolCall{original}}}
+	if err := s.saveExperiment(experiment); err != nil {
+		t.Fatal(err)
+	}
+	response := request(t, s, http.MethodPost, "/api/experiments/"+id+"/tool-calls/"+original.ID+"/retry", "secret", nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("retry=%d %s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		ToolCall OrchestrationToolCall `json:"tool_call"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("tool call executor did not start")
+	}
+	response = request(t, s, http.MethodPost, "/api/experiments/"+id+"/tool-calls/"+payload.ToolCall.ID+"/cancel", "secret", nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("cancel=%d %s", response.Code, response.Body.String())
+	}
+	close(release)
+	deadline := time.Now().Add(time.Second)
+	for {
+		current, err := s.loadExperiment(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		call := current.Orchestration.ToolCalls[1]
+		if call.Status == "cancelled" && call.Result == "已取消" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("cancelled state was overwritten: %#v", call)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	response = request(t, s, http.MethodPost, "/api/experiments/"+id+"/tool-calls/"+payload.ToolCall.ID+"/cancel", "secret", nil)
+	if response.Code != http.StatusConflict {
+		t.Fatalf("duplicate cancel=%d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestTerminalOutputIsBounded(t *testing.T) {
+	session := &terminalSession{}
+	for index := 0; index < terminalMaxLines+50; index++ {
+		appendTerminalOutput(session, fmt.Sprintf("line-%04d", index))
+	}
+	if len(session.Output) != terminalMaxLines || !session.Truncated || session.DroppedLines != 50 {
+		t.Fatalf("terminal line limit not enforced: count=%d dropped=%d truncated=%v", len(session.Output), session.DroppedLines, session.Truncated)
+	}
+	if session.OutputBytes > terminalMaxBytes {
+		t.Fatalf("terminal byte limit exceeded: %d", session.OutputBytes)
+	}
+	appendTerminalOutput(session, strings.Repeat("x", terminalMaxBytes+1024))
+	if session.OutputBytes > terminalMaxBytes || len(fmt.Sprint(session.Output[len(session.Output)-1]["line"])) >= terminalMaxBytes {
+		t.Fatalf("oversized terminal line not bounded: bytes=%d", session.OutputBytes)
+	}
+}
+
 func TestAuthStatusIsPublicAndOAuthIsGated(t *testing.T) {
 	s, _ := testServer(t, "secret")
 	if w := request(t, s, "GET", "/api/auth/status", "", nil); w.Code != 200 {
@@ -1223,6 +1396,83 @@ func TestP10AcceptanceDocumentIsUTF8AndReadable(t *testing.T) {
 		}
 	}
 }
+func TestOrchestrationProjectionExposesPentAGIStyleHierarchy(t *testing.T) {
+	s, root := testServer(t, "")
+	sample := filepath.Join(root, "sample.bin")
+	if err := os.WriteFile(sample, []byte("MZ"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	created := request(t, s, http.MethodPost, "/api/experiments", "", map[string]any{"target": "sample.bin", "mode": "pe-reconstruction"})
+	if created.Code != http.StatusCreated {
+		t.Fatal(created.Body.String())
+	}
+	var createdPayload map[string]any
+	if err := json.Unmarshal(created.Body.Bytes(), &createdPayload); err != nil {
+		t.Fatal(err)
+	}
+	id := createdPayload["experiment"].(map[string]any)["id"].(string)
+	s.appendEvent(id, "provider_broker_started", "running", "模型请求代理已启动", map[string]any{"model": "fixture"})
+	response := request(t, s, http.MethodGet, "/api/experiments/"+id+"/orchestration", "", nil)
+	if response.Code != http.StatusOK {
+		t.Fatal(response.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := payload["flow"].(map[string]any); !ok {
+		t.Fatalf("flow missing: %#v", payload)
+	}
+	if len(payload["tasks"].([]any)) != 1 || len(payload["subtasks"].([]any)) != 3 || len(payload["tool_calls"].([]any)) != 1 || len(payload["logs"].([]any)) < 2 {
+		t.Fatalf("unexpected orchestration projection: %#v", payload)
+	}
+	subtasks := payload["subtasks"].([]any)
+	first := subtasks[0].(map[string]any)
+	if first["status"] != "running" {
+		t.Fatalf("provider event should advance persisted subtask state: %#v", first)
+	}
+}
+
+func TestOrchestrationStatePersistsAndResumes(t *testing.T) {
+	s, root := testServer(t, "")
+	sample := filepath.Join(root, "sample.bin")
+	if err := os.WriteFile(sample, []byte("MZ"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	created := request(t, s, http.MethodPost, "/api/experiments", "", map[string]any{"target": "sample.bin", "mode": "pe-reconstruction"})
+	if created.Code != http.StatusCreated {
+		t.Fatal(created.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(created.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	id := payload["experiment"].(map[string]any)["id"].(string)
+	initial, err := s.loadExperiment(id)
+	if err != nil || initial.Orchestration == nil || len(initial.Orchestration.Subtasks) != 3 {
+		t.Fatalf("initial orchestration state missing: %#v err=%v", initial.Orchestration, err)
+	}
+	s.appendEvent(id, "started", "running", "任务执行器已启动", nil)
+	s.appendEvent(id, "result_summary", "running", "执行日志已归档", map[string]any{"output_lines": 2})
+	s.appendEvent(id, "model_completed", "completed", "模型重构阶段已完成", map[string]any{"model": "fixture"})
+	current, err := s.loadExperiment(id)
+	if err != nil || current.Orchestration == nil {
+		t.Fatalf("orchestration state not persisted: %#v err=%v", current.Orchestration, err)
+	}
+	if current.Orchestration.Subtasks[0].Status != "finished" || current.Orchestration.Subtasks[1].Status != "running" {
+		t.Fatalf("unexpected subtask states: %#v", current.Orchestration.Subtasks)
+	}
+	if len(current.Orchestration.ToolCalls) != 1 || current.Orchestration.LastEventSequence == 0 {
+		t.Fatalf("tool call or sequence was not persisted: %#v", current.Orchestration)
+	}
+	restarted := newServer(s.cfg)
+	defer restarted.close()
+	recovered, err := restarted.loadExperiment(id)
+	if err != nil || recovered.Orchestration == nil || len(recovered.Orchestration.ToolCalls) != 1 {
+		t.Fatalf("orchestration state did not survive restart: %#v err=%v", recovered.Orchestration, err)
+	}
+}
+
 func TestTemplatesAndCompletedEventStream(t *testing.T) {
 	s, root := testServer(t, "")
 	if w := request(t, s, "GET", "/api/flow-templates", "", nil); w.Code != 200 {
@@ -1385,23 +1635,27 @@ func TestTokenLifecycle(t *testing.T) {
 
 func TestAuditDescriptorCoversCriticalWrites(t *testing.T) {
 	tests := map[string]string{
-		http.MethodPost + " /api/experiments":                                                     "experiment.create",
-		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/execute":             "experiment.execute",
-		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/cancel":              "experiment.cancel",
-		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/retry":               "experiment.retry",
-		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/build":               "source.build",
-		http.MethodPut + " /api/experiments/" + strings.Repeat("a", 32) + "/source/file":          "source.save",
-		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/patches/apply":       "patch.apply",
-		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/patches/rollback":    "patch.rollback",
-		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/patches/ai-apply":    "patch.apply",
-		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/patches/ai-rollback": "patch.rollback",
-		http.MethodPut + " /api/providers":                                                        "provider.update",
-		http.MethodPost + " /api/providers/test":                                                  "provider.test",
-		http.MethodPost + " /api/knowledge":                                                       "knowledge.create",
-		http.MethodPatch + " /api/knowledge/" + strings.Repeat("b", 32):                           "knowledge.update",
-		http.MethodDelete + " /api/knowledge/" + strings.Repeat("b", 32):                          "knowledge.delete",
-		http.MethodPost + " /api/auth/tokens":                                                     "token.create",
-		http.MethodDelete + " /api/auth/tokens/" + strings.Repeat("c", 32):                        "token.revoke",
+		http.MethodPost + " /api/experiments":                                                        "experiment.create",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/execute":                "experiment.execute",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/cancel":                 "experiment.cancel",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/retry":                  "experiment.retry",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/build":                  "source.build",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/terminal":               "terminal.execute",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/terminal/session/stop":  "terminal.cancel",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/tool-calls/tool/retry":  "tool.retry",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/tool-calls/tool/cancel": "tool.cancel",
+		http.MethodPut + " /api/experiments/" + strings.Repeat("a", 32) + "/source/file":             "source.save",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/patches/apply":          "patch.apply",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/patches/rollback":       "patch.rollback",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/patches/ai-apply":       "patch.apply",
+		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/patches/ai-rollback":    "patch.rollback",
+		http.MethodPut + " /api/providers":                                                           "provider.update",
+		http.MethodPost + " /api/providers/test":                                                     "provider.test",
+		http.MethodPost + " /api/knowledge":                                                          "knowledge.create",
+		http.MethodPatch + " /api/knowledge/" + strings.Repeat("b", 32):                              "knowledge.update",
+		http.MethodDelete + " /api/knowledge/" + strings.Repeat("b", 32):                             "knowledge.delete",
+		http.MethodPost + " /api/auth/tokens":                                                        "token.create",
+		http.MethodDelete + " /api/auth/tokens/" + strings.Repeat("c", 32):                           "token.revoke",
 	}
 	for input, expected := range tests {
 		parts := strings.SplitN(input, " ", 2)
@@ -1431,6 +1685,29 @@ func TestMutationAuditRecordsFailureWithoutRequestSecrets(t *testing.T) {
 	}
 	if !bytes.Contains(audit, []byte(`"action":"experiment.execute"`)) || !bytes.Contains(audit, []byte(`"outcome":"failed"`)) || bytes.Contains(audit, []byte(secret)) {
 		t.Fatalf("invalid mutation audit: %s", audit)
+	}
+}
+
+func TestReadinessRequiresHealthyAuthenticatedRunner(t *testing.T) {
+	s, _ := testServer(t, "")
+	s.cfg.Production = true
+	response := request(t, s, http.MethodGet, "/readyz", "", nil)
+	if response.Code != http.StatusServiceUnavailable || !strings.Contains(response.Body.String(), "isolated runner is not configured") {
+		t.Fatalf("missing runner readiness status=%d body=%s", response.Code, response.Body.String())
+	}
+	runner := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Runner-Token") != "runner-secret" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+	}))
+	defer runner.Close()
+	s.cfg.RunnerURL = runner.URL
+	s.cfg.RunnerToken = "runner-secret"
+	response = request(t, s, http.MethodGet, "/readyz", "", nil)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"runner":"ready"`) {
+		t.Fatalf("healthy runner readiness status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 
@@ -1476,6 +1753,66 @@ func TestRestartRecoversInterruptedExperiment(t *testing.T) {
 	}
 	if recovered.Reconstruction.BuildPassed || recovered.Reconstruction.BehaviorPassed || recovered.Reconstruction.CompleteBuildable {
 		t.Fatalf("restart recovery retained unprovable completion gates: %#v", recovered.Reconstruction)
+	}
+}
+
+func TestWorkerFinalizationCannotOverwriteCancelledExperiment(t *testing.T) {
+	s, _ := testServer(t, "")
+	id := newID()
+	createdAt := now()
+	running := Experiment{ID: id, Status: "running", CreatedAt: createdAt, UpdatedAt: createdAt, Metadata: map[string]any{}}
+	if err := s.saveExperiment(running); err != nil {
+		t.Fatal(err)
+	}
+	cancelled, err := s.cancel(id)
+	if err != nil || cancelled.Status != "cancelled" {
+		t.Fatalf("cancel failed: %#v err=%v", cancelled, err)
+	}
+	completed := running
+	completed.Status = "completed"
+	completed.UpdatedAt = now()
+	if err = s.finalizeWorkerExperiment(completed, "分析任务已完成", 0); err == nil {
+		t.Fatal("late worker finalization must be rejected after cancellation")
+	}
+	current, err := s.loadExperiment(id)
+	if err != nil || current.Status != "cancelled" {
+		t.Fatalf("cancelled terminal state was overwritten: %#v err=%v", current, err)
+	}
+	events, err := s.events(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range events {
+		if event.Type == "completed" {
+			t.Fatalf("completion event published after rejected finalization: %#v", events)
+		}
+	}
+}
+
+func TestWorkerFinalizationPersistsBeforePublishingTerminalEvent(t *testing.T) {
+	s, _ := testServer(t, "")
+	id := newID()
+	createdAt := now()
+	running := Experiment{ID: id, Status: "running", CreatedAt: createdAt, UpdatedAt: createdAt, Metadata: map[string]any{}}
+	if err := s.saveExperiment(running); err != nil {
+		t.Fatal(err)
+	}
+	completed := running
+	completed.Status = "completed"
+	completed.UpdatedAt = now()
+	if err := s.finalizeWorkerExperiment(completed, "分析任务已完成", 0); err != nil {
+		t.Fatal(err)
+	}
+	current, err := s.loadExperiment(id)
+	if err != nil || current.Status != "completed" {
+		t.Fatalf("terminal state was not persisted: %#v err=%v", current, err)
+	}
+	events, err := s.events(id)
+	if err != nil || len(events) != 1 || events[0].Type != "completed" {
+		t.Fatalf("terminal event mismatch: %#v err=%v", events, err)
+	}
+	if current.Orchestration == nil || current.Orchestration.LastEventSequence != events[0].Sequence {
+		t.Fatalf("terminal event projection mismatch: %#v", current.Orchestration)
 	}
 }
 

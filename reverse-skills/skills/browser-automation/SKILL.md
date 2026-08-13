@@ -1,4 +1,4 @@
-﻿---
+---
 name: browser-automation
 description: |
   统一自动化入口。覆盖浏览器自动化（Playwright）和 Windows 桌面应用自动化（OpenReverse）。
@@ -8,6 +8,13 @@ description: |
 ---
 
 # 自动化操作 (Desktop & Browser Automation)
+
+## ACTION REQUIRED（读完后立刻执行）
+
+1. `NOW`：确认当前任务是否命中本 skill 的适用范围
+2. `NOW`：读取 `../tool-index.md`，校验工具可用性和实际路径
+3. `NEXT`：缺工具时调用 bootstrap，不要猜路径
+4. `ACT`：进入"工作流"第一步并执行，不要停在确认状态
 
 ## 适用范围
 
@@ -225,3 +232,11 @@ npm run doctor:network
 - 桌面应用是逆向工具 → `ida-reverse/`
 
 **同级关联模块**: `js-reverse`（浏览器操作后可能需要分析 JS）、`ida-reverse`（OpenReverse 可以自动化操作 IDA GUI）
+
+
+## 任务完成自检（声称完成前 MUST 通过）
+
+- [ ] 我是否执行了工作流中的每一步（而不是只阅读）？
+- [ ] 我是否基于 `tool-index` 使用了真实工具路径？
+- [ ] 我是否产出了可复现证据（命令/脚本/截图/报告）？
+- [ ] 我是否完成并回写了 RULES 要求的 Checklist 项？

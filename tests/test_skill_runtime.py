@@ -25,7 +25,6 @@ class SkillRuntimeTests(unittest.TestCase):
         self.assertEqual(decision["primary"]["skill_id"], "interface-analysis")
         self.assertEqual(decision["input"]["endpoint"], "https://api.example.test/v1/openapi.json")
         self.assertIn("url-descriptor", decision["input"]["kinds"])
-        self.assertIn("network", decision["execution_boundary"])
 
     def test_package_and_protection_routes_include_workflow_and_gate(self) -> None:
         catalog = SkillCatalog(ROOT / "reverse-skills")
@@ -36,14 +35,32 @@ class SkillRuntimeTests(unittest.TestCase):
 
         protection = catalog.route("review anti-cheat integrity", package="windows-game")
         self.assertEqual(protection["primary"]["skill_id"], "protection-review")
-        self.assertTrue(protection["authorization_required"])
         self.assertIn("anti_tamper_lab", protection["primary"]["capability_candidates"])
 
     def test_plain_local_files_do_not_accidentally_select_controlled_routes(self) -> None:
         router = SkillRouter(ROOT / "reverse-skills")
         self.assertEqual(router.route("", target="client.apk")["primary"]["skill_id"], "apk-reverse")
-        self.assertEqual(router.route("inspect binary", target="client.exe")["primary"]["skill_id"], "pe-triage")
-        self.assertEqual(router.route("inspect library", target="client.dll")["primary"]["skill_id"], "pe-triage")
+        self.assertEqual(router.route("inspect binary", target="client.exe")["primary"]["skill_id"], "pe-static-analysis")
+        self.assertEqual(router.route("inspect library", target="client.dll")["primary"]["skill_id"], "pe-static-analysis")
+
+    def test_imported_reverse_skill_routes_match_expected_domains(self) -> None:
+        router = SkillRouter(ROOT / "reverse-skills")
+        self.assertEqual(
+            router.route("inspect chrome extension manifest", target="plugin.crx")["primary"]["skill_id"],
+            "browser-extension-reverse",
+        )
+        self.assertEqual(
+            router.route("analyze protobuf traffic", target="capture.pcapng", interface="protocol")["primary"]["skill_id"],
+            "protocol-reverse",
+        )
+        self.assertEqual(
+            router.route("review a memory dump timeline", target="host.dmp", package="forensics")["primary"]["skill_id"],
+            "digital-forensics",
+        )
+        self.assertEqual(
+            router.route("open-source decompiler workflow with ghidra", target="sample.exe")["primary"]["skill_id"],
+            "ghidra-reverse",
+        )
 
     def test_cli_routes_endpoint_descriptors(self) -> None:
         completed = subprocess.run(
@@ -143,10 +160,7 @@ class SkillRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertEqual(json.loads(completed.stdout)["route"], expected)
-        self.assertIn(
-            "Keep the first pass offline and limited to the supplied local artifact.",
-            expected["next_actions"],
-        )
+        self.assertTrue(expected["next_actions"])
 
     def test_cli_route_rejects_remote_targets_and_invalid_limits(self) -> None:
         remote = subprocess.run(

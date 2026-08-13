@@ -11,7 +11,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KALI_BOOTSTRAP="$(cd "$SCRIPT_DIR/../../../kali/scripts" 2>/dev/null && pwd)/bootstrap-reverse.sh"
-DEFAULT_KEYSTORE="$SCRIPT_DIR/../debug.keystore"
+DEFAULT_KEYSTORE="$HOME/.android/debug.keystore"
 
 # ─── 参数 ──────────────────────────────────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ if [[ -z "$PROJECT_DIR" || ! -d "$PROJECT_DIR" ]]; then
     echo "用法: $0 <apktool_project_dir> [options]"
     echo "  --out <dir>        输出目录（默认: 项目父目录）"
     echo "  --name <base>      输出文件名前缀"
-    echo "  --keystore <path>  签名密钥库（默认: debug.keystore）"
+    echo "  --keystore <path>  签名密钥库（默认: ~/.android/debug.keystore）"
     echo "  --install          签名后安装到设备"
     echo "  --reinstall        覆盖安装"
     echo "  --device <serial>  指定设备"

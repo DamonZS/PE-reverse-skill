@@ -1,4 +1,4 @@
-export type CatalogKind = 'skill' | 'tool' | 'capability' | 'script' | 'dependency';
+export type CatalogKind = 'skill' | 'tool' | 'capability' | 'script' | 'dependency' | 'extension';
 
 export type CatalogItem = {
   id: string;
@@ -23,7 +23,7 @@ export type CatalogPayload = {
   items: CatalogItem[];
 };
 
-const KINDS: CatalogKind[] = ['skill', 'tool', 'capability', 'script', 'dependency'];
+const KINDS: CatalogKind[] = ['skill', 'tool', 'capability', 'script', 'dependency', 'extension'];
 
 function bool(value: unknown, fallback = false) {
   return typeof value === 'boolean' ? value : fallback;
@@ -36,7 +36,7 @@ function available(value: unknown, fallback = false) {
 }
 
 function text(value: unknown) {
-  return value == null ? '' : String(value);
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function normalizeItem(raw: unknown, fallbackKind: CatalogKind, index: number): CatalogItem {
@@ -59,7 +59,7 @@ function normalizeItem(raw: unknown, fallbackKind: CatalogKind, index: number): 
     accepted: bool(item.accepted ?? item.verified ?? status.accepted),
     missing_dependencies: Array.isArray(missing) ? missing.map(text).filter(Boolean) : [],
     acceptance_command: text(item.acceptance_command || item.verify_command || status.acceptance_command),
-    callable_name: text(item.callable),
+    callable_name: text(item.callable_name || item.entrypoint || item.callable),
     execution_boundary: text(item.execution_boundary || status.execution_boundary),
     routes: Array.isArray(item.routes) ? item.routes.map(text).filter(Boolean) : [],
     metadata: item,
@@ -85,6 +85,7 @@ export async function fetchCatalog(): Promise<CatalogPayload> {
     capability: ['capabilities', 'providers'],
     script: ['scripts'],
     dependency: ['dependencies', 'github_tools'],
+    extension: ['extensions'],
   };
   for (const kind of KINDS) {
     for (const key of aliases[kind]) {

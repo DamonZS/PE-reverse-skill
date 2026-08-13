@@ -16,7 +16,9 @@ import sys
 import json
 import hashlib
 import subprocess
+import shutil
 from pathlib import Path
+from collections.abc import Sequence
 from collections import defaultdict
 
 # ============================================================
@@ -30,7 +32,7 @@ def get_capstone():
         return capstone
     except ImportError:
         print("[*] 正在安装 capstone...")
-        code = run_cmd('"%s" -m pip install capstone -q' % sys.executable)[0]
+        code = run_cmd([sys.executable, '-m', 'pip', 'install', 'capstone', '-q'])[0]
         if code == 0:
             print("[+] capstone 安装成功")
             import capstone
@@ -266,11 +268,13 @@ def human_size(size_bytes):
 # 命令执行工具
 # ============================================================
 
-def run_cmd(cmd, timeout=60, capture=True):
-    """运行 shell 命令"""
+def run_cmd(cmd: Sequence[str], timeout=60, capture=True):
+    """运行参数数组命令，不通过 shell 解析。"""
+    if isinstance(cmd, (str, bytes)):
+        raise TypeError("run_cmd requires an argument sequence, not a shell command string")
     try:
         result = subprocess.run(
-            cmd, shell=True, capture_output=capture,
+            [str(part) for part in cmd], shell=False, capture_output=capture,
             timeout=timeout, text=True, errors='ignore'
         )
         return result.returncode, result.stdout or '', result.stderr or ''
@@ -280,14 +284,8 @@ def run_cmd(cmd, timeout=60, capture=True):
         return -1, '', str(e)
 
 def which(program):
-    """检查命令是否可用"""
-    result = subprocess.run(
-        'where %s' % program if os.name == 'nt' else 'which %s' % program,
-        shell=True, capture_output=True, text=True
-    )
-    if result.returncode == 0:
-        return result.stdout.strip().split('\n')[0]
-    return None
+    """检查命令是否可用。"""
+    return shutil.which(program)
 
 
 # ============================================================
@@ -349,7 +347,7 @@ def ensure_package(package, import_name=None):
         return True
     except ImportError:
         print("[*] 正在安装 %s..." % package)
-        code = run_cmd('"%s" -m pip install %s -q' % (sys.executable, package))[0]
+        code = run_cmd([sys.executable, '-m', 'pip', 'install', package, '-q'])[0]
         if code == 0:
             print("[+] %s 安装成功" % package)
             return True

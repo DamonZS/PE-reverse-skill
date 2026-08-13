@@ -1,7 +1,26 @@
 # Cybersecurity Skills Router — Kali Linux 专供版
 
 > 本目录是 Kali Linux 2026.1 优化适配层。基于 2026 年 3 月发布的 Kali 2026.1（内核 6.18）进行专项优化。
-> 核心知识库（skills/、CTF-Sandbox-Orchestrator/）与 Windows 版共享；Kali 专属 README 和 Bash 入口需要覆盖 Windows 核心能力名，同时额外提供 Kali 原生工具/MCP 能力。
+> 核心知识库（skills/、CTF-Sandbox-Orchestrator/）与 Windows 版共享；Kali 专属 README 和 Bash 入口需要覆盖 Windows 核心能力名，同时额外提供 Kali 原生工具/MCP 能力。  
+> 根目录 [README-kali.md](../README-kali.md) 仅为短跳转，**以本文件为准**。
+
+---
+
+## AI：读完后立即执行
+
+```text
+1. 检测包根目录（含 skills/ 与 kali/ 的仓库根）
+2. 读取 kali/RULES-kali.md → 全局注入与工具扫描
+3. bash kali/scripts/refresh-tool-index.sh
+4. 与主包共用作战链：
+   - skills/MASTER-ROUTING.md（或 pwsh skills/scripts/master-route.ps1）
+   - skills/scripts/case-init.ps1 → work/<case>/scope.md
+   - auth.status=granted + network_profile 后才对目标 ACT
+   - skills/ops/（证据链 / 角色 / 时间线 / IDENTITY）
+5. 向用户报告配置结果
+```
+
+通用 Agent 引导见仓库根 [README_AI.md](../README_AI.md)（检测到 Kali 时再读本文件）。
 
 ---
 
@@ -9,7 +28,7 @@
 
 ```text
 项目根目录/
-├── skills/                    # 共享：SKILL.md、routing.md、references、field-journal
+├── skills/                    # 共享：SKILL、routing、MASTER-ROUTING、ops、scripts、field-journal
 ├── CTF-Sandbox-Orchestrator/  # 共享：40+ CTF 子技能
 ├── kali/                      # ← 你在这里
 │   ├── scripts/
@@ -33,14 +52,18 @@ Kali 专属入口不是 Windows README 的简单复制，而是 **同一套核�
 - Kali：`kali/scripts/bootstrap-reverse.sh`
 - 普通 Linux/macOS：`skills/scripts/bootstrap-reverse.sh`
 
+JEB Pro 是用户自行许可和安装的商业工具；Reqable MCP 使用官方固定版本的 `reqable-mcp-server`，但仍要求单独安装 Reqable 桌面客户端。
+
 Kali 脚本应覆盖 Windows manifest 中的核心能力名，例如 `jadx`、`apktool`、`frida`、`jshookmcp`、`anything-analyzer`、`idapro`、`r2`、`adb`、`ghidra-mcp`、`seclists`、`burpsuite-mcp`、`nmap`、`pentestswarm`；同时可以额外支持 Kali 原生工具，例如 `mcp-kali-server`、`metasploitmcp`、`hexstrike-ai`、`sstimap`、`xsstrike`、`netexec` 等。
 
 **共享的部分**（不需要改动）：
-- 所有 `SKILL.md`、`routing.md`
+- 所有 `SKILL.md`、`routing.md`、`MASTER-ROUTING.md`
+- `skills/ops/` 作战契约（scope / 证据链 / 角色 / 时间线）
 - 所有 `references/` 知识库
 - `field-journal/` 自进化机制
 - `CTF-Sandbox-Orchestrator/` 全部
 - `docs-generator/`、`diagram-generator/`
+- `skills/scripts/case-init.ps1`、`master-route.ps1`（可用 pwsh 调用）
 
 **Kali 专属的部分**：
 - 脚本全部是 bash（`.sh`）

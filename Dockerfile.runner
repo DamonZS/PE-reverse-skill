@@ -1,0 +1,12 @@
+FROM golang:1.26-bookworm AS go-builder
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY vendor ./vendor
+COPY cmd/reverse-analyzer-runner ./cmd/reverse-analyzer-runner
+RUN CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w" -o /out/reverse-analyzer-runner ./cmd/reverse-analyzer-runner
+
+FROM docker:27-cli
+COPY --from=go-builder /out/reverse-analyzer-runner /usr/local/bin/reverse-analyzer-runner
+USER 65532:65532
+EXPOSE 8091
+ENTRYPOINT ["reverse-analyzer-runner"]

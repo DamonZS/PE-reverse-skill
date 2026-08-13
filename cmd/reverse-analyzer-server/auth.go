@@ -218,8 +218,8 @@ type tokenFile struct {
 
 var rolePermissions = map[string]map[string]bool{
 	"viewer":  {"workspace.read": true, "artifact.read": true},
-	"analyst": {"workspace.read": true, "artifact.read": true, "knowledge.write": true, "analysis.plan": true, "analysis.execute": true},
-	"admin":   {"workspace.read": true, "artifact.read": true, "knowledge.write": true, "analysis.plan": true, "analysis.execute": true, "providers.manage": true, "users.manage": true},
+	"analyst": {"workspace.read": true, "artifact.read": true, "knowledge.write": true, "analysis.plan": true, "analysis.execute": true, "terminal.read": true, "terminal.execute": true, "terminal.cancel": true, "tool.retry": true, "tool.cancel": true},
+	"admin":   {"workspace.read": true, "artifact.read": true, "knowledge.write": true, "analysis.plan": true, "analysis.execute": true, "terminal.read": true, "terminal.execute": true, "terminal.cancel": true, "tool.retry": true, "tool.cancel": true, "providers.manage": true, "users.manage": true},
 }
 
 func tokenHash(v string) string { sum := sha256.Sum256([]byte(v)); return hex.EncodeToString(sum[:]) }
@@ -255,6 +255,24 @@ func (s *Server) authenticate(r *http.Request) *identity {
 }
 func permission(r *http.Request) string {
 	p := r.URL.Path
+	parts := strings.Split(strings.Trim(p, "/"), "/")
+	if len(parts) >= 4 && parts[0] == "api" && parts[1] == "experiments" && parts[3] == "terminal" {
+		if len(parts) == 6 && parts[5] == "stop" {
+			return "terminal.cancel"
+		}
+		if r.Method == http.MethodPost {
+			return "terminal.execute"
+		}
+		return "terminal.read"
+	}
+	if len(parts) == 6 && parts[0] == "api" && parts[1] == "experiments" && parts[3] == "tool-calls" {
+		if parts[5] == "retry" {
+			return "tool.retry"
+		}
+		if parts[5] == "cancel" {
+			return "tool.cancel"
+		}
+	}
 	if strings.HasPrefix(p, "/api/auth/tokens") {
 		return "users.manage"
 	}

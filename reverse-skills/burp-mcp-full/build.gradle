@@ -7,6 +7,10 @@ version = '1.0.0'
 sourceCompatibility = '21'
 targetCompatibility = '21'
 
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
 repositories {
     mavenCentral()
 }

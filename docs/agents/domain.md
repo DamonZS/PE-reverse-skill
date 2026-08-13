@@ -18,7 +18,8 @@ If these files do not exist, continue silently. Producer skills create them when
 |-- CONTEXT.md
 |-- docs/
 |   `-- adr/
-`-- reverse_analyzer/
+|-- reverse_analyzer/
+`-- cmd/
 ```
 
 ## Vocabulary

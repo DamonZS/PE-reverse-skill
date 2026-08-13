@@ -69,6 +69,7 @@ If the task is clearly dominated by one domain and the specialized skill exists,
 - `$competition-web-runtime`
 - `$competition-reverse-pwn`
 - `$competition-crypto-mobile`
+- `$competition-zip-archive`
 - `$competition-agent-cloud`
 - `$competition-identity-windows`
 - `$competition-prompt-injection`

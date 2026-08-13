@@ -1,4 +1,4 @@
-# CTF Reverse - Advanced Tools & Deobfuscation
+﻿# CTF Reverse - Advanced Tools & Deobfuscation
 
 Advanced tooling for commercial packers/protectors, binary diffing, deobfuscation frameworks, emulation, and symbolic execution beyond angr.
 
@@ -372,7 +372,7 @@ while pc:
 
 ## Manticore (Symbolic Execution)
 
-Trail of Bits' symbolic execution tool. Similar to angr but with native EVM (Ethereum) support.
+Trail of Bits' symbolic execution tool for native binaries. Its API is similar in spirit to angr.
 
 ```python
 from manticore.native import Manticore
@@ -393,7 +393,7 @@ def fail(state):
 m.run()
 ```
 
-**Best for:** EVM/smart contract analysis, simpler Linux binaries. angr is generally more mature for complex RE tasks.
+**Best for:** simpler Linux binaries and embedded targets. angr is generally more mature for complex RE tasks.
 
 ---
 

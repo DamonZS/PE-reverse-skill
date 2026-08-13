@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -16,7 +17,8 @@ def build_platform_catalog(workspace: str | Path) -> dict[str, Any]:
     """Return a JSON-compatible platform inventory without executing catalog items."""
 
     root = Path(workspace).resolve()
-    skill_catalog = SkillCatalog(root / "reverse-skills")
+    skills_root = Path(os.environ.get("REVERSE_ANALYZER_SKILLS_DIR", root / "reverse-skills")).resolve()
+    skill_catalog = SkillCatalog(skills_root)
     skills = [
         record.to_dict()
         for record in skill_catalog.discover()
@@ -26,7 +28,8 @@ def build_platform_catalog(workspace: str | Path) -> dict[str, Any]:
     providers = _default_providers()
     scripts = _scripts(root / "scripts", root)
     github_tools = _github_tools(root / "config" / "github-tools.lock.json")
-    discovered_total = len(skills) + len(tools) + len(providers) + len(scripts) + len(github_tools)
+    extensions = _external_extensions(skills_root, root)
+    discovered_total = len(skills) + len(tools) + len(providers) + len(scripts) + len(github_tools) + len(extensions)
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "workspace": str(root),
@@ -41,6 +44,7 @@ def build_platform_catalog(workspace: str | Path) -> dict[str, Any]:
             "capability_total": len({item["capability"] for item in providers}),
             "script_total": len(scripts),
             "github_tool_total": len(github_tools),
+            "extension_total": len(extensions),
         },
         "integration": {
             "discovered_total": discovered_total,
@@ -54,7 +58,50 @@ def build_platform_catalog(workspace: str | Path) -> dict[str, Any]:
         "providers": providers,
         "scripts": scripts,
         "github_tools": github_tools,
+        "extensions": extensions,
     }
+
+
+def _display_path(path: Path, workspace_root: Path) -> str:
+    try:
+        return path.relative_to(workspace_root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _external_extensions(skills_root: Path, workspace_root: Path) -> list[dict[str, Any]]:
+    """Inventory absorbed external integrations without claiming they are live."""
+
+    records: list[dict[str, Any]] = []
+    extension_roots = {
+        "ctf-sandbox-orchestrator": skills_root / "CTF-Sandbox-Orchestrator",
+        "burp-mcp-full": skills_root / "burp-mcp-full",
+        "kali-toolchain": skills_root / "kali",
+        "examples": skills_root / "examples",
+    }
+    for extension_id, directory in extension_roots.items():
+        if not directory.is_dir():
+            continue
+        files = [path for path in directory.rglob("*") if path.is_file()]
+        skill_count = sum(path.name == "SKILL.md" for path in files)
+        records.append(
+            {
+                "id": extension_id,
+                "name": extension_id.replace("-", " ").title(),
+                "kind": "extension",
+                "path": _display_path(directory, workspace_root),
+                "file_count": len(files),
+                "skill_count": skill_count,
+                "registered": True,
+                "callable": False,
+                "dependency_ready": False,
+                "accepted": True,
+                "status": "absorbed_inventory",
+                "execution_boundary": "inventory_only",
+                "missing_dependencies": ["external runtime acceptance"] if extension_id != "examples" else [],
+            }
+        )
+    return records
 
 
 def _builtin_tools() -> list[dict[str, Any]]:

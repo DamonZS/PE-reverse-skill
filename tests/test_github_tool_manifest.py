@@ -9,6 +9,21 @@ import unittest
 from urllib.parse import urlparse
 
 
+def _run_powershell(command: list[str], *, cwd: Path) -> tuple[subprocess.CompletedProcess[object], str]:
+    with tempfile.TemporaryFile() as output:
+        completed = subprocess.run(
+            command,
+            cwd=cwd,
+            stdout=output,
+            stderr=subprocess.STDOUT,
+            timeout=20,
+            check=False,
+        )
+        output.seek(0)
+        text = output.read().decode(errors="replace")
+    return completed, text
+
+
 class GitHubToolManifestTests(unittest.TestCase):
     def test_manifest_references_existing_providers_and_official_sources(self) -> None:
         root = Path(__file__).resolve().parents[1]
@@ -41,16 +56,12 @@ class GitHubToolManifestTests(unittest.TestCase):
         if shell is None:
             self.skipTest("PowerShell is not available")
         root = Path(__file__).resolve().parents[1]
-        completed = subprocess.run(
+        completed, output = _run_powershell(
             [shell, "-NoProfile", "-File", str(root / "scripts" / "install_github_tools.ps1"), "-ListOnly"],
             cwd=root,
-            capture_output=True,
-            text=True,
-            timeout=20,
-            check=False,
         )
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        output = completed.stdout.lower() + completed.stderr.lower()
+        output = output.lower()
+        self.assertEqual(completed.returncode, 0, output)
         self.assertIn("classification", output)
         self.assertIn("operator-selected", output)
 
@@ -60,7 +71,7 @@ class GitHubToolManifestTests(unittest.TestCase):
             self.skipTest("PowerShell is not available")
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as temporary:
-            completed = subprocess.run(
+            completed, output = _run_powershell(
                 [
                     shell,
                     "-NoProfile",
@@ -72,13 +83,10 @@ class GitHubToolManifestTests(unittest.TestCase):
                     "ghidra,unknown-tool",
                 ],
                 cwd=root,
-                capture_output=True,
-                text=True,
-                timeout=20,
-                check=False,
             )
         self.assertNotEqual(completed.returncode, 0)
-        self.assertIn("unknown", completed.stdout.lower() + completed.stderr.lower())
+        output = output.lower()
+        self.assertIn("unknown", output)
 
     def test_script_rejects_provider_path_outside_repository(self) -> None:
         shell = shutil.which("pwsh") or shutil.which("powershell")
@@ -103,7 +111,7 @@ class GitHubToolManifestTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             manifest_path = Path(temporary) / "manifest.json"
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-            completed = subprocess.run(
+            completed, output = _run_powershell(
                 [
                     shell,
                     "-NoProfile",
@@ -114,13 +122,10 @@ class GitHubToolManifestTests(unittest.TestCase):
                     "-ListOnly",
                 ],
                 cwd=root,
-                capture_output=True,
-                text=True,
-                timeout=20,
-                check=False,
             )
         self.assertNotEqual(completed.returncode, 0)
-        self.assertIn("provider module", completed.stdout.lower() + completed.stderr.lower())
+        output = output.lower()
+        self.assertIn("provider module", output)
 
 
 if __name__ == "__main__":

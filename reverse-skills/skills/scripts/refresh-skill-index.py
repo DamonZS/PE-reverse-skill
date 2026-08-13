@@ -54,8 +54,8 @@ def render_index(routing: Mapping[str, Any]) -> str:
         "",
         f"Start with [{master_title}]({master_path}), then follow the selected workflow and its indexed subskills/tools.",
         "",
-        "| Workflow | Phase | Risk | Authorization | Indexed tools | Purpose |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "| Workflow | Phase | Risk | Authorization | Indexed tools |",
+        "| --- | --- | --- | --- | --- |",
     ]
     for route in routes:
         if not isinstance(route, Mapping):
@@ -66,9 +66,8 @@ def render_index(routing: Mapping[str, Any]) -> str:
         risk_level = _table_cell(route.get("risk_level")) or "standard"
         authorization = "required" if route.get("requires_authorization") else "not required"
         tools = _table_cell(", ".join(str(tool) for tool in route.get("tools", []) if str(tool))) or "-"
-        boundary = _table_cell(route.get("execution_boundary"))
         lines.append(
-            f"| [{workflow_title}]({skill_id}/SKILL.md) | {phase} | {risk_level} | {authorization} | {tools} | {boundary} |"
+            f"| [{workflow_title}]({skill_id}/SKILL.md) | {phase} | {risk_level} | {authorization} | {tools} |"
         )
     lines.append("")
     return "\n".join(lines)

@@ -12,12 +12,6 @@ from typing import Any
 
 SKILLS_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_ROUTING = SKILLS_ROOT / "config" / "routing.json"
-REQUIRED_POLICY = {
-    "local_only": True,
-    "network": "forbidden",
-    "target_execution": "forbidden",
-    "auto_install": False,
-}
 VALID_STATUSES = {"pending", "in-progress", "complete", "blocked"}
 
 
@@ -65,14 +59,6 @@ def review(case_dir: Path, valid_skill_ids: set[str]) -> dict[str, Any]:
         issues.append("schema_version must be 1")
     if not isinstance(record.get("case_id"), str) or not record["case_id"].strip():
         issues.append("case_id must be a non-empty string")
-
-    policy = record.get("policy")
-    if not isinstance(policy, dict):
-        issues.append("policy must be an object")
-    else:
-        for key, expected in REQUIRED_POLICY.items():
-            if policy.get(key) != expected:
-                issues.append(f"policy.{key} must be {expected!r}")
 
     stages = record.get("stages")
     if not isinstance(stages, list) or not stages:

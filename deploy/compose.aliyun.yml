@@ -25,8 +25,6 @@ services:
     pull_policy: never
     restart: unless-stopped
     user: "10001:10001"
-    group_add:
-      - "${DOCKER_GID:?set DOCKER_GID}"
     read_only: true
     depends_on:
       postgres:
@@ -46,9 +44,8 @@ services:
       REVERSE_ANALYZER_CORS_ALLOWED_ORIGINS: https://pe.toporeduce.cn
       REVERSE_ANALYZER_TRUSTED_PROXY_CIDRS: 172.16.0.0/12
       REVERSE_ANALYZER_PROVIDER_CONFIG: /run/config/provider.local.json
-      REVERSE_ANALYZER_SANDBOX_RUNTIME: docker
-      REVERSE_ANALYZER_SANDBOX_IMAGE: ${REVERSE_ANALYZER_IMAGE}
-      REVERSE_ANALYZER_SANDBOX_WORKSPACE_VOLUME: pe_reverse_analyzer_workspace
+      REVERSE_ANALYZER_RUNNER_URL: http://runner:8091
+      REVERSE_ANALYZER_RUNNER_TOKEN_FILE: /run/secrets/runner_token
       REVERSE_ANALYZER_PROVIDER_TIMEOUT: "600"
       REVERSE_ANALYZER_PROVIDER_MAX_OUTPUT_TOKENS: "4096"
       REVERSE_ANALYZER_PROVIDER_REQUEST_LIMIT: "64"
@@ -56,10 +53,10 @@ services:
     secrets:
       - postgres_password
       - web_token
+      - runner_token
     volumes:
       - workspace:/workspace
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /opt/pe-reverse-analyzer/config/provider.local.json:/run/config/provider.local.json
+      - /opt/pe-reverse-analyzer/config/provider.local.json:/run/config/provider.local.json:ro
     tmpfs:
       - /tmp:size=192m,mode=1777
     ports:
@@ -76,6 +73,37 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
 
+  runner:
+    image: ${REVERSE_ANALYZER_RUNNER_IMAGE:?set REVERSE_ANALYZER_RUNNER_IMAGE}
+    pull_policy: never
+    restart: unless-stopped
+    user: "65532:65532"
+    group_add:
+      - "${DOCKER_GID:?set DOCKER_GID}"
+    environment:
+      REVERSE_ANALYZER_RUNNER_ADDR: 0.0.0.0:8091
+      REVERSE_ANALYZER_RUNNER_TOKEN_FILE: /run/secrets/runner_token
+      REVERSE_ANALYZER_RUNNER_RUNTIME: docker
+      REVERSE_ANALYZER_RUNNER_WORKER_IMAGE: ${REVERSE_ANALYZER_IMAGE}
+      REVERSE_ANALYZER_RUNNER_WORKSPACE_VOLUME: pe_reverse_analyzer_workspace
+    secrets:
+      - runner_token
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --header=\"X-Runner-Token: $$(cat /run/secrets/runner_token)\" http://127.0.0.1:8091/healthz >/dev/null"]
+      interval: 20s
+      timeout: 5s
+      retries: 8
+    mem_limit: 128m
+    cpus: 0.25
+    pids_limit: 64
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+
 volumes:
   postgres_data:
     name: pe_reverse_analyzer_postgres
@@ -87,3 +115,5 @@ secrets:
     file: /opt/pe-reverse-analyzer/secrets/postgres_password
   web_token:
     file: /opt/pe-reverse-analyzer/secrets/web_token
+  runner_token:
+    file: /opt/pe-reverse-analyzer/secrets/runner_token

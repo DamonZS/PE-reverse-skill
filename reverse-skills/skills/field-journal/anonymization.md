@@ -1,6 +1,6 @@
 # Field-Journal 脱敏规范
 
-> 写 field-journal、提交 PR、分享 payload、对外发报告时**必须脱敏**。下面这套占位符规范借鉴自 PE 多 agent 系统的 anonymization 协议，目标是：**保留可复用价值的同时，不暴露真实目标**。
+> 写 field-journal、提交 PR、分享 payload、对外发报告时**必须脱敏**。下面这套占位符规范借鉴自 PentAGI 多 agent 系统的 anonymization 协议，目标是：**保留可复用价值的同时，不暴露真实目标**。
 
 ## 占位符总表
 
@@ -197,7 +197,11 @@ grep -nE '[\w\.\-]+@[\w\.\-]+\.\w+' file.md
 grep -nE '\b1[3-9][0-9]{9}\b' file.md
 ```
 
-把这段封装成一个 `field-journal/scripts/scan-leaks.ps1`，每次提交前跑。
+已封装为 `skills/scripts/scan-leaks.ps1`（PowerShell，PS 5.1 / pwsh 兼容），每次提交前跑：
+```powershell
+powershell -File skills/scripts/scan-leaks.ps1 -Path skills/field-journal
+```
+CI（ci.yml `leak-scan` job）已接入该脚本，发现未脱敏信息会直接失败。
 
 ## 反向：阅读他人脱敏文档
 

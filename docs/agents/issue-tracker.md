@@ -1,8 +1,6 @@
 # Issue Tracker: GitHub
 
-Issues and PRDs for this repository are stored in GitHub Issues. Use the `gh` CLI for all tracker operations.
-
-External pull requests are not part of the triage request surface.
+Issues and specifications for this repository are stored in GitHub Issues. Use the `gh` CLI for tracker operations.
 
 ## Conventions
 
@@ -10,11 +8,14 @@ External pull requests are not part of the triage request surface.
 - Read an issue: `gh issue view <number> --comments`
 - List issues: `gh issue list --state open --json number,title,body,labels,comments`
 - Comment on an issue: `gh issue comment <number> --body "..."`
-- Apply a label: `gh issue edit <number> --add-label "..."`
-- Remove a label: `gh issue edit <number> --remove-label "..."`
+- Apply or remove labels: `gh issue edit <number> --add-label "..."` or `--remove-label "..."`
 - Close an issue: `gh issue close <number> --comment "..."`
 
-Infer the repository from `git remote -v`; when run inside this clone, `gh` resolves the current repository automatically.
+Infer the repository from `git remote -v`; inside this clone, `gh` resolves the current repository automatically.
+
+## Pull Requests As A Request Surface
+
+External pull requests are not a request surface. Do not place them in the issue triage queue.
 
 ## Skill Terms
 

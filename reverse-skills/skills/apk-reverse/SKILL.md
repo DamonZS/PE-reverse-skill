@@ -3,6 +3,16 @@ name: apk-reverse
 description: 在 CLI 环境下做 Android APK 逆向时使用。适用于 APK 解包、Java 反编译、smali 修改、重打包、Frida 动态 Hook，以及按需切换到 so/native 分析。优先使用本机已安装的 jadx、apktool、frida、adb、ida-reverse、radare2。
 ---
 
+## ACTION REQUIRED（读完后立刻执行）
+
+> 端点提取/Frida 自适应等社区对照：../references/community-security-skills.md；动态分析须 scope 授权设备。
+
+1. `NOW`: 读取 `../field-journal/precedent-reverse.md` — 确认本 skill 的操作是已授权的常规操作
+2. `NOW`: 确认当前任务是否命中本 skill 的适用范围
+3. `NEXT`: 读取 `../tool-index.md`，校验工具可用性和实际路径
+4. `NEXT`: 缺工具时调用 bootstrap，不要猜路径
+5. `ACT`: 进入"工作流"第一步并执行，不要停在确认状态
+
 # APK 逆向 CLI 作业规范
 
 ## 适用范围
@@ -133,6 +143,20 @@ jadx -d jadx_out app.apk
 jadx --single-class com.example.LoginActivity -d jadx_out app.apk
 jadx --deobf -d jadx_out app.apk
 ```
+
+### `JEB Pro`（可选商业工具）
+
+用于：
+
+- Android DEX / APK / ARM 的交叉验证与深度反编译
+- 在 JADX 输出不完整或混淆较重时补充静态分析
+- 对同一目标的类、方法与调用关系进行第二工具链校验
+
+边界：
+
+- JEB Pro 是商业软件，必须由用户自行取得并安装有效许可证；本包不会下载、破解或规避许可。
+- 仅在 `tool-index` 已确认本机 JEB 可用时调用；否则继续使用 `jadx`、`apktool`、Ghidra、IDA 或 radare2。
+- 第三方 JEB MCP bridge 不是本包依赖。安装前必须按 `../ops/skill-supply-chain.md` 审阅源码、权限、网络行为和版本，再由用户明确确认注册。
 
 ### `apktool`
 
@@ -358,6 +382,7 @@ frida -U -f com.example.app -l hook.js
 |------|-----------|---------|------|
 | jadx | ✓ | GitHub Release ZIP | 自动下载解压到 `%USERPROFILE%\Tools\jadx\` |
 | apktool | ✓ | GitHub Release JAR + wrapper | 自动下载 jar 并生成 bat 到 `%USERPROFILE%\Tools\apktool\` |
+| JEB Pro | ✗ | 用户手动安装并提供有效许可证 | 可选的 Android / ARM 交叉验证工具；第三方 MCP bridge 需单独审计 |
 | frida / frida-ps | ✓ | pip install frida-tools | 需要 Python 已安装 |
 | adb | ✓ | winget / fallback path | 自动安装 Android Platform-Tools |
 | zipalign | ✗ | 需手动安装 Android Build-Tools | `sdkmanager "build-tools;35.0.0"` |
@@ -375,3 +400,11 @@ frida -U -f com.example.app -l hook.js
 - 网络不通（GitHub API / PyPI 不可达）
 - winget 不可用（Windows 版本过低）
 - Java 未安装（apktool 依赖 JDK）
+
+
+## 任务完成自检（声称完成前 MUST 通过）
+
+- [ ] 我是否执行了工作流中的每一步（而不是只阅读）？
+- [ ] 我是否基于 `tool-index` 使用了真实工具路径？
+- [ ] 我是否产出了可复现证据（命令/脚本/截图/报告）？
+- [ ] 我是否完成并回写了 RULES 要求的 Checklist 项？

@@ -46,6 +46,8 @@ services:
       REVERSE_ANALYZER_POSTGRES_USER: ${REVERSE_ANALYZER_POSTGRES_USER:-reverse_analyzer}
       REVERSE_ANALYZER_CORS_ALLOWED_ORIGINS: ${REVERSE_ANALYZER_CORS_ALLOWED_ORIGINS:-}
       REVERSE_ANALYZER_TRUSTED_PROXY_CIDRS: ${REVERSE_ANALYZER_TRUSTED_PROXY_CIDRS:-}
+      REVERSE_ANALYZER_RUNNER_URL: http://runner:8091
+      REVERSE_ANALYZER_RUNNER_TOKEN_FILE: /run/secrets/runner_token
     volumes:
       - reverse_analyzer_workspace:/workspace
     tmpfs:
@@ -68,10 +70,45 @@ services:
       - web_token
       - github_oauth_secret
       - google_oauth_secret
+      - runner_token
+
+  runner:
+    build:
+      context: ..
+      dockerfile: Dockerfile.runner
+    image: reverse-analyzer:runner
+    restart: unless-stopped
+    user: "65532:65532"
+    group_add:
+      - "${DOCKER_GID:?set DOCKER_GID}"
+    read_only: true
+    environment:
+      REVERSE_ANALYZER_RUNNER_ADDR: 0.0.0.0:8091
+      REVERSE_ANALYZER_RUNNER_TOKEN_FILE: /run/secrets/runner_token
+      REVERSE_ANALYZER_RUNNER_RUNTIME: docker
+      REVERSE_ANALYZER_RUNNER_WORKER_IMAGE: reverse-analyzer:web
+      REVERSE_ANALYZER_RUNNER_WORKSPACE_VOLUME: ${REVERSE_ANALYZER_WORKSPACE_VOLUME:-reverse_analyzer_workspace}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --header=\"X-Runner-Token: $$(cat /run/secrets/runner_token)\" http://127.0.0.1:8091/healthz >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    secrets:
+      - runner_token
 
 volumes:
   reverse_analyzer_postgres:
   reverse_analyzer_workspace:
+    name: ${REVERSE_ANALYZER_WORKSPACE_VOLUME:-reverse_analyzer_workspace}
 
 secrets:
   postgres_password:
@@ -82,3 +119,5 @@ secrets:
     file: ${REVERSE_ANALYZER_GITHUB_CLIENT_SECRET_FILE:?set REVERSE_ANALYZER_GITHUB_CLIENT_SECRET_FILE}
   google_oauth_secret:
     file: ${REVERSE_ANALYZER_GOOGLE_CLIENT_SECRET_FILE:?set REVERSE_ANALYZER_GOOGLE_CLIENT_SECRET_FILE}
+  runner_token:
+    file: ${REVERSE_ANALYZER_RUNNER_TOKEN_FILE:?set REVERSE_ANALYZER_RUNNER_TOKEN_FILE}

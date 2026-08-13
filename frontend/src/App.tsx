@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -80,6 +80,23 @@ type EventRecord = {
   status?: string;
   message: string;
   data?: Record<string, unknown>;
+};
+type Orchestration = {
+  flow: { id: string; title?: string; status: string; created_at?: string; updated_at?: string };
+  tasks: Array<{ id: string; title?: string; status: string; input?: string; result?: string }>;
+  subtasks: Array<{ id: string; title: string; description?: string; status: string; result?: string }>;
+  tool_calls: Array<{ id: string; root_id?: string; attempt?: number; name: string; status: string; result?: string; timestamp?: string; started_at?: string; ended_at?: string; duration?: string; retry_of?: string; canceled?: boolean; args?: Record<string, unknown> }>;
+  logs: Array<{ id: string; type: string; message: string; status?: string; timestamp?: string }>;
+  files: Array<{ id: string; name: string; path: string; size: number; is_dir?: boolean; modified_at?: string }>;
+};
+
+type TerminalSession = {
+  id: string;
+  command: string;
+  status: string;
+  started_at?: string;
+  ended_at?: string;
+  output_count?: number;
 };
 type EnvironmentPayload = {
   summary: Record<string, number>;
@@ -637,6 +654,7 @@ function Catalog({
     "capability",
     "script",
     "dependency",
+    "extension",
   ];
   const names: Record<CatalogKind, string> = {
     skill: "技能",
@@ -644,6 +662,7 @@ function Catalog({
     capability: "能力",
     script: "脚本",
     dependency: "依赖",
+    extension: "外部扩展",
   };
   const [active, setActive] = useState<CatalogKind | "all">("all");
   const [filter, setFilter] = useState("");
@@ -793,7 +812,7 @@ function Catalog({
               <button className="ghostBtn" onClick={() => setSelected(null)}>
                 关闭
               </button>
-              {selected.kind !== "dependency" && (
+              {!['dependency', 'extension'].includes(selected.kind) && (
                 <button
                   className="primaryBtn"
                   onClick={() => {
@@ -1539,12 +1558,36 @@ function FlowDrawer({
   const [patchOpen, setPatchOpen] = useState(false);
   const [previewPath, setPreviewPath] = useState("");
   const [actionMessage, setActionMessage] = useState("");
+  const [orchestration, setOrchestration] = useState<Orchestration | null>(null);
+  const [orchestrationLoading, setOrchestrationLoading] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<"execution" | "orchestration">("execution");
   const [, setClock] = useState(0);
   useEffect(() => {
     if (experiment.status !== "running") return;
     const timer = setInterval(() => setClock((x) => x + 1), 1000);
     return () => clearInterval(timer);
   }, [experiment.status]);
+  const loadOrchestration = useCallback(async (signal?: AbortSignal) => {
+    setOrchestrationLoading(true);
+    try {
+      const response = await fetch(`/api/experiments/${experiment.id}/orchestration`, {
+        headers: headers(), cache: "no-store", signal,
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || `编排接口返回 ${response.status}`);
+      setOrchestration(payload as Orchestration);
+    } catch (error) {
+      if (!signal?.aborted) setActionMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (!signal?.aborted) setOrchestrationLoading(false);
+    }
+  }, [experiment.id]);
+  useEffect(() => {
+    if (drawerTab !== "orchestration") return;
+    const controller = new AbortController();
+    void loadOrchestration(controller.signal);
+    return () => controller.abort();
+  }, [drawerTab, loadOrchestration]);
   const action = async (name: "execute" | "cancel" | "retry") => {
     if (!canWrite) {
       setActionMessage("只读角色不能执行、取消或重试任务。");
@@ -1602,29 +1645,21 @@ function FlowDrawer({
       x.type !== "progress" &&
       x.type !== "result_summary",
   );
-  const legacySuppressed = Math.max(
-    0,
-    events.reduce((maximum, event) => Math.max(maximum, event.sequence), 0) -
-      events.length,
-  );
   const outputLineCount = Number(
-    summaryEvents[summaryEvents.length - 1]?.data?.output_lines ||
-      outputEvents.length ||
-      legacySuppressed,
+    summaryEvents[summaryEvents.length - 1]?.data?.output_lines ??
+      outputEvents.length,
   );
   const outputSummary = summaryEvents.length
     ? summaryEvents
         .map((x) => `${x.message}\n${JSON.stringify(x.data || {}, null, 2)}`)
         .join("\n\n")
-    : legacySuppressed
-      ? `旧版本任务的 ${legacySuppressed} 条逐行原始输出已折叠。\n这些内容仍保留在任务事件文件中，但不再加载到浏览器。`
-      : "分析结束后将显示输出规模和归档路径。";
+    : "分析结束后将显示输出规模和归档路径。";
   const reportedProgress = Number(
     progressEvents[progressEvents.length - 1]?.data?.percent || 0,
   );
   const progress = flowProgress(
     experiment.status,
-    outputEvents.length,
+    outputLineCount,
     reportedProgress,
   );
   const stages = [
@@ -1693,7 +1728,7 @@ function FlowDrawer({
   );
   return (
     <>
-      <aside className="drawer">
+      <aside className={`drawer ${drawerTab === "orchestration" ? "orchestrationMode" : ""}`}>
         <header>
           <div>
             <p>流程详情</p>
@@ -1710,6 +1745,14 @@ function FlowDrawer({
           <code>{experiment.id}</code>
           <small>{experiment.sample}</small>
         </div>
+        <div className="drawerTabs" role="tablist" aria-label="流程详情视图">
+          <button className={drawerTab === "execution" ? "active" : ""} onClick={() => setDrawerTab("execution")}>执行与证据</button>
+          <button className={drawerTab === "orchestration" ? "active" : ""} onClick={() => setDrawerTab("orchestration")}>编排视图</button>
+        </div>
+        {drawerTab === "orchestration" ? (
+          <OrchestrationView data={orchestration} loading={orchestrationLoading} onChanged={() => loadOrchestration()} />
+        ) : null}
+        <div className={drawerTab === "execution" ? "drawerExecution" : "hiddenSection"}>
         <section
           className={`progressOverview ${experiment.status === "failed" ? "failed" : ""}`}
         >
@@ -2079,6 +2122,7 @@ function FlowDrawer({
             )}
           </div>
         </section>
+        </div>
       </aside>
       {previewPath && (
         <ArtifactPreview
@@ -2102,6 +2146,338 @@ function FlowDrawer({
         />
       )}
     </>
+  );
+}
+
+type OrchestrationFileNode = {
+  children: OrchestrationFileNode[];
+  fileCount: number;
+  fullPath: string;
+  id: string;
+  modified_at?: string;
+  name: string;
+  path: string;
+  size: number;
+  totalSize: number;
+  type: "directory" | "file";
+};
+
+function sharedPathPrefix(paths: string[]) {
+  if (!paths.length) return [] as string[];
+  const split = paths.map((item) => item.split("/").filter(Boolean));
+  const prefix: string[] = [];
+  for (let index = 0; ; index += 1) {
+    const current = split[0]?.[index];
+    if (!current || split.some((parts) => parts[index] !== current)) break;
+    prefix.push(current);
+  }
+  return prefix;
+}
+
+function buildOrchestrationFileTree(files: Orchestration["files"]) {
+  const prefix = sharedPathPrefix(files.map((file) => file.path)).join("/");
+  const root: OrchestrationFileNode[] = [];
+  const directories = new Map<string, OrchestrationFileNode>();
+
+  const ensureDirectory = (parts: string[], fullParts: string[]) => {
+    const key = parts.join("/");
+    const parentKey = parts.slice(0, -1).join("/");
+    const name = parts[parts.length - 1] || "根目录";
+    const fullPath = fullParts.join("/");
+    let node = directories.get(key);
+    if (node) return node;
+    node = {
+      children: [],
+      fileCount: 0,
+      fullPath,
+      id: `dir:${key || "root"}`,
+      name,
+      path: key,
+      size: 0,
+      totalSize: 0,
+      type: "directory",
+    };
+    directories.set(key, node);
+    if (parentKey) {
+      ensureDirectory(parts.slice(0, -1), fullParts.slice(0, -1)).children.push(node);
+    } else {
+      root.push(node);
+    }
+    return node;
+  };
+
+  for (const file of files) {
+    const fullParts = file.path.split("/").filter(Boolean);
+    const displayPath = prefix && file.path.startsWith(prefix + "/") ? file.path.slice(prefix.length + 1) : file.path;
+    const displayParts = displayPath.split("/").filter(Boolean);
+    const parent = displayParts.length > 1 ? ensureDirectory(displayParts.slice(0, -1), fullParts.slice(0, -1)) : null;
+    const node: OrchestrationFileNode = {
+      children: [],
+      fileCount: 1,
+      fullPath: file.path,
+      id: file.id,
+      modified_at: file.modified_at,
+      name: file.name,
+      path: displayParts.join("/"),
+      size: file.size,
+      totalSize: file.size,
+      type: "file",
+    };
+    if (parent) {
+      parent.children.push(node);
+    } else {
+      root.push(node);
+    }
+  }
+
+  const finalize = (node: OrchestrationFileNode) => {
+    if (node.type === "file") return node;
+    node.children = node.children
+      .map(finalize)
+      .sort((left, right) => {
+        if (left.type !== right.type) return left.type === "directory" ? -1 : 1;
+        return left.name.localeCompare(right.name, "zh-CN");
+      });
+    node.fileCount = node.children.reduce((count, child) => count + (child.type === "file" ? 1 : child.fileCount), 0);
+    node.totalSize = node.children.reduce((size, child) => size + (child.type === "file" ? child.size : child.totalSize), 0);
+    return node;
+  };
+
+  return root.map(finalize).sort((left, right) => {
+    if (left.type !== right.type) return left.type === "directory" ? -1 : 1;
+    return left.name.localeCompare(right.name, "zh-CN");
+  });
+}
+
+function filterOrchestrationTree(nodes: OrchestrationFileNode[], query: string): OrchestrationFileNode[] {
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) return nodes;
+  const visit = (node: OrchestrationFileNode): OrchestrationFileNode | null => {
+    const selfMatch = `${node.name} ${node.path} ${node.fullPath}`.toLowerCase().includes(trimmed);
+    if (node.type === "file") return selfMatch ? node : null;
+    const children = node.children.map(visit).filter(Boolean) as OrchestrationFileNode[];
+    if (selfMatch || children.length) return { ...node, children };
+    return null;
+  };
+  return nodes.map(visit).filter(Boolean) as OrchestrationFileNode[];
+}
+
+function OrchestrationView({
+  data,
+  loading,
+  onChanged,
+}: {
+  data: Orchestration | null;
+  loading: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const [logQuery, setLogQuery] = useState("");
+  const [logType, setLogType] = useState<"all" | "message" | "terminal" | "tool" | "validation">("all");
+  const [fileQuery, setFileQuery] = useState("");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [toolMessage, setToolMessage] = useState("");
+  const [terminalSessions, setTerminalSessions] = useState<TerminalSession[]>([]);
+  const [terminalOutput, setTerminalOutput] = useState("");
+  const [terminalBusy, setTerminalBusy] = useState("");
+
+  const fileTree = useMemo(() => (data ? buildOrchestrationFileTree(data.files) : []), [data]);
+  const visibleFileTree = useMemo(() => filterOrchestrationTree(fileTree, fileQuery), [fileTree, fileQuery]);
+  const visibleLogs = useMemo(() => {
+    if (!data) return [] as Orchestration["logs"];
+    return data.logs.filter((log) => {
+      const matchesType = logType === "all" || log.type === logType;
+      const matchesQuery = !logQuery.trim() || `${log.type} ${log.message}`.toLowerCase().includes(logQuery.trim().toLowerCase());
+      return matchesType && matchesQuery;
+    });
+  }, [data, logQuery, logType]);
+
+  useEffect(() => {
+    if (!data) return;
+    setLogQuery("");
+    setLogType("all");
+    setFileQuery("");
+    setToolMessage("");
+    const initial: Record<string, boolean> = {};
+    for (const node of fileTree) {
+      if (node.type === "directory") initial[node.path] = true;
+    }
+    setExpanded(initial);
+  }, [data?.flow.id, fileTree]);
+
+  useEffect(() => {
+    void loadTerminalSessions();
+  }, [data?.flow.id]);
+
+  if (loading) return <div className="orchestrationState"><Loader2 className="spin" />正在读取编排数据</div>;
+  if (!data) return <Empty text="暂无编排数据" />;
+  const task = data.tasks[0];
+  const toggleDirectory = (path: string) => setExpanded((current) => ({ ...current, [path]: !current[path] }));
+  const mutateToolCall = async (toolCallId: string, action: "retry" | "cancel") => {
+    setTerminalBusy(`tool:${toolCallId}:${action}`);
+    try {
+      const response = await fetch(`/api/experiments/${data.flow.id}/tool-calls/${toolCallId}/${action}`, {
+        method: "POST",
+        headers: headers(),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "工具调用操作失败");
+      const nextStatus = String(payload.tool_call?.status || "");
+      setToolMessage(
+        action === "retry"
+          ? nextStatus === "dependency-gated"
+            ? "已创建 successor attempt，但该调用缺少安全重放执行器"
+            : "已创建并启动 successor attempt"
+          : "工具调用 attempt 已取消",
+      );
+      await onChanged();
+    } catch (error) {
+      setToolMessage(error instanceof Error ? error.message : "工具调用操作失败");
+    } finally {
+      setTerminalBusy("");
+    }
+  };
+  const loadTerminalSessions = async () => {
+    try {
+      const response = await fetch(`/api/experiments/${data.flow.id}/terminal`, { headers: headers(), cache: "no-store" });
+      const payload = await response.json();
+      if (response.ok) setTerminalSessions((payload.sessions || []) as TerminalSession[]);
+    } catch {
+      setTerminalSessions([]);
+    }
+  };
+  const loadTerminalOutput = async (sessionId: string) => {
+    setTerminalBusy(`terminal:${sessionId}`);
+    try {
+      const response = await fetch(`/api/experiments/${data.flow.id}/terminal/${sessionId}/output`, { headers: headers(), cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "终端输出读取失败");
+      const lines = Array.isArray(payload.output) ? payload.output.map((item: Record<string, unknown>) => String(item.line || "")).join("\n") : "";
+      setTerminalOutput(lines);
+    } catch (error) {
+      setTerminalOutput(error instanceof Error ? error.message : "终端输出读取失败");
+    } finally {
+      setTerminalBusy("");
+    }
+  };
+  const renderTree = (nodes: OrchestrationFileNode[], depth = 0): React.ReactNode =>
+    nodes.map((node) => {
+      const paddingLeft = 10 + depth * 16;
+      if (node.type === "directory") {
+        const open = expanded[node.path] ?? depth < 1;
+        return (
+          <div className="flowFileNode" key={node.id}>
+            <button className="flowFileRow dir" onClick={() => toggleDirectory(node.path)} style={{ paddingLeft }} type="button">
+              {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              <b title={node.fullPath}>{node.name}</b>
+              <small>{node.fileCount} 个文件</small>
+              <code>{formatBytes(node.totalSize)}</code>
+            </button>
+            {open ? <div className="flowFileChildren">{renderTree(node.children, depth + 1)}</div> : null}
+          </div>
+        );
+      }
+      return (
+        <div className="flowFileNode" key={node.id}>
+          <div className="flowFileRow file" style={{ paddingLeft }}>
+            <FileJson size={14} />
+            <b title={node.fullPath}>{node.name}</b>
+            <small title={node.path}>{node.path}</small>
+            <code>{formatBytes(node.size)}</code>
+          </div>
+        </div>
+      );
+    });
+
+  return (
+    <div className="orchestrationView">
+      <div className="orchestrationSummary">
+        <div><span>流程</span><b>{data.flow.title || data.flow.id}</b><small>{status(data.flow.status)}</small></div>
+        <div><span>任务</span><b>{data.tasks.length}</b><small>当前分析任务</small></div>
+        <div><span>子任务</span><b>{data.subtasks.length}</b><small>阶段拆解</small></div>
+        <div><span>工具调用</span><b>{data.tool_calls.length}</b><small>模型与执行器</small></div>
+      </div>
+      <section className="orchestrationSection">
+        <div className="sectionHeading"><h3>任务层级</h3><span className={`pill ${tone(task?.status || "queued")}`}>{status(task?.status || "queued")}</span></div>
+        <div className="orchestrationTask"><FileSearch size={16} /><div><b>{task?.title || "当前分析任务"}</b><small>{task?.input || "未记录输入"}</small><p>{task?.result || "等待结果"}</p></div></div>
+        <div className="subtaskList">
+          {data.subtasks.map((item, index) => (
+            <article className="subtaskRow" key={item.id}><span>{index + 1}</span><div><b>{item.title}</b><small>{item.description}</small><p>{item.result}</p></div><em className={`pill ${tone(item.status)}`}>{status(item.status)}</em></article>
+          ))}
+        </div>
+      </section>
+      <section className="orchestrationSection">
+        <div className="sectionHeading"><h3>工具调用</h3><span className="sectionCount">{data.tool_calls.length}</span></div>
+        <div className="toolCallList">
+          {data.tool_calls.map((call) => (
+            <article className="toolCallRow" key={call.id}>
+              <Wrench size={14} />
+              <div>
+                <b>{call.name}{call.attempt && call.attempt > 1 ? ` · attempt ${call.attempt}` : ""}</b>
+                <small>{call.result || "未返回结果"}</small>
+                <small>{call.retry_of ? `重试自 ${call.retry_of}` : call.duration ? `耗时 ${call.duration}` : call.timestamp ? `记录于 ${timeOnly(call.timestamp)}` : "等待执行"}</small>
+              </div>
+              <div className="toolCallActions">
+                <button className="ghostBtn" disabled={!!terminalBusy || !["failed", "cancelled", "dependency-gated"].includes(call.status)} onClick={() => void mutateToolCall(call.id, "retry")} type="button">重试</button>
+                <button className="ghostBtn" disabled={!!terminalBusy || !["queued", "running"].includes(call.status)} onClick={() => void mutateToolCall(call.id, "cancel")} type="button">取消</button>
+                <span className={`pill ${tone(call.status)}`}>{status(call.status)}</span>
+              </div>
+            </article>
+          ))}
+          {!data.tool_calls.length && <Empty text="暂无工具调用记录" />}
+        </div>
+        {toolMessage && <div className="editorMessage">{toolMessage}</div>}
+      </section>
+      <section className="orchestrationSection">
+        <div className="sectionHeading"><h3>终端会话</h3><span className="sectionCount">{terminalSessions.length}</span></div>
+        <div className="toolCallList">
+          {terminalSessions.map((session) => (
+            <article className="toolCallRow" key={session.id}>
+              <Terminal size={14} />
+              <div>
+                <b>{session.command}</b>
+                <small>{session.output_count || 0} 行输出</small>
+              </div>
+              <div className="toolCallActions">
+                <button className="ghostBtn" disabled={!!terminalBusy} onClick={() => void loadTerminalOutput(session.id)} type="button">查看输出</button>
+                <span className={`pill ${tone(session.status)}`}>{status(session.status)}</span>
+              </div>
+            </article>
+          ))}
+          {!terminalSessions.length && <Empty text="暂无终端会话记录" />}
+        </div>
+        {terminalOutput ? (
+          <div className="terminalOutput">
+            <header><span /><span /><span /><b>终端输出</b></header>
+            <pre>{terminalOutput}</pre>
+          </div>
+        ) : null}
+      </section>
+      <section className="orchestrationSection">
+        <div className="sectionHeading"><h3>统一日志</h3><span className="sectionCount">{visibleLogs.length} / {data.logs.length}</span></div>
+        <div className="orchestrationToolbar">
+          <label className="orchestrationSearch"><Search size={14} /><input placeholder="搜索日志关键字" value={logQuery} onChange={(event) => setLogQuery(event.target.value)} /></label>
+          <div className="orchestrationFilters">
+            {(["all", "terminal", "tool", "validation", "message"] as const).map((item) => (
+              <button className={logType === item ? "active" : ""} key={item} onClick={() => setLogType(item)} type="button">{item === "all" ? "全部" : item}</button>
+            ))}
+          </div>
+        </div>
+        <div className="orchestrationLogs">
+          {visibleLogs.slice(-120).map((log) => <div key={log.id}><span>{log.type}</span><p>{log.message}</p><time>{timeOnly(log.timestamp || "")}</time></div>)}
+          {!visibleLogs.length && <Empty text="没有匹配的日志记录" />}
+        </div>
+      </section>
+      <section className="orchestrationSection">
+        <div className="sectionHeading"><h3>流程文件</h3><span className="sectionCount">{data.files.length}</span></div>
+        <div className="orchestrationToolbar">
+          <label className="orchestrationSearch"><Search size={14} /><input placeholder="搜索文件路径或名称" value={fileQuery} onChange={(event) => setFileQuery(event.target.value)} /></label>
+          <small className="flowFilesHint">按目录折叠展示，保留 PentAGI 式流程文件浏览体验</small>
+        </div>
+        <div className="flowFilesTree">
+          {visibleFileTree.length ? renderTree(visibleFileTree) : <Empty text="没有匹配的流程文件" />}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -3217,6 +3593,7 @@ type SourceFile = {
   size: number;
   editable: boolean;
   directory?: boolean;
+  modified_at?: string;
 };
 function SourceWorkspace({
   experiment,
@@ -3239,6 +3616,8 @@ function SourceWorkspace({
   const [message, setMessage] = useState("");
   const [buildOutput, setBuildOutput] = useState("");
   const [fileQuery, setFileQuery] = useState("");
+  const [targetPath, setTargetPath] = useState("");
+  const [terminalCommand, setTerminalCommand] = useState("");
   const readFile = async (path: string) => {
     setBusy("file");
     try {
@@ -3364,6 +3743,54 @@ function SourceWorkspace({
     } else setMessage("下载失败");
     setBusy("");
   };
+  const fileAction = async (action: string, payload: Record<string, unknown>) => {
+    if (!canWrite) {
+      setMessage("只读角色不能修改工程文件。");
+      return;
+    }
+    setBusy(`fs:${action}`);
+    try {
+      const response = await fetch(`/api/experiments/${experiment.id}/source/actions`, {
+        method: "POST",
+        headers: headers({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ action, ...payload }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "文件操作失败");
+      setMessage(`文件操作已完成：${action}`);
+      await loadProject();
+      await onChanged();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "文件操作失败");
+    } finally {
+      setBusy("");
+    }
+  };
+  const startTerminal = async () => {
+    if (!canWrite) {
+      setMessage("只读角色不能启动终端命令。");
+      return;
+    }
+    if (!terminalCommand.trim()) {
+      setMessage("请输入终端命令。");
+      return;
+    }
+    setBusy("terminal");
+    try {
+      const response = await fetch(`/api/experiments/${experiment.id}/terminal`, {
+        method: "POST",
+        headers: headers({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ command: terminalCommand.trim() }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "终端启动失败");
+      setMessage("终端会话已启动，请到编排视图查看输出。");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "终端启动失败");
+    } finally {
+      setBusy("");
+    }
+  };
   const selectedFile = files.find((file) => file.path === selected);
   const dirty = content !== savedContent;
   const visibleFiles = files.filter((file) =>
@@ -3379,46 +3806,19 @@ function SourceWorkspace({
             <code>{root}</code>
           </div>
           <div className="sourceActions">
-            <button
-              className="ghostBtn"
-              disabled={!!busy}
-              onClick={() => void download()}
-            >
+            <button className="ghostBtn" disabled={!!busy} onClick={() => void download()}>
               <Download size={15} />
               下载完整工程
             </button>
-            <button
-              className="primaryBtn"
-              disabled={!canWrite || !!busy || !selectedFile?.editable}
-              title={
-                !selectedFile?.editable
-                  ? "请先选择可编辑源码文件"
-                  : dirty
-                    ? "保存当前修改"
-                    : "当前无修改，点击可查看提示"
-              }
-              onClick={() => void save()}
-            >
+            <button className="primaryBtn" disabled={!canWrite || !!busy || !selectedFile?.editable} title={!selectedFile?.editable ? "请先选择可编辑源码文件" : dirty ? "保存当前修改" : "当前无修改，点击可查看提示"} onClick={() => void save()}>
               <Save size={15} />
               保存源码
             </button>
-            <button
-              className="primaryBtn"
-              disabled={!canWrite || !!busy || dirty}
-              onClick={() => void build()}
-            >
-              {busy === "build" ? (
-                <Loader2 className="spin" size={15} />
-              ) : (
-                <Hammer size={15} />
-              )}
+            <button className="primaryBtn" disabled={!canWrite || !!busy || dirty} onClick={() => void build()}>
+              {busy === "build" ? <Loader2 className="spin" size={15} /> : <Hammer size={15} />}
               构建整个工程
             </button>
-            <button
-              className="iconBtn"
-              onClick={onClose}
-              title="关闭源码工作区"
-            >
+            <button className="iconBtn" onClick={onClose} title="关闭源码工作区">
               <X size={17} />
             </button>
           </div>
@@ -3436,6 +3836,19 @@ function SourceWorkspace({
             <p className="sourceTreeHint">
               软件包目录保留原包结构，目标目录放置逐目标重构源码；一次构建顶层工程。
             </p>
+            <div className="sourceOpsPanel">
+              <input value={targetPath} onChange={(event) => setTargetPath(event.target.value)} placeholder="目标路径，例如 src/copy.c 或 tmp/logs" />
+              <div className="sourceOpsButtons">
+                <button className="ghostBtn" disabled={!selected || !!busy} onClick={() => void fileAction("delete", { path: selected })} type="button"><Trash2 size={14} />删除</button>
+                <button className="ghostBtn" disabled={!selected || !targetPath.trim() || !!busy} onClick={() => void fileAction("copy", { path: selected, target: targetPath.trim() })} type="button">复制</button>
+                <button className="ghostBtn" disabled={!selected || !targetPath.trim() || !!busy} onClick={() => void fileAction("move", { path: selected, target: targetPath.trim() })} type="button">移动</button>
+                <button className="ghostBtn" disabled={!targetPath.trim() || !!busy} onClick={() => void fileAction("mkdir", { path: targetPath.trim() })} type="button"><Plus size={14} />新建目录</button>
+              </div>
+              <div className="sourceOpsButtons">
+                <input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} placeholder="终端命令，例如 dir 或 cmake --build .build" />
+                <button className="ghostBtn" disabled={!terminalCommand.trim() || !!busy} onClick={() => void startTerminal()} type="button"><Terminal size={14} />启动终端</button>
+              </div>
+            </div>
             <div className="sourceFileSearch">
               <Search size={14} />
               <input
@@ -3698,8 +4111,11 @@ function status(value: string) {
     (
       {
         queued: "已排队",
+        created: "已创建",
+        waiting: "等待中",
         planned: "已验证",
         running: "运行中",
+        finished: "已完成",
         repairing: "修复中",
         mismatch: "仍有差异",
         completed: "已完成",
@@ -3730,6 +4146,7 @@ function tone(value: string) {
   if (
     [
       "completed",
+      "finished",
       "passed",
       "executed",
       "verified",
@@ -3743,6 +4160,8 @@ function tone(value: string) {
   if (
     [
       "running",
+      "waiting",
+      "created",
       "repairing",
       "mismatch",
       "planned",

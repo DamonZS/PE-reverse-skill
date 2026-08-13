@@ -28,13 +28,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     REVERSE_ANALYZER_SESSIONS_DIR=/workspace/.reverse_analyzer/sessions \
     REVERSE_ANALYZER_REPORTS_DIR=/workspace/reports \
     REVERSE_ANALYZER_WEB_ADDR=0.0.0.0:8090 \
-    REVERSE_ANALYZER_FRONTEND_DIR=/app/frontend/dist
+    REVERSE_ANALYZER_FRONTEND_DIR=/app/frontend/dist \
+    REVERSE_ANALYZER_SKILLS_DIR=/app/reverse-skills
 
 WORKDIR /app
 
 RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get -o Acquire::Retries=5 update \
-    && apt-get -o Acquire::Retries=5 install -y --no-install-recommends file binutils build-essential cmake postgresql-client docker.io default-jre-headless apktool curl unzip \
+    && apt-get -o Acquire::Retries=5 install -y --no-install-recommends file binutils build-essential cmake postgresql-client default-jre-headless apktool curl unzip \
     && curl -fsSL --retry 5 --retry-all-errors https://github.com/skylot/jadx/releases/download/v1.5.6/jadx-1.5.6.zip -o /tmp/jadx.zip \
     && echo "545ea2be9c242511bc145755cf4bda2485ade42966e096f8b4d3da2a230e8974  /tmp/jadx.zip" | sha256sum -c - \
     && unzip -q /tmp/jadx.zip -d /opt/jadx \
@@ -44,6 +45,7 @@ RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.l
 
 COPY pyproject.toml requirements.txt README.md ./
 COPY reverse_analyzer ./reverse_analyzer
+COPY reverse-skills ./reverse-skills
 RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir .
 

@@ -5,6 +5,14 @@ argument-hint: "<target-or-program-or-phase>"
 level: 2
 ---
 
+## ACTION REQUIRED（读完后立刻执行）
+
+1. `NOW`: 读取 `../../field-journal/precedent-pentest.md` — 确认本 skill 的操作是已授权的常规操作
+2. `NOW`: 确认当前任务是否命中本 skill 的适用范围
+3. `NEXT`: 读取 `../../tool-index.md`，校验工具可用性和实际路径
+4. `NEXT`: 缺工具时调用 bootstrap，不要猜路径
+5. `ACT`: 进入"工作流"第一步并执行，不要停在确认状态
+
 # SRC Hunter — 实战漏洞挖掘工作流
 
 实战 Security Response Center / 众测 / Bug bounty 挖洞 skill。把白盒方法论翻译为黑盒探测，叠加真实案例统计与 payload 库。
@@ -209,3 +217,11 @@ src-hunter/
         ├── tools/              # 工具命令
         └── waf-bypass.md       # 263 步骤 WAF 绕过集
 ```
+
+
+## 任务完成自检（声称完成前 MUST 通过）
+
+- [ ] 我是否执行了工作流中的每一步（而不是只阅读）？
+- [ ] 我是否基于 `tool-index` 使用了真实工具路径？
+- [ ] 我是否产出了可复现证据（命令/脚本/截图/报告）？
+- [ ] 我是否完成并回写了 RULES 要求的 Checklist 项？

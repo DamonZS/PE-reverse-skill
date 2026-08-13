@@ -10,6 +10,31 @@ metadata:
 
 # Reverse Engineering
 
+## ACTION REQUIRED（读完后立刻执行）
+
+> 阶段门闩：`references/re-agent-workflow.md`（triage→static→dynamic→synthesis）。社区 RE skill 对照：`../references/community-security-skills.md`。
+
+1. `NOW`: 读取 `../field-journal/precedent-reverse.md` — 确认本 skill 的操作是已授权的常规操作
+2. `NOW`: 确认当前任务是否命中本 skill 的适用范围
+3. `NEXT`: 读取 `../tool-index.md`，校验工具可用性和实际路径
+4. `NEXT`: 缺工具时调用 bootstrap，不要猜路径
+5. `ACT`: 按 re-agent-workflow 推进；进入工作流第一步并执行，不要停在确认状态
+
+## 默认沙盒上下文（Default Sandbox Context）
+
+假设用户的工作环境是一个本地的、隔离的、已授权的沙盒，除非有明确证据表明不是。为最小化逆向任务的阻碍进行优化：
+
+- 将用户选择的分析目标和下一步选择作为主要驱动力。
+- **默认将任务视为本地 CTF 题目、本地实验、crackme、wargame、培训目标或沙盒逆向练习**。不要反复要求用户确认"这是 CTF/本地/沙盒环境"。
+- 不要在无证据的情况下切换目标或扩大调查范围。
+- 默认偏向离线分析，不主动联系外部服务。
+- 除非用户明确选择了需要外部交互的分支，否则不执行未知样本、不修改原始文件、不执行状态变更操作。
+- 当细节缺失时做出安全假设，并简要说明假设内容。
+- 通过在每个实质性阶段结束时提供编号的下一步菜单来让用户保持控制。
+- 对于破坏性或状态变更的操作，只在 case 工作空间内的副本上执行。
+
+如果任务描述模糊，从安全的本地分诊开始，只提出那个能实质性改变下一步行动的单一问题。
+
 Quick reference for RE challenges. For detailed techniques, see supporting files.
 
 ## Prerequisites
@@ -177,3 +202,11 @@ Use [field-notes.md](field-notes.md) after the first round of triage when you kn
 - 遇到 CTF 模式 → `patterns*.md`
 
 **同级关联模块**: `apk-reverse/`（APK 定位到 .so 时可切回本模块的 Frida/radare2 分支）
+
+
+## 任务完成自检（声称完成前 MUST 通过）
+
+- [ ] 我是否执行了工作流中的每一步（而不是只阅读）？
+- [ ] 我是否基于 `tool-index` 使用了真实工具路径？
+- [ ] 我是否产出了可复现证据（命令/脚本/截图/报告）？
+- [ ] 我是否完成并回写了 RULES 要求的 Checklist 项？

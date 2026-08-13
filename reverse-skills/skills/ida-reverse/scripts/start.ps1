@@ -141,7 +141,12 @@ if ([string]::IsNullOrWhiteSpace($ServerPath)) {
 # 清理旧进程（杀进程树，包括 worker 子进程）
 $old = Get-Process -Name "ida-pro-mcp" -ErrorAction SilentlyContinue
 if (-not $old) { $old = Get-Process -Name "idalib-mcp" -ErrorAction SilentlyContinue }
-if ($old) { taskkill /F /T /PID $old.Id 2>$null | Out-Null; Start-Sleep 2 }
+if ($old) {
+    foreach ($process in @($old)) {
+        & taskkill.exe /F /T /PID $process.Id 2>$null | Out-Null
+    }
+    Start-Sleep 2
+}
 
 # 后台启动
 Start-Process -WindowStyle Hidden -FilePath $ServerPath -ArgumentList "--host 127.0.0.1 --port $Port"

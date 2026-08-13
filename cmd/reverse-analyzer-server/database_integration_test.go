@@ -50,6 +50,10 @@ func TestPostgreSQLConcurrentEventSequence(t *testing.T) {
 			t.Fatalf("event[%d].sequence=%d", index, event.Sequence)
 		}
 	}
+	current, err := s.loadExperiment(id)
+	if err != nil || current.Orchestration == nil || current.Orchestration.LastEventSequence != count {
+		t.Fatalf("concurrent event projection mismatch: %#v err=%v", current.Orchestration, err)
+	}
 }
 
 func TestPostgreSQLWorkspaceIsolationAndRestartRecovery(t *testing.T) {
@@ -93,8 +97,142 @@ func TestPostgreSQLWorkspaceIsolationAndRestartRecovery(t *testing.T) {
 		t.Fatalf("restart recovery did not revoke unprovable gates: %#v err=%v", recovered, err)
 	}
 	var migrationCount int
-	if err := restarted.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&migrationCount); err != nil || migrationCount != 8 {
+	if err := restarted.db.QueryRow(`SELECT count(*) FROM schema_migrations`).Scan(&migrationCount); err != nil || migrationCount != 9 {
 		t.Fatalf("migration ledger count=%d err=%v", migrationCount, err)
+	}
+}
+
+func TestPostgreSQLWorkerEventsRequireCurrentFencingToken(t *testing.T) {
+	if os.Getenv("REVERSE_ANALYZER_DATABASE_URL") == "" {
+		t.Skip("set REVERSE_ANALYZER_DATABASE_URL to run PostgreSQL integration tests")
+	}
+	s, root := testServer(t, "integration-admin")
+	defer s.close()
+	id := newID()
+	x := Experiment{ID: id, Status: "running", CreatedAt: now(), UpdatedAt: now(), Metadata: map[string]any{"worker_fencing_token": float64(2)}}
+	if err := s.saveExperiment(x); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_, _ = s.db.Exec(`DELETE FROM worker_leases WHERE experiment_id=$1`, id)
+		_, _ = s.db.Exec(`DELETE FROM experiments WHERE id=$1`, id)
+		_, _ = s.db.Exec(`DELETE FROM workspaces WHERE id=$1`, root)
+	}()
+	if _, err := s.db.Exec(`INSERT INTO worker_leases(experiment_id,workspace_id,owner_id,heartbeat_at,expires_at,fencing_token,version) VALUES($1,$2,$3,now(),now()+interval '30 seconds',2,2)`, id, root, s.workerOwner); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.appendWorkerEvent(id, "progress", "running", "stale", nil, 1); err == nil {
+		t.Fatal("stale fencing token appended a worker event")
+	}
+	if err := s.appendWorkerEvent(id, "progress", "running", "current", nil, 2); err != nil {
+		t.Fatal(err)
+	}
+	events, err := s.events(id)
+	if err != nil || len(events) != 1 || events[0].Message != "current" {
+		t.Fatalf("worker events=%#v err=%v", events, err)
+	}
+	current, err := s.loadExperiment(id)
+	if err != nil || current.Orchestration == nil || current.Orchestration.LastEventSequence != events[0].Sequence {
+		t.Fatalf("worker event projection not persisted: %#v err=%v", current.Orchestration, err)
+	}
+}
+
+func TestPostgreSQLExpiredLeaseCannotHeartbeatOrAppendEvents(t *testing.T) {
+	if os.Getenv("REVERSE_ANALYZER_DATABASE_URL") == "" {
+		t.Skip("set REVERSE_ANALYZER_DATABASE_URL to run PostgreSQL integration tests")
+	}
+	s, root := testServer(t, "integration-admin")
+	defer s.close()
+	id := newID()
+	x := Experiment{ID: id, Status: "running", CreatedAt: now(), UpdatedAt: now(), Metadata: map[string]any{"worker_fencing_token": float64(3)}}
+	if err := s.saveExperiment(x); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_, _ = s.db.Exec(`DELETE FROM worker_leases WHERE experiment_id=$1`, id)
+		_, _ = s.db.Exec(`DELETE FROM experiments WHERE id=$1`, id)
+		_, _ = s.db.Exec(`DELETE FROM workspaces WHERE id=$1`, root)
+	}()
+	if _, err := s.db.Exec(`INSERT INTO worker_leases(experiment_id,workspace_id,owner_id,heartbeat_at,expires_at,fencing_token,version) VALUES($1,$2,$3,now()-interval '1 minute',now()-interval '1 second',3,1)`, id, root, s.workerOwner); err != nil {
+		t.Fatal(err)
+	}
+	result, err := s.db.Exec(`UPDATE worker_leases SET heartbeat_at=now(),expires_at=now()+interval '30 seconds',version=version+1 WHERE experiment_id=$1 AND workspace_id=$2 AND owner_id=$3 AND fencing_token=$4 AND expires_at>now()`, id, root, s.workerOwner, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows, _ := result.RowsAffected(); rows != 0 {
+		t.Fatal("expired lease was revived")
+	}
+	if err := s.appendWorkerEvent(id, "progress", "running", "late", nil, 3); err == nil {
+		t.Fatal("expired lease appended a worker event")
+	}
+}
+
+func TestPostgreSQLRecoverySkipsActiveLeaseAndRecoversExpiredLease(t *testing.T) {
+	if os.Getenv("REVERSE_ANALYZER_DATABASE_URL") == "" {
+		t.Skip("set REVERSE_ANALYZER_DATABASE_URL to run PostgreSQL integration tests")
+	}
+	s, root := testServer(t, "integration-admin")
+	defer s.close()
+	activeID := newID()
+	expiredID := newID()
+	for _, id := range []string{activeID, expiredID} {
+		if err := s.saveExperiment(Experiment{ID: id, Status: "running", CreatedAt: now(), UpdatedAt: now(), Metadata: map[string]any{}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer func() {
+		_, _ = s.db.Exec(`DELETE FROM worker_leases WHERE experiment_id IN ($1,$2)`, activeID, expiredID)
+		_, _ = s.db.Exec(`DELETE FROM experiments WHERE id IN ($1,$2)`, activeID, expiredID)
+		_, _ = s.db.Exec(`DELETE FROM workspaces WHERE id=$1`, root)
+	}()
+	if _, err := s.db.Exec(`INSERT INTO worker_leases(experiment_id,workspace_id,owner_id,heartbeat_at,expires_at,fencing_token,version) VALUES($1,$2,'active-owner',now(),now()+interval '30 seconds',1,1),($3,$2,'expired-owner',now()-interval '1 minute',now()-interval '1 second',1,1)`, activeID, root, expiredID); err != nil {
+		t.Fatal(err)
+	}
+	s.recoverInterruptedExperiments()
+	active, err := s.loadExperiment(activeID)
+	if err != nil || active.Status != "running" {
+		t.Fatalf("active lease was recovered: %#v err=%v", active, err)
+	}
+	expired, err := s.loadExperiment(expiredID)
+	if err != nil || expired.Status != "failed" || expired.Orchestration == nil || expired.Orchestration.LastEventSequence != 1 {
+		t.Fatalf("expired lease was not recovered atomically: %#v err=%v", expired, err)
+	}
+}
+
+func TestPostgreSQLCancellationDeletesLeaseAndRejectsLateWorkerEvent(t *testing.T) {
+	if os.Getenv("REVERSE_ANALYZER_DATABASE_URL") == "" {
+		t.Skip("set REVERSE_ANALYZER_DATABASE_URL to run PostgreSQL integration tests")
+	}
+	s, root := testServer(t, "integration-admin")
+	defer s.close()
+	id := newID()
+	x := Experiment{ID: id, Status: "running", CreatedAt: now(), UpdatedAt: now(), Metadata: map[string]any{"worker_fencing_token": float64(4)}}
+	if err := s.saveExperiment(x); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_, _ = s.db.Exec(`DELETE FROM worker_leases WHERE experiment_id=$1`, id)
+		_, _ = s.db.Exec(`DELETE FROM experiments WHERE id=$1`, id)
+		_, _ = s.db.Exec(`DELETE FROM workspaces WHERE id=$1`, root)
+	}()
+	if _, err := s.db.Exec(`INSERT INTO worker_leases(experiment_id,workspace_id,owner_id,heartbeat_at,expires_at,fencing_token,version) VALUES($1,$2,$3,now(),now()+interval '30 seconds',4,1)`, id, root, s.workerOwner); err != nil {
+		t.Fatal(err)
+	}
+	cancelled, err := s.cancel(id)
+	if err != nil || cancelled.Status != "cancelled" {
+		t.Fatalf("cancel failed: %#v err=%v", cancelled, err)
+	}
+	var leaseCount int
+	if err := s.db.QueryRow(`SELECT count(*) FROM worker_leases WHERE experiment_id=$1`, id).Scan(&leaseCount); err != nil || leaseCount != 0 {
+		t.Fatalf("lease count=%d err=%v", leaseCount, err)
+	}
+	if err := s.appendWorkerEvent(id, "progress", "running", "late", nil, 4); err == nil {
+		t.Fatal("late worker event was accepted after cancellation")
+	}
+	current, err := s.loadExperiment(id)
+	if err != nil || current.Status != "cancelled" || current.Orchestration == nil || current.Orchestration.LastEventSequence != 1 {
+		t.Fatalf("cancelled state or projection mismatch: %#v err=%v", current, err)
 	}
 }
 

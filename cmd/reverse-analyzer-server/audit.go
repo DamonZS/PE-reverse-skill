@@ -65,6 +65,21 @@ func auditDescriptor(r *http.Request) (auditRecordDescriptor, bool) {
 				}
 			case "runtime-marks":
 				descriptor.Action = "runtime-mark.create"
+			case "terminal":
+				if len(parts) == 4 && r.Method == http.MethodPost {
+					descriptor.Action = "terminal.execute"
+					descriptor.ResourceType = "terminal"
+				} else if len(parts) == 6 && parts[5] == "stop" && r.Method == http.MethodPost {
+					descriptor.Action = "terminal.cancel"
+					descriptor.ResourceType = "terminal"
+					descriptor.ResourceID = parts[4]
+				}
+			case "tool-calls":
+				if len(parts) == 6 && r.Method == http.MethodPost && (parts[5] == "retry" || parts[5] == "cancel") {
+					descriptor.Action = "tool." + parts[5]
+					descriptor.ResourceType = "tool_call"
+					descriptor.ResourceID = parts[4]
+				}
 			}
 		}
 	} else if path == "api/providers" && (r.Method == http.MethodPost || r.Method == http.MethodPut) {

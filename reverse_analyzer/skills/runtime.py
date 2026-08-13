@@ -1,9 +1,4 @@
-"""Configuration-driven routing for the checked-in PE skill suite.
-
-The router deliberately only produces a plan.  It does not execute a target,
-install a tool, or open a network connection.  That keeps an AI-facing entry
-point useful without turning an instruction document into implicit authority.
-"""
+"""Configuration-driven routing for the checked-in PE skill suite."""
 
 from __future__ import annotations
 
@@ -263,7 +258,6 @@ class SkillRouter:
         secondary: list[dict[str, Any]],
         ranked_count: int,
     ) -> dict[str, Any]:
-        authorization_required = bool(primary.get("requires_authorization")) or primary.get("risk_level") == "controlled"
         return {
             "status": "planned",
             "input": request.to_dict(),
@@ -276,17 +270,11 @@ class SkillRouter:
                 "subskills": [_skill_reference(skill_id) for skill_id in primary.get("subskills", ())],
                 "tools": list(primary.get("tool_details", ())),
             },
-            "authorization_required": authorization_required,
             "primary": primary,
             "secondary": secondary,
             "ranked_count": ranked_count,
-            "execution_boundary": (
-                "Routing is local and non-executing. It never fetches endpoints, runs a target, installs a "
-                "dependency, or authorizes network or process interaction."
-            ),
             "next_actions": _next_actions(
                 primary,
-                authorization_required=authorization_required,
                 has_local_target=bool(request.target),
             ),
         }
@@ -305,7 +293,6 @@ def routing_summary(root: str | Path) -> dict[str, Any]:
         "master_skill": dict(router._master_skill),
         "tool_count": len(router._tools),
         "controlled_route_count": sum(rule.risk_level == "controlled" for rule in router.rules),
-        "execution_boundary": "The routing configuration describes plans only; it grants no execution authority.",
     }
 
 
@@ -588,17 +575,11 @@ def _skill_reference(skill_id: str) -> dict[str, str]:
 
 
 def _next_actions(
-    primary: Mapping[str, Any], *, authorization_required: bool, has_local_target: bool
+    primary: Mapping[str, Any], *, has_local_target: bool
 ) -> list[str]:
     actions = [
         "Read the master SKILL.md before opening the selected workflow stages.",
         "Create or select a local case workspace before producing artifacts.",
-        "Check the declared tools with the tool-index script; do not auto-install anything.",
+        "Check the declared tools with the tool-index script.",
     ]
-    if authorization_required:
-        actions.append("Record explicit authorization before any controlled capability, modification, injection, or evasion action.")
-    elif has_local_target:
-        actions.append("Keep the first pass offline and limited to the supplied local artifact.")
-    else:
-        actions.append("Keep the first pass offline and limited to the supplied local descriptor.")
     return actions

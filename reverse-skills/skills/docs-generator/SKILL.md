@@ -1,4 +1,4 @@
-﻿---
+---
 name: docs-generator
 description: |
   Creates task-oriented technical documentation with progressive disclosure. Use when writing READMEs, API docs, architecture docs, or markdown documentation.
@@ -7,6 +7,13 @@ description: |
 ---
 
 # Technical Documentation
+
+## ACTION REQUIRED（读完后立刻执行）
+
+1. `NOW`：确认当前任务是否命中本 skill 的适用范围
+2. `NOW`：读取 `../tool-index.md`，校验工具可用性和实际路径
+3. `NEXT`：缺工具时调用 bootstrap，不要猜路径
+4. `ACT`：进入"工作流"第一步并执行，不要停在确认状态
 
 For writing style, tone, and voice guidance, use `Skill(ce:writer)` with **The Engineer** persona.
 
@@ -29,7 +36,21 @@ For writing style, tone, and voice guidance, use `Skill(ce:writer)` with **The E
 | 渗透测试/漏洞挖掘 | `references/security-report-templates.md` → 渗透测试报告 |
 | CTF 解题 | `references/security-report-templates.md` → CTF Writeup |
 | JS/Web 签名逆向 | `references/security-report-templates.md` → 签名逆向报告 |
+| 恶意软件 / APT / 病毒分析报告 | `references/security-report-templates.md` + **`references/vendor-report-rules.md`** |
 | 通用技术文档 | `references/templates.md` → README / API 文档 |
+
+### 厂商报告结构（Issue #65）
+
+安全类正式报告 **MUST** 叠加 `references/vendor-report-rules.md`（只取结构，不抄厂商原文）：
+
+| Flavor | 何时用 | 主参考骨架 |
+|--------|--------|------------|
+| `malware`（**默认**） | 单样本、木马、白加黑、钓鱼投毒、日常程序分析 | 火绒式：概述→流程→样本分析→应急处置→IOC |
+| `apt` | APT/战役/团伙/多阶段感染链/行业定向 | 卡巴斯基 Securelist 式：摘要→感染链→调查叙事→Interesting findings→技术分析→检测缓解→IOC |
+| （无全文 flavor） | 渗透 / CTF / JS 签名 | 原任务模板 + 通用专业元素最小集（摘要、IOC 表可 n/a、建议） |
+
+原则：**模板在精不在多** —— 仅上述 2 个 flavor，不另建第三套全文模板。  
+与 §0 Evidence→Finding→Path **同时生效**；冲突时 Evidence 契约优先。
 
 ### 输出规范
 
@@ -46,6 +67,9 @@ For writing style, tone, and voice guidance, use `Skill(ce:writer)` with **The E
 - 关键发现必须有证据支撑
 - 复现步骤必须让第三方能独立重现
 - 敏感信息（真实 token、密码、内部 URL）用占位符替代
+- **MUST** 包含 Evidence → Finding → Path 链（见 `../ops/evidence-finding-path.md` 与模板 §0）
+- **MUST** 叠加 `references/vendor-report-rules.md`：选定 flavor（默认 `malware`）或任务模板最小集；含概述、IOC 表（可 n/a）、可执行建议
+- **SHOULD** 引用 case `scope.md` / `timeline.md`（`../scripts/case-init.ps1`）
 
 ### 图表集成
 
@@ -153,4 +177,14 @@ For README, API endpoint, and file organization templates, see [references/templ
 - `field-journal/` — 报告内容同时作为进化日志的数据来源
 
 **安全报告模板**: `references/security-report-templates.md`
+**厂商报告规则**: `references/vendor-report-rules.md`（flavor: malware | apt）
 **通用文档模板**: `references/templates.md`
+
+
+## 任务完成自检（声称完成前 MUST 通过）
+
+- [ ] 我是否执行了工作流中的每一步（而不是只阅读）？
+- [ ] 我是否基于 `tool-index` 使用了真实工具路径？
+- [ ] 我是否产出了可复现证据（命令/脚本/截图/报告）？
+- [ ] 报告是否含 Evidence / Finding / Path（ops 契约）？
+- [ ] 是否完成并回写了 RULES 要求的 Checklist 项？

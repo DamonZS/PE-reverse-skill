@@ -15,6 +15,8 @@ Recover the transform chain in order:
 
 Record exact parameters whenever they matter: keys, IVs, nonces, salts, tags, padding rules, alphabets, offsets, and byte order.
 
+For encrypted ZIP/PKZIP challenges, route to `$competition-zip-archive`. Confirm legacy ZipCrypto first and prefer a known-plaintext attack with `bkcrack`; do not start with blind password brute force. WinZip AES is outside that child skill's scope.
+
 ## Steganography
 
 Inspect metadata, chunk layout, palettes, alpha planes, LSBs, thumbnails, appended trailers, and transcoding artifacts before assuming the payload is absent.

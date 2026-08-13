@@ -17,7 +17,7 @@ class SkillCatalogTests(unittest.TestCase):
         self.assertEqual(len(records), len(list((ROOT / "reverse-skills").rglob("SKILL.md"))))
         self.assertEqual(len({record.id for record in records}), len(records))
         self.assertTrue(catalog.get("skills/apk-reverse"))
-        self.assertTrue(any(record.metadata_status == "inferred" for record in records))
+        self.assertTrue(all(record.metadata_status == "complete" for record in records))
 
     def test_cli_lists_and_audits_skills(self) -> None:
         audit = subprocess.run([sys.executable, "-m", "reverse_analyzer", "skills", "audit"], cwd=ROOT, text=True, capture_output=True, check=False)

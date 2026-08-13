@@ -1423,7 +1423,7 @@ def reconstruct_apk(apk_path, output_dir):
 
     decompiled_dir = output_dir / "app" / "src" / "main"
     if which('apktool'):
-        code, out, err = run_cmd('apktool d -f "%s" -o "%s"' % (apk_path, decompiled_dir))
+        code, out, err = run_cmd(['apktool', 'd', '-f', str(apk_path), '-o', str(decompiled_dir)])
         if code != 0:
             print("[!] apktool 失败，尝试解压: %s" % err[:100])
     if not decompiled_dir.exists():
@@ -1433,7 +1433,7 @@ def reconstruct_apk(apk_path, output_dir):
 
     jadx_out = output_dir / "app" / "src" / "main" / "java_reconstructed"
     if which('jadx'):
-        code, out, err = run_cmd('jadx -d "%s" --show-bad-code "%s"' % (jadx_out, apk_path), timeout=120)
+        code, out, err = run_cmd(['jadx', '-d', str(jadx_out), '--show-bad-code', str(apk_path)], timeout=120)
         if code == 0:
             print("[+] jadx 反编译完成")
             java_dir = output_dir / "app" / "src" / "main" / "java"

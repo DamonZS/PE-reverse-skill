@@ -21,13 +21,13 @@ from reverse_analyzer.skills.runtime import SkillRouter, SkillRoutingError  # no
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Route a reverse-analysis request without fetching endpoints or running a target."
+        description="Route a reverse-analysis request."
     )
     selector = parser.add_mutually_exclusive_group()
     selector.add_argument("--intent", help="Plain-language request to route.")
     selector.add_argument("--skill-id", help="Explicit skill ID from config/routing.json.")
-    parser.add_argument("--target", help="Optional local target path used only for suffix routing.")
-    parser.add_argument("--endpoint", "--url", dest="endpoint", help="Optional HTTP(S) endpoint descriptor; never fetched.")
+    parser.add_argument("--target", help="Optional local target path used for suffix routing.")
+    parser.add_argument("--endpoint", "--url", dest="endpoint", help="Optional HTTP(S) endpoint descriptor.")
     parser.add_argument("--interface", help="Optional interface kind such as rest, graphql, or websocket.")
     parser.add_argument("--package", help="Optional package ecosystem such as android, dotnet, or npm.")
     parser.add_argument(
@@ -76,8 +76,6 @@ def main(argv: list[str] | None = None) -> int:
             "phase": primary["phase"],
             "tools": primary["tools"],
             "scripts": primary["scripts"],
-            "execution_boundary": decision["execution_boundary"],
-            "policy": router.policy,
             "route": decision,
         }
     except SkillRoutingError as error:

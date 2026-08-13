@@ -4,17 +4,54 @@
 
 Start with [Intelligent Reverse Task Router](SKILL.md), then follow the selected workflow and its indexed subskills/tools.
 
-| Workflow | Phase | Risk | Authorization | Indexed tools | Purpose |
-| --- | --- | --- | --- | --- | --- |
-| [PE Triage](pe-triage/SKILL.md) | intake | standard | not required | master-route, case-init | Local, offline, static intake only; do not execute the target, use a network, or install tools. |
-| [Interface and Endpoint Analysis](interface-analysis/SKILL.md) | interface | standard | not required | master-route, case-init | Classify a URL or local interface descriptor without fetching it; use local captures and supplied files only. |
-| [Android Package Analysis](apk-reverse/SKILL.md) | package | standard | not required | master-route, case-init | Plan offline package inspection only; do not install, attach to, or interact with a device. |
-| [iOS and Mobile Package Analysis](mobile-reverse/SKILL.md) | package | standard | not required | master-route, case-init | Plan offline package inspection only; device interaction remains outside the router. |
-| [.NET Package and Assembly Analysis](dotnet-analysis/SKILL.md) | package | standard | not required | master-route, case-init | Plan offline CLR metadata and assembly analysis; preserve the original artifact and do not patch it. |
-| [Generic Package and Archive Analysis](package-analysis/SKILL.md) | package | standard | not required | master-route, case-init | Classify and inspect supplied package bytes offline; do not resolve dependencies, install packages, or execute contents. |
-| [License, Integrity, Anti-Tamper, and Anti-Cheat Review](protection-review/SKILL.md) | protection | controlled | required | master-route, case-init, review-case | Authorization-gated analysis and evidence planning only; no license bypass, patch, injection, or anti-cheat evasion is automated. |
-| [EDR and Endpoint Telemetry Defense Review](edr-defense-review/SKILL.md) | protection | controlled | required | master-route, case-init, review-case | Authorization-gated defensive analysis of hooks, telemetry, and detection coverage; no unhook, evasion, injection, or disable action is automated. |
-| [PE Static Analysis](pe-static-analysis/SKILL.md) | structure | standard | not required | master-route | Use already-installed local static tooling only; do not execute the target, use a network, or install tools. |
-| [PE Deep Analysis](pe-deep-analysis/SKILL.md) | reasoning | standard | not required | master-route | Reason from local static evidence only; do not execute, emulate, debug, patch, or network-enable the target. |
-| [Source Reconstruction](source-reconstruction/SKILL.md) | reconstruction | standard | not required | master-route | Write evidence-labeled reconstruction only; do not claim original source recovery, execute the target, or use a network. |
-| [Case Review](case-review/SKILL.md) | review | standard | not required | master-route, review-case, verify-skill-suite | Review local case records only; do not execute a target, access a network, or install tools. |
+| Workflow | Phase | Risk | Authorization | Indexed tools |
+| --- | --- | --- | --- | --- |
+| [PE Triage](pe-triage/SKILL.md) | intake | standard | not required | master-route, case-init |
+| [Interface and Endpoint Analysis](interface-analysis/SKILL.md) | interface | standard | not required | master-route, case-init |
+| [Browser Extension Reverse](browser-extension-reverse/SKILL.md) | package | standard | not required | master-route, case-init |
+| [Protocol Reverse](protocol-reverse/SKILL.md) | protocol | standard | not required | master-route, case-init |
+| [Android Package Analysis](apk-reverse/SKILL.md) | package | standard | not required | master-route, case-init |
+| [iOS and Mobile Package Analysis](mobile-reverse/SKILL.md) | package | standard | not required | master-route, case-init |
+| [.NET Package and Assembly Analysis](dotnet-analysis/SKILL.md) | package | standard | not required | master-route, case-init |
+| [DSL VM Reverse](reverse-engineering/dsl-vm-reverse/SKILL.md) | reasoning | standard | not required | master-route, case-init |
+| [Code Audit and SAST](code-audit/SKILL.md) | audit | standard | not required | master-route, case-init |
+| [Digital Forensics](digital-forensics/SKILL.md) | forensics | standard | not required | master-route, case-init |
+| [Ghidra Reverse](ghidra-reverse/SKILL.md) | reasoning | standard | not required | master-route, case-init |
+| [Go and Rust Reverse](go-rust-reverse/SKILL.md) | reasoning | standard | not required | master-route, case-init |
+| [macOS Reverse](macos-reverse/SKILL.md) | reasoning | standard | not required | master-route, case-init |
+| [Cloud and Kubernetes Security](cloud-k8s/SKILL.md) | cloud | standard | not required | master-route, case-init |
+| [Windows and AD Security](windows-ad/SKILL.md) | identity | standard | not required | master-route, case-init |
+| [Database Security](database-security/SKILL.md) | audit | standard | not required | master-route, case-init |
+| [Identity Federation](identity-federation/SKILL.md) | identity | standard | not required | master-route, case-init |
+| [Threat Hunting](threat-hunting/SKILL.md) | defense | standard | not required | master-route, case-init |
+| [OT and ICS Security](ot-ics/SKILL.md) | industrial | standard | not required | master-route, case-init |
+| [Wi-Fi and Wireless Security](wifi-wireless/SKILL.md) | wireless | standard | not required | master-route, case-init |
+| [RF and SDR Research](radio-sdr/SKILL.md) | wireless | standard | not required | master-route, case-init |
+| [Thick Client Security](thick-client/SKILL.md) | client | standard | not required | master-route, case-init |
+| [Email Security](email-security/SKILL.md) | defense | standard | not required | master-route, case-init |
+| [Hardware Security](hardware-security/SKILL.md) | hardware | standard | not required | master-route, case-init |
+| [Generic Package and Archive Analysis](package-analysis/SKILL.md) | package | standard | not required | master-route, case-init |
+| [License, Integrity, Anti-Tamper, and Anti-Cheat Review](protection-review/SKILL.md) | protection | standard | not required | master-route, case-init, review-case |
+| [EDR and Endpoint Telemetry Defense Review](edr-defense-review/SKILL.md) | protection | standard | not required | master-route, case-init, review-case |
+| [PE Static Analysis](pe-static-analysis/SKILL.md) | structure | standard | not required | master-route |
+| [PE Deep Analysis](pe-deep-analysis/SKILL.md) | reasoning | standard | not required | master-route |
+| [Source Reconstruction](source-reconstruction/SKILL.md) | reconstruction | standard | not required | master-route |
+| [Case Review](case-review/SKILL.md) | review | standard | not required | master-route, review-case, verify-skill-suite |
+| [JS and Frontend Reverse](js-reverse/SKILL.md) | web | standard | not required | master-route, case-init |
+| [IDA Reverse](ida-reverse/SKILL.md) | reasoning | standard | not required | master-route, case-init |
+| [radare2 Reverse](radare2/SKILL.md) | reasoning | standard | not required | master-route, case-init |
+| [Firmware and IoT Pentest](firmware-pentest/SKILL.md) | firmware | standard | not required | master-route, case-init |
+| [Malware Analysis](malware-analysis/SKILL.md) | malware | standard | not required | master-route, case-init |
+| [Attack Chain](attack-chain/SKILL.md) | offense | standard | not required | master-route, case-init |
+| [Pentest Tools](pentest-tools/SKILL.md) | offense | standard | not required | master-route, case-init |
+| [API Security](api-security/SKILL.md) | api | standard | not required | master-route, case-init |
+| [Supply Chain Security](supply-chain-security/SKILL.md) | supply-chain | standard | not required | master-route, case-init |
+| [LLM and Agent Security](llm-security/SKILL.md) | ai-security | standard | not required | master-route, case-init |
+| [Binary Diff](binary-diff/SKILL.md) | diff | standard | not required | master-route, case-init |
+| [Patch Diff Exploit](patch-diff-exploit/SKILL.md) | diff | standard | not required | master-route, case-init |
+| [Pwn Chain](pwn-chain/SKILL.md) | exploit | standard | not required | master-route, case-init |
+| [EDR Bypass Reverse](edr-bypass-re/SKILL.md) | defense-evasion | standard | not required | master-route, case-init |
+| [Browser and Desktop Automation](browser-automation/SKILL.md) | automation | standard | not required | master-route, case-init |
+| [Docs Generator](docs-generator/SKILL.md) | reporting | standard | not required | master-route, case-init |
+| [Diagram Generator](diagram-generator/SKILL.md) | visualization | standard | not required | master-route, case-init |
+| [General Reverse Engineering](reverse-engineering/SKILL.md) | reasoning | standard | not required | master-route, case-init |
