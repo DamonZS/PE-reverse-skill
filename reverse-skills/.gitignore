@@ -48,6 +48,7 @@ burp-mcp-full/build/libs/
 burp-mcp-full/lib/
 *.class
 *.jar
+!burp-mcp-full/gradle/wrapper/gradle-wrapper.jar
 !burp-mcp-full/build/libs/burp-mcp-full.jar
 
 # 已弃用的文件（保留用于历史参考）
