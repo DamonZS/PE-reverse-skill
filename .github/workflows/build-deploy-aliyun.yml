@@ -52,6 +52,15 @@ jobs:
           tags: reverse-analyzer:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: 构建 Runner 镜像
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.runner
+          load: true
+          tags: reverse-analyzer-runner:${{ github.sha }}
+          cache-from: type=gha,scope=runner
+          cache-to: type=gha,mode=max,scope=runner
       - name: 验证 Android 真实构建工具链
         run: |
           docker run --rm --entrypoint sh reverse-analyzer:${{ github.sha }} -lc \
@@ -59,7 +68,7 @@ jobs:
       - name: 打包镜像
         run: |
           docker pull postgres:15-bookworm
-          docker save reverse-analyzer:${{ github.sha }} postgres:15-bookworm | gzip -1 > reverse-analyzer-image.tar.gz
+          docker save reverse-analyzer:${{ github.sha }} reverse-analyzer-runner:${{ github.sha }} postgres:15-bookworm | gzip -1 > reverse-analyzer-image.tar.gz
           git archive --format=tar.gz -o source.tar.gz HEAD
           curl -fsSL --retry 5 --retry-all-errors \
             https://github.com/DeusData/codebase-memory-mcp/releases/download/v0.9.0/codebase-memory-mcp-ui-linux-amd64-portable.tar.gz \
@@ -110,6 +119,7 @@ jobs:
             chmod 0660 "$ROOT/config/provider.local.json"
             . "$ROOT/deploy.env"
             export REVERSE_ANALYZER_IMAGE="reverse-analyzer:${{ github.sha }}"
+            export REVERSE_ANALYZER_RUNNER_IMAGE="reverse-analyzer-runner:${{ github.sha }}"
             docker compose --project-name pe-reverse-analyzer --env-file "$ROOT/deploy.env" -f "$ROOT/compose.yml" up -d --remove-orphans
             docker image prune -f --filter "until=168h"
             for i in $(seq 1 60); do

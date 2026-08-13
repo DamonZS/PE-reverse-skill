@@ -83,6 +83,25 @@ func TestProductionDockerSocketIsIsolatedToRunner(t *testing.T) {
 	}
 }
 
+func TestAliyunWorkflowPackagesAndDeploysRunnerImage(t *testing.T) {
+	root := filepath.Join("..", "..")
+	content, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "build-deploy-aliyun.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	for _, required := range []string{
+		"file: Dockerfile.runner",
+		"tags: reverse-analyzer-runner:${{ github.sha }}",
+		"docker save reverse-analyzer:${{ github.sha }} reverse-analyzer-runner:${{ github.sha }} postgres:15-bookworm",
+		"export REVERSE_ANALYZER_RUNNER_IMAGE=\"reverse-analyzer-runner:${{ github.sha }}\"",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("Aliyun deployment workflow missing runner image contract %q", required)
+		}
+	}
+}
+
 func TestRoutingSkillFilesExistAndAreTracked(t *testing.T) {
 	root := filepath.Join("..", "..")
 	skillRoot := filepath.Join(root, "reverse-skills", "skills")
