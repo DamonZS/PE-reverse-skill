@@ -114,8 +114,12 @@ jobs:
             cp "$RELEASE/deploy/compose.aliyun.yml" "$ROOT/compose.yml"
             cp "$RELEASE/deploy/nginx.aliyun.conf" "$ROOT/nginx.conf"
             sh "$RELEASE/deploy/install-codegraph.sh" "$RELEASE"
-            chown root:10001 "$ROOT/secrets/postgres_password" "$ROOT/secrets/web_token" "$ROOT/config/provider.local.json"
-            chmod 0640 "$ROOT/secrets/postgres_password" "$ROOT/secrets/web_token"
+            if [ ! -s "$ROOT/secrets/runner_token" ]; then
+              umask 077
+              openssl rand -hex 32 > "$ROOT/secrets/runner_token"
+            fi
+            chown root:10001 "$ROOT/secrets/postgres_password" "$ROOT/secrets/web_token" "$ROOT/secrets/runner_token" "$ROOT/config/provider.local.json"
+            chmod 0640 "$ROOT/secrets/postgres_password" "$ROOT/secrets/web_token" "$ROOT/secrets/runner_token"
             chmod 0660 "$ROOT/config/provider.local.json"
             . "$ROOT/deploy.env"
             export REVERSE_ANALYZER_IMAGE="reverse-analyzer:${{ github.sha }}"

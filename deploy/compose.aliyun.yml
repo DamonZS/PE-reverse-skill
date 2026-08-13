@@ -79,6 +79,7 @@ services:
     restart: unless-stopped
     user: "65532:65532"
     group_add:
+      - "10001"
       - "${DOCKER_GID:?set DOCKER_GID}"
     environment:
       REVERSE_ANALYZER_RUNNER_ADDR: 0.0.0.0:8091

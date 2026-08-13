@@ -95,9 +95,32 @@ func TestAliyunWorkflowPackagesAndDeploysRunnerImage(t *testing.T) {
 		"tags: reverse-analyzer-runner:${{ github.sha }}",
 		"docker save reverse-analyzer:${{ github.sha }} reverse-analyzer-runner:${{ github.sha }} postgres:15-bookworm",
 		"export REVERSE_ANALYZER_RUNNER_IMAGE=\"reverse-analyzer-runner:${{ github.sha }}\"",
+		"if [ ! -s \"$ROOT/secrets/runner_token\" ]; then",
+		"openssl rand -hex 32 > \"$ROOT/secrets/runner_token\"",
+		"chown root:10001 \"$ROOT/secrets/postgres_password\" \"$ROOT/secrets/web_token\" \"$ROOT/secrets/runner_token\"",
+		"chmod 0640 \"$ROOT/secrets/postgres_password\" \"$ROOT/secrets/web_token\" \"$ROOT/secrets/runner_token\"",
 	} {
 		if !strings.Contains(text, required) {
-			t.Fatalf("Aliyun deployment workflow missing runner image contract %q", required)
+			t.Fatalf("Aliyun deployment workflow missing runner image or secret contract %q", required)
+		}
+	}
+}
+
+func TestAliyunRunnerCanReadRunnerTokenSecret(t *testing.T) {
+	root := filepath.Join("..", "..")
+	content, err := os.ReadFile(filepath.Join(root, "deploy", "compose.aliyun.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	runnerStart := strings.Index(text, "  runner:")
+	if runnerStart < 0 {
+		t.Fatal("Aliyun compose is missing runner service")
+	}
+	runnerSection := text[runnerStart:]
+	for _, required := range []string{"user: \"65532:65532\"", "group_add:", "- \"10001\"", "runner_token"} {
+		if !strings.Contains(runnerSection, required) {
+			t.Fatalf("Aliyun runner cannot read the persisted runner token: missing %q", required)
 		}
 	}
 }
