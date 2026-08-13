@@ -355,23 +355,104 @@ Whether you use Claude Code, Codex CLI, Cursor, Cline, Windsurf, or another code
 
 ### Minimum Prompt Requirements
 
-No matter how you inject instructions, at minimum tell the AI about these three entry files:
+No matter how you inject instructions, at minimum tell the AI about these four entry files:
 
-- `skills\SKILL.md`
-- `skills\routing.md`
-- `skills\tool-index.md`
+- `<SKILL_ROOT>\README_AI.md`
+- `<SKILL_ROOT>\RULES.md`
+- `<SKILL_ROOT>\skills\SKILL.md`
+- `<SKILL_ROOT>\skills\config\routing.json`
+
+`<SKILL_ROOT>\skills\tool-index.md` is generated per machine. It is a local capability report, not a replacement for the routing configuration.
+
+### Recommended Local Checkout
+
+For this repository, use the checked-in package at:
+
+```text
+D:\Project\PE-reverse-skill\reverse-skills
+```
+
+Do not rely on an older global copy under `~/.codex/skills/pe-reverse-analyzer`, `~/.workbuddy/skills/pe-reverse-analyzer`, or another `reverse-skill` directory. Those directories may be independently installed snapshots and can miss the current `config/routing.json`, tool manifest, production fixes, or tracked sub-skills.
+
+The checked-in `skills/scripts/master-route.py` imports the sibling repository package `reverse_analyzer`. Therefore, copying only `reverse-skills` into a global Skill directory is sufficient for methodology files but not for the configuration-driven Python router. The recommended runtime installation is the complete repository checkout. If a client only discovers Skills from a global directory, keep a thin client-visible entry that points to this checkout, or synchronize the whole repository and its Python environment; do not copy only this subdirectory and assume routing will work.
+
+### First-Time Windows Setup
+
+Run these commands from the repository root or use absolute paths:
+
+```powershell
+$RepoRoot = "D:\Project\PE-reverse-skill"
+$SkillRoot = "$RepoRoot\reverse-skills"
+powershell -ExecutionPolicy Bypass -File "$SkillRoot\skills\scripts\refresh-tool-index.ps1"
+& "$RepoRoot\.venv\Scripts\python.exe" "$SkillRoot\skills\scripts\refresh-skill-index.py"
+& "$RepoRoot\.venv\Scripts\python.exe" "$SkillRoot\skills\scripts\verify-skill-suite.py" --strict-index
+```
+
+Then verify the real router:
+
+```powershell
+& "$RepoRoot\.venv\Scripts\python.exe" "$SkillRoot\skills\scripts\master-route.py" `
+  --intent "分析这个 Windows EXE 并重构源码" `
+  --target "sample.exe" `
+  --format text
+```
+
+Expected fields include `skill`, `path`, `phase`, and `tools`. A successful route only proves that the router selected a workflow; it does not prove that IDA, Burp, Frida, Docker, or any other external service is installed or connected.
 
 ### Claude Code
 
-Claude Code is the best fit for directly connecting this package. If you already have `.claude\settings.local.json`, `.claude\mcp.json`, `RULES.md`, or `route-reverse.ps1`, only update old paths to the current installation path.
+Add the compact routing instruction from `RULES.md` to `~/.claude/CLAUDE.md`, or let the client load `<SKILL_ROOT>\README_AI.md` as project instructions. Configure MCP servers separately in the client's MCP configuration. On first use, the agent should refresh `tool-index.md`, read `RULES.md`, route the request, and only then enter the selected `SKILL.md`.
 
-### Codex CLI / Cursor / Cline / Windsurf / Others
+### Codex CLI
 
-These tools can also reuse this package as long as they satisfy two conditions:
-1. They support MCP or equivalent external tool integration
-2. They support Rules / custom instructions / project-level instruction files
+Open the repository root as the Codex working directory and provide this project instruction:
 
-The key is to inject: package path, key entry files, MCP addresses, and "route first, execute second."
+```text
+For reverse-engineering, malware-analysis, CTF, or authorized security tasks, first read D:\Project\PE-reverse-skill\reverse-skills\README_AI.md and D:\Project\PE-reverse-skill\reverse-skills\RULES.md. Use D:\Project\PE-reverse-skill\reverse-skills\skills\config\routing.json as the routing source of truth. Run the local refresh and route commands before using tools. Route first, execute second; do not infer tool paths from an older global Skill copy.
+```
+
+Codex project instructions and MCP configuration are client-specific. The Skill package itself does not make an MCP server available automatically.
+
+### Cursor / Cline / Windsurf / Kiro
+
+Add the same compact instruction to the client's project or global Rules panel. Cursor, Cline, and Windsurf generally require manual paste into their Rules or Custom Instructions UI; Kiro can use a steering file. Keep `<SKILL_ROOT>` as an absolute path and configure MCP endpoints in the client separately.
+
+### Four Independent Statuses
+
+Check these independently when diagnosing an integration:
+
+| Status | Meaning | Verification |
+|---|---|---|
+| Skill loaded | AI can read the package instructions | The client reads `README_AI.md` and `skills/SKILL.md` |
+| Router working | The checked-in route resolves a task | `master-route.py --intent ... --format text` |
+| Local tools available | Executables are detected on this machine | `skills/tool-index.md` / `tool-index.json` |
+| MCP or platform connected | External service is reachable | Client MCP test, service health endpoint, or platform `/readyz` |
+
+A successful Skill load or route does not imply MCP connectivity. Likewise, an MCP connection does not replace the checked-in routing and tool contracts.
+
+### MCP Configuration
+
+Configure only the services required by the selected workflow. For example:
+
+```json
+{
+  "mcpServers": {
+    "anything-analyzer": { "url": "http://localhost:23816/mcp" },
+    "idapro": { "url": "http://127.0.0.1:13337/mcp" },
+    "jshook": {
+      "command": "npx",
+      "args": ["-y", "@jshookmcp/jshook@latest"],
+      "env": { "JSHOOK_BASE_PROFILE": "search" }
+    },
+    "burpsuite": {
+      "command": "node",
+      "args": ["<SKILL_ROOT>\\burp-mcp-full\\mcp-bridge.js"]
+    }
+  }
+}
+```
+
+Replace `<SKILL_ROOT>` with the actual absolute path. Do not add a service merely because it appears in this example; start and verify the service required by the routed workflow.
 
 ---
 
