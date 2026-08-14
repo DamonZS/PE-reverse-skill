@@ -39,6 +39,15 @@ test("源码保存按钮可点击并在没有修改时给出原因", () => {
   assert.match(app, /当前无修改，点击可查看提示/);
 });
 
+test("前端工作台接入文件、终端和 ToolCall 控制", () => {
+  assert.match(app, /fileAction\("batch-copy"/);
+  assert.match(app, /fileAction\("batch-move"/);
+  assert.match(app, /读取增量/);
+  assert.match(app, /stopTerminalSession\(session\.id\)/);
+  assert.match(app, /mutateToolCall\(call\.id, "retry"\)/);
+  assert.match(app, /mutateToolCall\(call\.id, "cancel"\)/);
+});
+
 test("模型服务和权限管理视图只向管理员渲染", () => {
   assert.match(app, /view === "providers" && identity\?\.role === "admin"/);
   assert.match(app, /当前账号无权访问管理功能/);

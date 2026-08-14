@@ -1411,6 +1411,10 @@ func (s *Server) sourceActions(w http.ResponseWriter, r *http.Request, id string
 			bad(w, "缺少文件路径")
 			return false
 		}
+		if err := validateMutableSourcePath(path); err != nil {
+			bad(w, err.Error())
+			return false
+		}
 		resolved, pathErr := safeProjectFile(project, path)
 		if pathErr != nil {
 			bad(w, pathErr.Error())
@@ -1429,6 +1433,10 @@ func (s *Server) sourceActions(w http.ResponseWriter, r *http.Request, id string
 			return false
 		}
 		for _, path := range paths {
+			if err := validateMutableSourcePath(path); err != nil {
+				bad(w, err.Error())
+				return false
+			}
 			resolved, pathErr := safeProjectFile(project, path)
 			if pathErr != nil {
 				bad(w, pathErr.Error())
@@ -1471,6 +1479,10 @@ func (s *Server) sourceActions(w http.ResponseWriter, r *http.Request, id string
 			bad(w, "缺少目录路径")
 			return
 		}
+		if err := validateMutableSourcePath(payload.Path); err != nil {
+			bad(w, err.Error())
+			return
+		}
 		resolved, pathErr := safeProjectFile(project, payload.Path)
 		if pathErr != nil {
 			bad(w, pathErr.Error())
@@ -1484,6 +1496,10 @@ func (s *Server) sourceActions(w http.ResponseWriter, r *http.Request, id string
 	case "write":
 		if payload.Path == "" {
 			bad(w, "缺少文件路径")
+			return
+		}
+		if err := validateMutableSourcePath(payload.Path); err != nil {
+			bad(w, err.Error())
 			return
 		}
 		resolved, pathErr := safeProjectFile(project, payload.Path)
@@ -1510,7 +1526,11 @@ func (s *Server) sourceActions(w http.ResponseWriter, r *http.Request, id string
 			bad(w, "缺少目标目录")
 			return
 		}
-		if !applyMany("batch_copy", payload.Paths, func(path string) error { return copyProjectPath(project, path, payload.Target) }) {
+		if err := validateMutableSourcePath(payload.Target); err != nil {
+			bad(w, err.Error())
+			return
+		}
+		if !applyMany("batch_copy", payload.Paths, func(path string) error { return copyProjectPathInto(project, path, payload.Target) }) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"copied": true, "count": len(payload.Paths), "target": filepath.ToSlash(payload.Target)})
@@ -1519,7 +1539,11 @@ func (s *Server) sourceActions(w http.ResponseWriter, r *http.Request, id string
 			bad(w, "缺少目标目录")
 			return
 		}
-		if !applyMany("batch_move", payload.Paths, func(path string) error { return moveProjectPath(project, path, payload.Target) }) {
+		if err := validateMutableSourcePath(payload.Target); err != nil {
+			bad(w, err.Error())
+			return
+		}
+		if !applyMany("batch_move", payload.Paths, func(path string) error { return moveProjectPathInto(project, path, payload.Target) }) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"moved": true, "count": len(payload.Paths), "target": filepath.ToSlash(payload.Target)})
@@ -1696,9 +1720,26 @@ func (s *Server) terminalOutput(w http.ResponseWriter, r *http.Request, id, sess
 		writeJSON(w, http.StatusNotFound, map[string]any{"error": "终端会话不存在"})
 		return
 	}
+	after := 0
+	if raw := strings.TrimSpace(r.URL.Query().Get("after")); raw != "" {
+		parsed, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || parsed < 0 {
+			bad(w, "after 必须是非负整数")
+			return
+		}
+		after = parsed
+	}
 	session.Mu.Lock()
 	defer session.Mu.Unlock()
-	writeJSON(w, http.StatusOK, map[string]any{"session": terminalSessionView(session), "output": session.Output})
+	output := session.Output
+	if after > 0 {
+		if after >= len(output) {
+			output = []map[string]any{}
+		} else {
+			output = output[after:]
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"session": terminalSessionView(session), "output": output, "next_offset": len(session.Output)})
 }
 
 func (s *Server) terminalStop(w http.ResponseWriter, r *http.Request, id, sessionID string) {
@@ -2174,10 +2215,24 @@ func skipSourceFile(path string) bool {
 	return base == "SOURCE_TREE.json" || base == "BUILD_STATUS.json"
 }
 
+func validateMutableSourcePath(path string) error {
+	cleaned := strings.Trim(filepath.ToSlash(path), "/")
+	if cleaned == "" || cleaned == "." {
+		return errors.New("不允许修改源码工程根目录")
+	}
+	if skipSourceFile(cleaned) {
+		return errors.New("不允许修改自动生成的源码工程元数据")
+	}
+	return nil
+}
+
 func copyProjectPath(project, sourcePath, target string) error {
 	dest, err := safeProjectFile(project, target)
 	if err != nil {
 		return err
+	}
+	if pathWithin(sourcePath, dest) {
+		return errors.New("不允许将目录复制到自身内部")
 	}
 	info, err := os.Stat(sourcePath)
 	if err != nil {
@@ -2219,15 +2274,26 @@ func copyProjectPath(project, sourcePath, target string) error {
 	return os.WriteFile(dest, data, 0600)
 }
 
+func copyProjectPathInto(project, sourcePath, targetDir string) error {
+	return copyProjectPath(project, sourcePath, filepath.ToSlash(filepath.Join(filepath.FromSlash(targetDir), filepath.Base(sourcePath))))
+}
+
 func moveProjectPath(project, sourcePath, target string) error {
 	dest, err := safeProjectFile(project, target)
 	if err != nil {
 		return err
 	}
+	if pathWithin(sourcePath, dest) {
+		return errors.New("不允许将目录移动到自身内部")
+	}
 	if err = os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
 		return err
 	}
 	return os.Rename(sourcePath, dest)
+}
+
+func moveProjectPathInto(project, sourcePath, targetDir string) error {
+	return moveProjectPath(project, sourcePath, filepath.ToSlash(filepath.Join(filepath.FromSlash(targetDir), filepath.Base(sourcePath))))
 }
 
 func durationSince(startedAt, endedAt string) string {

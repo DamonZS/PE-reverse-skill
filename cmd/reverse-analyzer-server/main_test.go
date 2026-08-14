@@ -1138,6 +1138,77 @@ func TestReconstructedSourceWorkspaceLifecycle(t *testing.T) {
 	}
 }
 
+func TestSourceActionsManageFilesWithPathGuards(t *testing.T) {
+	s, root := testServer(t, "")
+	sample := filepath.Join(root, "sample.bin")
+	if err := os.WriteFile(sample, []byte("MZ"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	created := request(t, s, http.MethodPost, "/api/experiments", "", map[string]any{"target": "sample.bin"})
+	if created.Code != http.StatusCreated {
+		t.Fatal(created.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(created.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	id := payload["experiment"].(map[string]any)["id"].(string)
+	project := filepath.Join(root, "experiments", id, "analysis", "reconstructed_test")
+	if err := os.MkdirAll(filepath.Join(project, "src"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "CMakeLists.txt"), []byte("project(reconstructed C)\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "src", "a.c"), []byte("int a;\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "src", "b.c"), []byte("int b;\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	write := request(t, s, http.MethodPost, "/api/experiments/"+id+"/source/actions", "", map[string]any{"action": "write", "path": "src/new.c", "content": "int n;\n"})
+	if write.Code != http.StatusOK {
+		t.Fatalf("write status=%d body=%s", write.Code, write.Body.String())
+	}
+	copyResp := request(t, s, http.MethodPost, "/api/experiments/"+id+"/source/actions", "", map[string]any{"action": "batch-copy", "paths": []string{"src/a.c", "src/b.c"}, "target": "copies"})
+	if copyResp.Code != http.StatusOK {
+		t.Fatalf("copy status=%d body=%s", copyResp.Code, copyResp.Body.String())
+	}
+	for _, name := range []string{"a.c", "b.c"} {
+		if _, err := os.Stat(filepath.Join(project, "copies", name)); err != nil {
+			t.Fatalf("batch copy did not preserve %s: %v", name, err)
+		}
+	}
+	moveResp := request(t, s, http.MethodPost, "/api/experiments/"+id+"/source/actions", "", map[string]any{"action": "move", "path": "src/new.c", "target": "moved/new.c"})
+	if moveResp.Code != http.StatusOK {
+		t.Fatalf("move status=%d body=%s", moveResp.Code, moveResp.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(project, "moved", "new.c")); err != nil {
+		t.Fatal(err)
+	}
+	deleteResp := request(t, s, http.MethodPost, "/api/experiments/"+id+"/source/actions", "", map[string]any{"action": "delete", "path": "moved/new.c"})
+	if deleteResp.Code != http.StatusOK {
+		t.Fatalf("delete status=%d body=%s", deleteResp.Code, deleteResp.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(project, "moved", "new.c")); !os.IsNotExist(err) {
+		t.Fatalf("deleted file still exists or unexpected stat error: %v", err)
+	}
+
+	for name, body := range map[string]map[string]any{
+		"root delete":      {"action": "delete", "path": "."},
+		"metadata write":   {"action": "write", "path": "SOURCE_TREE.json", "content": "{}"},
+		"path escape":      {"action": "write", "path": "../escape.c", "content": "x"},
+		"self copy dir":    {"action": "copy", "path": "src", "target": "src/nested"},
+		"batch bad target": {"action": "batch-copy", "paths": []string{"src/a.c"}, "target": "BUILD_STATUS.json"},
+	} {
+		resp := request(t, s, http.MethodPost, "/api/experiments/"+id+"/source/actions", "", body)
+		if resp.Code == http.StatusOK || resp.Code == http.StatusCreated {
+			t.Fatalf("%s should be rejected: %d %s", name, resp.Code, resp.Body.String())
+		}
+	}
+}
+
 func TestSafeProjectFileRejectsSymlinkEscape(t *testing.T) {
 	project := t.TempDir()
 	outside := t.TempDir()
@@ -1251,6 +1322,62 @@ func TestToolCallRetryCreatesDependencyGatedSuccessor(t *testing.T) {
 	}
 }
 
+func TestToolCallRetryRunsExecutorAndRecordsDuration(t *testing.T) {
+	s, _ := testServer(t, "secret")
+	release := make(chan struct{})
+	s.toolExecutors["replayable-success"] = func(ctx context.Context, _ Experiment, _ OrchestrationToolCall) (string, error) {
+		select {
+		case <-release:
+			return "replayed ok", nil
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+	id := strings.Repeat("r", 32)
+	original := OrchestrationToolCall{ID: "tool-success", RootID: "tool-success", Attempt: 1, Name: "replayable-success", Status: "failed", Result: "previous failure"}
+	experiment := Experiment{ID: id, Name: "fixture", Status: "completed", CreatedAt: now(), UpdatedAt: now(), Orchestration: &OrchestrationState{ToolCalls: []OrchestrationToolCall{original}}}
+	if err := s.saveExperiment(experiment); err != nil {
+		t.Fatal(err)
+	}
+	response := request(t, s, http.MethodPost, "/api/experiments/"+id+"/tool-calls/tool-success/retry", "secret", nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("retry=%d %s", response.Code, response.Body.String())
+	}
+	close(release)
+	deadline := time.Now().Add(time.Second)
+	for {
+		current, err := s.loadExperiment(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(current.Orchestration.ToolCalls) != 2 {
+			t.Fatalf("tool calls=%#v", current.Orchestration.ToolCalls)
+		}
+		successor := current.Orchestration.ToolCalls[1]
+		if successor.Status == "completed" {
+			if successor.Result != "replayed ok" || successor.StartedAt == "" || successor.EndedAt == "" || successor.Duration == "" || successor.Attempt != 2 || successor.RetryOf != original.ID {
+				t.Fatalf("successor missing execution projection: %#v", successor)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("tool call did not complete: %#v", successor)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	events, err := s.events(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	types := []string{}
+	for _, event := range events {
+		types = append(types, event.Type)
+	}
+	if !containsString(types, "tool_call_retry") || !containsString(types, "tool_call_started") || !containsString(types, "tool_call_finished") {
+		t.Fatalf("tool call lifecycle events missing: %#v", types)
+	}
+}
+
 func TestToolCallCancelPreservesCancelledTerminalState(t *testing.T) {
 	s, _ := testServer(t, "secret")
 	started := make(chan struct{})
@@ -1304,6 +1431,46 @@ func TestToolCallCancelPreservesCancelledTerminalState(t *testing.T) {
 	response = request(t, s, http.MethodPost, "/api/experiments/"+id+"/tool-calls/"+payload.ToolCall.ID+"/cancel", "secret", nil)
 	if response.Code != http.StatusConflict {
 		t.Fatalf("duplicate cancel=%d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestTerminalSessionOutputDeltaAndStop(t *testing.T) {
+	s, root := testServer(t, "")
+	id := strings.Repeat("t", 32)
+	x := Experiment{ID: id, Status: "completed", CreatedAt: now(), UpdatedAt: now()}
+	if err := s.saveExperiment(x); err != nil {
+		t.Fatal(err)
+	}
+	project := filepath.Join(root, "experiments", id, "analysis", "reconstructed_archive_terminal")
+	if err := os.MkdirAll(project, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "CMakeLists.txt"), []byte("project(terminal)\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	session := &terminalSession{ID: "session-1", ExperimentID: id, Command: "fixture", StartedAt: now(), Status: "running"}
+	appendTerminalOutput(session, "line-1")
+	appendTerminalOutput(session, "line-2")
+	s.terminals[session.ID] = session
+
+	all := request(t, s, http.MethodGet, "/api/experiments/"+id+"/terminal/session-1/output", "", nil)
+	if all.Code != http.StatusOK || !bytes.Contains(all.Body.Bytes(), []byte("line-1")) || !bytes.Contains(all.Body.Bytes(), []byte("\"next_offset\":2")) {
+		t.Fatalf("full output mismatch: %d %s", all.Code, all.Body.String())
+	}
+	delta := request(t, s, http.MethodGet, "/api/experiments/"+id+"/terminal/session-1/output?after=1", "", nil)
+	if delta.Code != http.StatusOK || bytes.Contains(delta.Body.Bytes(), []byte("line-1")) || !bytes.Contains(delta.Body.Bytes(), []byte("line-2")) {
+		t.Fatalf("delta output mismatch: %d %s", delta.Code, delta.Body.String())
+	}
+	badAfter := request(t, s, http.MethodGet, "/api/experiments/"+id+"/terminal/session-1/output?after=-1", "", nil)
+	if badAfter.Code != http.StatusBadRequest {
+		t.Fatalf("bad after should be rejected: %d %s", badAfter.Code, badAfter.Body.String())
+	}
+	stopped := request(t, s, http.MethodPost, "/api/experiments/"+id+"/terminal/session-1/stop", "", nil)
+	if stopped.Code != http.StatusOK {
+		t.Fatalf("stop failed: %d %s", stopped.Code, stopped.Body.String())
+	}
+	if session.Status != "stopped" || session.ExitCode == nil || *session.ExitCode != -1 || session.EndedAt == "" {
+		t.Fatalf("terminal session was not stopped: %#v", session)
 	}
 }
 

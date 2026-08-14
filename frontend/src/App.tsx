@@ -125,6 +125,9 @@ type TerminalSession = {
   started_at?: string;
   ended_at?: string;
   output_count?: number;
+  output_bytes?: number;
+  dropped_lines?: number;
+  truncated?: boolean;
 };
 type EnvironmentPayload = {
   summary: Record<string, number>;
@@ -2727,6 +2730,7 @@ function OrchestrationView({
   const [toolMessage, setToolMessage] = useState("");
   const [terminalSessions, setTerminalSessions] = useState<TerminalSession[]>([]);
   const [terminalOutput, setTerminalOutput] = useState("");
+  const [terminalOffset, setTerminalOffset] = useState<Record<string, number>>({});
   const [terminalBusy, setTerminalBusy] = useState("");
 
   const fileTree = useMemo(() => (data ? buildOrchestrationFileTree(data.files) : []), [data]);
@@ -2794,16 +2798,38 @@ function OrchestrationView({
       setTerminalSessions([]);
     }
   };
-  const loadTerminalOutput = async (sessionId: string) => {
+  const loadTerminalOutput = async (sessionId: string, incremental = false) => {
     setTerminalBusy(`terminal:${sessionId}`);
     try {
-      const response = await fetch(`/api/experiments/${data.flow.id}/terminal/${sessionId}/output`, { headers: headers(), cache: "no-store" });
+      const after = incremental ? terminalOffset[sessionId] || 0 : 0;
+      const suffix = incremental ? `?after=${after}` : "";
+      const response = await fetch(`/api/experiments/${data.flow.id}/terminal/${sessionId}/output${suffix}`, { headers: headers(), cache: "no-store" });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "终端输出读取失败");
       const lines = Array.isArray(payload.output) ? payload.output.map((item: Record<string, unknown>) => String(item.line || "")).join("\n") : "";
-      setTerminalOutput(lines);
+      setTerminalOutput((current) => incremental && current && lines ? `${current}\n${lines}` : incremental && !lines ? current : lines);
+      setTerminalOffset((current) => ({ ...current, [sessionId]: Number(payload.next_offset || 0) }));
+      if (payload.session) {
+        setTerminalSessions((current) => current.map((item) => item.id === sessionId ? payload.session as TerminalSession : item));
+      }
     } catch (error) {
       setTerminalOutput(error instanceof Error ? error.message : "终端输出读取失败");
+    } finally {
+      setTerminalBusy("");
+    }
+  };
+  const stopTerminalSession = async (sessionId: string) => {
+    setTerminalBusy(`terminal-stop:${sessionId}`);
+    try {
+      const response = await fetch(`/api/experiments/${data.flow.id}/terminal/${sessionId}/stop`, {
+        method: "POST",
+        headers: headers({ "Content-Type": "application/json" }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "终端停止失败");
+      await loadTerminalSessions();
+    } catch (error) {
+      setTerminalOutput(error instanceof Error ? error.message : "终端停止失败");
     } finally {
       setTerminalBusy("");
     }
@@ -2884,10 +2910,13 @@ function OrchestrationView({
               <Terminal size={14} />
               <div>
                 <b>{session.command}</b>
-                <small>{session.output_count || 0} 行输出</small>
+                <small>{session.output_count || 0} 行输出 · {formatBytes(session.output_bytes || 0)}</small>
+                <small>{session.truncated ? `已截断，丢弃 ${session.dropped_lines || 0} 行` : session.ended_at ? `结束于 ${timeOnly(session.ended_at)}` : session.started_at ? `启动于 ${timeOnly(session.started_at)}` : "等待输出"}</small>
               </div>
               <div className="toolCallActions">
-                <button className="ghostBtn" disabled={!!terminalBusy} onClick={() => void loadTerminalOutput(session.id)} type="button">查看输出</button>
+                <button className="ghostBtn" disabled={!!terminalBusy} onClick={() => void loadTerminalOutput(session.id, false)} type="button">全量输出</button>
+                <button className="ghostBtn" disabled={!!terminalBusy} onClick={() => void loadTerminalOutput(session.id, true)} type="button">读取增量</button>
+                <button className="ghostBtn" disabled={!!terminalBusy || session.status !== "running"} onClick={() => void stopTerminalSession(session.id)} type="button">结束</button>
                 <span className={`pill ${tone(session.status)}`}>{status(session.status)}</span>
               </div>
             </article>
@@ -3368,6 +3397,7 @@ type PatchRecord = {
   source_sha256: string;
   patched_sha256?: string;
   output: string;
+  artifact_dir: string;
   error?: string;
   updated_at: string;
 };
@@ -3616,6 +3646,9 @@ function HexPatchWorkspace({
   const [selected, setSelected] = useState<PatchRecord | null>(null);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!selected && records.length) setSelected(records[0]);
+  }, [records, selected]);
   const request = async (action: string, body: Record<string, unknown>) => {
     if (!canWrite && action !== "inspect")
       throw new Error("只读角色不能修改程序。");
@@ -3984,20 +4017,52 @@ function HexPatchWorkspace({
               <ShieldCheck size={15} />
               验证修改计划
             </button>
-            {selected && (
-              <section className="patchSummary">
-                <b>{selected.status}</b>
-                <code>{selected.id}</code>
-                <span>输出副本</span>
-                <code>{selected.output}</code>
-                {selected.patched_sha256 && (
-                  <>
+            <section className="patchSummary">
+              <div className="sectionHeading">
+                <h3>执行状态</h3>
+                <span className={`pill ${tone(selected?.status || "queued")}`}>
+                  {status(selected?.status || "queued")}
+                </span>
+              </div>
+              {selected ? (
+                <>
+                  <article>
+                    <span>修改记录</span>
+                    <code>{selected.id}</code>
+                  </article>
+                  <article>
+                    <span>目标文件</span>
+                    <code title={selected.target}>{selected.target}</code>
+                  </article>
+                  <article>
+                    <span>输出副本</span>
+                    <code title={selected.output}>{selected.output}</code>
+                  </article>
+                  <article>
+                    <span>证据目录</span>
+                    <code title={selected.artifact_dir}>{selected.artifact_dir}</code>
+                  </article>
+                  <article>
+                    <span>原始 SHA-256</span>
+                    <code>{selected.source_sha256}</code>
+                  </article>
+                  <article>
                     <span>修改后 SHA-256</span>
-                    <code>{selected.patched_sha256}</code>
-                  </>
-                )}
-              </section>
-            )}
+                    <code>{selected.patched_sha256 || "尚未生成"}</code>
+                  </article>
+                  <article>
+                    <span>最近错误</span>
+                    <p>{selected.error || "暂无"}</p>
+                  </article>
+                  <article>
+                    <span>最近更新</span>
+                    <code>{date(selected.updated_at)}</code>
+                  </article>
+                </>
+              ) : (
+                <p>当前没有可展示的补丁记录。</p>
+              )}
+            </section>
             <div className="patchActions">
               <button
                 className="primaryBtn"
@@ -4292,6 +4357,8 @@ function SourceWorkspace({
                 <button className="ghostBtn" disabled={!selected || !targetPath.trim() || !!busy} onClick={() => void fileAction("copy", { path: selected, target: targetPath.trim() })} type="button">复制</button>
                 <button className="ghostBtn" disabled={!selected || !targetPath.trim() || !!busy} onClick={() => void fileAction("move", { path: selected, target: targetPath.trim() })} type="button">移动</button>
                 <button className="ghostBtn" disabled={!targetPath.trim() || !!busy} onClick={() => void fileAction("mkdir", { path: targetPath.trim() })} type="button"><Plus size={14} />新建目录</button>
+                <button className="ghostBtn" disabled={!targetPath.trim() || !visibleFiles.length || !!busy} onClick={() => void fileAction("batch-copy", { paths: visibleFiles.filter((file) => !file.directory).map((file) => file.path), target: targetPath.trim() })} type="button">批量复制筛选</button>
+                <button className="ghostBtn" disabled={!targetPath.trim() || !visibleFiles.length || !!busy} onClick={() => void fileAction("batch-move", { paths: visibleFiles.filter((file) => !file.directory).map((file) => file.path), target: targetPath.trim() })} type="button">批量移动筛选</button>
               </div>
               <div className="sourceOpsButtons">
                 <input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} placeholder="终端命令，例如 dir 或 cmake --build .build" />
