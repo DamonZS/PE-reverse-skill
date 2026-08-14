@@ -217,7 +217,15 @@ code, pre { font-family: "Cascadia Mono", "Consolas", monospace; }
 .evidenceCard h3 { margin: 6px 0 0; font-size: 14px; }
 .evidenceCard p, .evidenceCard small { margin: 0; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
 
-.capabilityRow { display: grid; grid-template-columns: 24px minmax(0, 1fr) 70px; gap: 12px; align-items: start; }
+.capabilityRow { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px; align-items: start; cursor: pointer; }
+.capabilityRow.active { border-color: var(--cyan); background: #112822; box-shadow: inset 2px 0 var(--cyan); }
+.providerRowActions { display: flex; align-items: center; justify-content: flex-end; min-width: 34px; }
+.providerRowActions .pill { white-space: nowrap; }
+.providerView { display: grid; gap: 15px; }
+.providerDetails { display: grid; grid-template-columns: 110px minmax(0, 1fr); margin: 0; border-top: 1px solid var(--line); }
+.providerDetails dt, .providerDetails dd { margin: 0; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 11px; overflow-wrap: anywhere; }
+.providerDetails dt { color: var(--muted); }
+.providerDetails dd { color: var(--soft); }
 .rowTitle { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
 .rowTitle h3 { margin: 0; font-size: 14px; }
 .capabilityRow code { color: var(--muted); font-size: 10px; white-space: normal; overflow-wrap: anywhere; }

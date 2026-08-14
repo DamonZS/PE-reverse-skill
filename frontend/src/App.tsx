@@ -18,6 +18,7 @@ import {
   HardDriveUpload,
   LayoutDashboard,
   Loader2,
+  Pencil,
   Play,
   Plus,
   RefreshCw,
@@ -977,46 +978,117 @@ function ProvidersView({
   loading: boolean;
   onChanged: () => Promise<void>;
 }) {
-  const [selected, setSelected] = useState<Provider | null>(null);
+  const [selectedName, setSelectedName] = useState("");
+  const [draft, setDraft] = useState<Provider | null>(null);
+  const [mode, setMode] = useState<"view" | "create" | "edit">("view");
   const [apiKeys, setApiKeys] = useState("");
   const [message, setMessage] = useState("");
+  const selected = data.find((item) => item.name === selectedName) || null;
+
   useEffect(() => {
-    if (!selected && data.length) setSelected(data[0]);
-  }, [data, selected]);
+    if (!data.length) {
+      setSelectedName("");
+      return;
+    }
+    if (!selectedName || !data.some((item) => item.name === selectedName)) {
+      setSelectedName(data[0].name);
+    }
+  }, [data, selectedName]);
+
+  const beginCreate = () => {
+    setDraft({
+      name: "",
+      kind: "openai-compatible",
+      protocol: "chat_completions",
+      model: "",
+      base_url: "https://api.openai.com/v1",
+      api_keys: [],
+      key_count: 0,
+      enabled: true,
+      priority: data.length * 10,
+      models: [{ id: "", display_name: "", priority: 10, enabled: true }],
+    });
+    setApiKeys("");
+    setMessage("");
+    setMode("create");
+  };
+
+  const beginEdit = (profile: Provider) => {
+    setSelectedName(profile.name);
+    setDraft({ ...profile, models: profile.models?.map((item) => ({ ...item })) });
+    setApiKeys("");
+    setMessage("");
+    setMode("edit");
+  };
+
+  const cancelEdit = () => {
+    setDraft(null);
+    setApiKeys("");
+    setMessage("");
+    setMode("view");
+  };
+
   const save = async () => {
-    if (!selected) return;
+    if (!draft) return;
+    const name = draft.name.trim();
+    if (!name) {
+      setMessage("请填写配置名称");
+      return;
+    }
+    if (data.some((item) => item.name === name && !(mode === "edit" && item.name === selectedName))) {
+      setMessage("该配置名称已存在，请换一个名称");
+      return;
+    }
     setMessage("保存中");
     const profile = apiKeys.trim()
-      ? { ...selected, api_keys: apiKeys.split(/\r?\n/).map((key) => key.trim()).filter(Boolean) }
-      : selected;
+      ? { ...draft, name, api_keys: apiKeys.split(/\r?\n/).map((key) => key.trim()).filter(Boolean) }
+      : { ...draft, name };
     const r = await fetch("/api/providers", {
       method: "PUT",
       headers: headers({ "Content-Type": "application/json" }),
       body: JSON.stringify(profile),
     });
     const p = await r.json();
-    setMessage(r.ok ? "配置已保存" : p.error || "保存失败");
-    if (r.ok) await onChanged();
+    if (!r.ok) {
+      setMessage(p.error || "保存失败");
+      return;
+    }
+    setSelectedName(name);
+    setDraft(null);
+    setApiKeys("");
+    setMode("view");
+    setMessage("配置已保存");
+    await onChanged();
   };
+
   const test = async () => {
-    if (!selected) return;
+    const profile = draft || selected;
+    if (!profile || !profile.name.trim()) {
+      setMessage("请先填写配置名称");
+      return;
+    }
     setMessage("连接测试中");
     const r = await fetch("/api/providers/test", {
       method: "POST",
       headers: headers({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ name: selected.name, profile: selected }),
+      body: JSON.stringify({ name: profile.name, profile }),
     });
     const p = await r.json();
     setMessage(
       r.ok
-        ? `连接成功：${p.model || selected.model || "本地服务"} · 密钥槽位 ${p.key_slot || "无需密钥"}`
+        ? `连接成功：${p.model || profile.model || "本地服务"} · 密钥槽位 ${p.key_slot || "无需密钥"}`
         : `连接失败：${p.error || r.status}`,
     );
     await onChanged();
   };
+
+  const updateDraft = (patch: Partial<Provider>) => {
+    setDraft((current) => (current ? { ...current, ...patch } : current));
+  };
+  const editProfile = draft && (mode === "create" || mode === "edit");
   return (
     <div className="knowledgeLayout">
-      <Panel title="模型服务列表">
+      <Panel title="模型服务列表" action="新建配置" onAction={beginCreate}>
         {loading ? (
           <div className="catalogState">
             <Loader2 className="spin" />
@@ -1025,13 +1097,21 @@ function ProvidersView({
         ) : (
           <div className="capabilityList">
             {data.map((x) => (
-              <button
-                className="capabilityRow"
+              <div
+                className={`capabilityRow ${selectedName === x.name ? "active" : ""}`}
                 key={x.name}
+                role="button"
+                tabIndex={0}
                 onClick={() => {
-                  setSelected({ ...x });
-                  setApiKeys("");
-                  setMessage("");
+                  if (mode !== "view") cancelEdit();
+                  setSelectedName(x.name);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    if (mode !== "view") cancelEdit();
+                    setSelectedName(x.name);
+                  }
                 }}
               >
                 <Zap size={18} />
@@ -1042,41 +1122,87 @@ function ProvidersView({
                       {x.enabled ? "已启用" : "已停用"}
                     </span>
                   </div>
-                  <p>
-                    {x.kind} · {x.model || "本地规则引擎"}
-                  </p>
+                  <p>{x.kind} · {x.model || "本地规则引擎"}</p>
                   <code>
                     优先级 {x.priority} · 请求{" "}
                     {x.usage?.Requests ?? x.usage?.requests ?? 0} · 失败{" "}
                     {x.usage?.Failures ?? x.usage?.failures ?? 0}
                   </code>
                 </div>
-              </button>
+                <div className="providerRowActions">
+                  {x.name === "rule_based" ? (
+                    <span className="pill">内置只读</span>
+                  ) : (
+                    <button
+                      className="iconBtn"
+                      title={`编辑 ${x.name}`}
+                      aria-label={`编辑 ${x.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        beginEdit(x);
+                      }}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
         )}
       </Panel>
       <Panel title="模型服务配置">
-        {selected ? (
+        {mode === "view" && selected ? (
+          <div className="providerView">
+            <div className="selectedAsset">
+              <Zap size={17} />
+              <div>
+                <span>已保存配置</span>
+                <b>{selected.name}</b>
+                <code>{selected.kind} · {selected.model || "本地规则引擎"}</code>
+              </div>
+              <span className={`pill ${selected.enabled ? "done" : "queued"}`}>
+                {selected.enabled ? "已启用" : "已停用"}
+              </span>
+            </div>
+            <dl className="providerDetails">
+              <dt>类型</dt><dd>{selected.kind}</dd>
+              <dt>模型优先级</dt><dd>{selected.models?.map((item) => item.id).filter(Boolean).join("、") || selected.model || "未配置"}</dd>
+              <dt>接口协议</dt><dd>{selected.protocol || "本地"}</dd>
+              <dt>服务端点</dt><dd>{selected.base_url || "本地规则引擎"}</dd>
+              <dt>API Key</dt><dd>{selected.key_count || 0} 个密钥槽位</dd>
+              <dt>服务优先级</dt><dd>{selected.priority}</dd>
+            </dl>
+            {message && <div className="inlineMsg">{message}</div>}
+            <div className="actionRow">
+              {selected.name !== "rule_based" && (
+                <button className="primaryBtn" onClick={() => beginEdit(selected)}>
+                  <Pencil size={15} />
+                  编辑配置
+                </button>
+              )}
+              <button className="ghostBtn" onClick={() => void test()}>
+                <Zap size={15} />
+                连接测试
+              </button>
+            </div>
+          </div>
+        ) : editProfile ? (
           <div className="formStack">
             <label>
               名称
               <input
-                value={selected.name}
-                disabled={selected.name === "rule_based"}
-                onChange={(e) =>
-                  setSelected({ ...selected, name: e.target.value })
-                }
+                value={draft?.name || ""}
+                disabled={mode === "edit" || draft?.name === "rule_based"}
+                onChange={(e) => updateDraft({ name: e.target.value })}
               />
             </label>
             <label>
               类型
               <select
-                value={selected.kind}
-                disabled={selected.name === "rule_based"}
-                onChange={(e) =>
-                  setSelected({ ...selected, kind: e.target.value })
-                }
+                value={draft?.kind || "openai-compatible"}
+                disabled={draft?.name === "rule_based"}
+                onChange={(e) => updateDraft({ kind: e.target.value })}
               >
                 <option value="local">本地</option>
                 <option value="openai-compatible">开放模型接口兼容模式</option>
@@ -1089,15 +1215,15 @@ function ProvidersView({
                   className="iconBtn"
                   title="添加模型"
                   onClick={() => {
-                    const models = [...(selected.models || [])];
+                    const models = [...(draft?.models || [])];
                     models.push({ id: "", display_name: "", priority: (models.length + 1) * 10, enabled: true });
-                    setSelected({ ...selected, models });
+                    updateDraft({ models });
                   }}
                 >
                   <Plus size={15} />
                 </button>
               </div>
-              {(selected.models?.length ? selected.models : [{ id: selected.model || "", display_name: selected.model || "", priority: 10, enabled: true }]).map((model, index, source) => (
+              {(draft?.models?.length ? draft.models : [{ id: draft?.model || "", display_name: draft?.model || "", priority: 10, enabled: true }]).map((model, index, source) => (
                 <div className="modelPriorityRow" key={`${index}-${model.id}`}>
                   <span className="priorityIndex">{index + 1}</span>
                   <input
@@ -1107,22 +1233,22 @@ function ProvidersView({
                     onChange={(e) => {
                       const models = [...source];
                       models[index] = { ...model, id: e.target.value, priority: (index + 1) * 10 };
-                      setSelected({ ...selected, model: index === 0 ? e.target.value : selected.model, models });
+                      updateDraft({ model: index === 0 ? e.target.value : draft?.model, models });
                     }}
                   />
                   <button className="iconBtn" title="上移" disabled={index === 0} onClick={() => {
                     const models = [...source]; [models[index - 1], models[index]] = [models[index], models[index - 1]];
                     models.forEach((item, i) => { item.priority = (i + 1) * 10; });
-                    setSelected({ ...selected, model: models[0].id, models });
+                    updateDraft({ model: models[0].id, models });
                   }}><ChevronUp size={15} /></button>
                   <button className="iconBtn" title="下移" disabled={index === source.length - 1} onClick={() => {
                     const models = [...source]; [models[index + 1], models[index]] = [models[index], models[index + 1]];
                     models.forEach((item, i) => { item.priority = (i + 1) * 10; });
-                    setSelected({ ...selected, model: models[0].id, models });
+                    updateDraft({ model: models[0].id, models });
                   }}><ChevronDown size={15} /></button>
                   <button className="iconBtn danger" title="删除模型" disabled={source.length === 1} onClick={() => {
                     const models = source.filter((_, i) => i !== index).map((item, i) => ({ ...item, priority: (i + 1) * 10 }));
-                    setSelected({ ...selected, model: models[0]?.id || "", models });
+                    updateDraft({ model: models[0]?.id || "", models });
                   }}><Trash2 size={15} /></button>
                 </div>
               ))}
@@ -1130,11 +1256,9 @@ function ProvidersView({
             <label>
               接口协议
               <select
-                value={selected.protocol || (selected.model?.startsWith("gpt-") ? "responses" : "chat_completions")}
-                disabled={selected.kind === "local"}
-                onChange={(e) =>
-                  setSelected({ ...selected, protocol: e.target.value as Provider["protocol"] })
-                }
+                value={draft?.protocol || (draft?.model?.startsWith("gpt-") ? "responses" : "chat_completions")}
+                disabled={draft?.kind === "local"}
+                onChange={(e) => updateDraft({ protocol: e.target.value as Provider["protocol"] })}
               >
                 <option value="responses">OpenAI 原生 Responses（/v1/responses）</option>
                 <option value="chat_completions">Chat Completions（/v1/chat/completions）</option>
@@ -1143,42 +1267,34 @@ function ProvidersView({
             <label>
               服务端点
               <input
-                value={selected.base_url || ""}
-                disabled={selected.kind === "local"}
-                onChange={(e) =>
-                  setSelected({ ...selected, base_url: e.target.value })
-                }
+                value={draft?.base_url || ""}
+                disabled={draft?.kind === "local"}
+                onChange={(e) => updateDraft({ base_url: e.target.value })}
               />
             </label>
             <label>
               API Key（每行一个，第一行优先）
               <textarea
                 value={apiKeys}
-                disabled={selected.kind === "local"}
-                onChange={(e) =>
-                  setApiKeys(e.target.value)
-                }
-                placeholder={selected.key_count ? `已配置 ${selected.key_count} 个 Key；粘贴完整列表以更新` : "每行粘贴一个 API Key"}
+                disabled={draft?.kind === "local"}
+                onChange={(e) => setApiKeys(e.target.value)}
+                placeholder={draft?.key_count ? `已配置 ${draft.key_count} 个 Key；粘贴完整列表以更新` : "每行粘贴一个 API Key"}
               />
             </label>
-            {selected.kind !== "local" && (
+            {draft?.kind !== "local" && (
               <div className="modelPriorityEditor">
                 <div className="fieldHeader">
                   <span>API Key 优先级</span>
-                  <small>{apiKeys.trim() ? "待保存" : `已配置 ${selected.key_count || 0} 个`}</small>
+                  <small>{apiKeys.trim() ? "待保存" : `已配置 ${draft?.key_count || 0} 个`}</small>
                 </div>
                 {Array.from({
                   length: apiKeys.trim()
                     ? apiKeys.split(/\r?\n/).map((key) => key.trim()).filter(Boolean).length
-                    : selected.key_count || 0,
+                    : draft?.key_count || 0,
                 }).map((_, index) => (
                   <div className="modelPriorityRow" key={`key-slot-${index + 1}`}>
                     <span className="priorityIndex">{index + 1}</span>
-                    <input
-                      aria-label={`API Key 槽位 ${index + 1}`}
-                      value={`密钥槽位 ${index + 1}`}
-                      readOnly
-                    />
+                    <input aria-label={`API Key 槽位 ${index + 1}`} value={`密钥槽位 ${index + 1}`} readOnly />
                     <span className="pill done">已配置</span>
                   </div>
                 ))}
@@ -1188,37 +1304,34 @@ function ProvidersView({
               优先级
               <input
                 type="number"
-                value={selected.priority}
-                onChange={(e) =>
-                  setSelected({ ...selected, priority: Number(e.target.value) })
-                }
+                value={draft?.priority ?? 0}
+                onChange={(e) => updateDraft({ priority: Number(e.target.value) })}
               />
             </label>
             <label>
               <input
                 type="checkbox"
-                checked={selected.enabled}
-                disabled={selected.name === "rule_based"}
-                onChange={(e) =>
-                  setSelected({ ...selected, enabled: e.target.checked })
-                }
+                checked={draft?.enabled || false}
+                disabled={draft?.name === "rule_based"}
+                onChange={(e) => updateDraft({ enabled: e.target.checked })}
               />
               启用此模型服务
             </label>
             {message && <div className="inlineMsg">{message}</div>}
             <div className="actionRow">
               <button className="primaryBtn" onClick={() => void save()}>
-                <Database size={15} />
-                保存配置
+                <Save size={15} />
+                {mode === "create" ? "保存新配置" : "保存修改"}
               </button>
               <button className="ghostBtn" onClick={() => void test()}>
                 <Zap size={15} />
                 连接测试
               </button>
+              <button className="ghostBtn" onClick={cancelEdit}>取消</button>
             </div>
           </div>
         ) : (
-          <Empty text="请选择模型服务" />
+          <Empty text="请选择已保存的模型服务，或新建配置" />
         )}
       </Panel>
     </div>
