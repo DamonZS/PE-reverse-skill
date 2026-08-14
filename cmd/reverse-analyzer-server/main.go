@@ -778,21 +778,31 @@ func (s *Server) experiments(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		target := strings.TrimSpace(fmt.Sprint(p["target"]))
-		resolved, err := s.safePath(target)
-		if err != nil {
-			bad(w, err.Error())
-			return
-		}
-		if st, err := os.Stat(resolved); err != nil || st.IsDir() {
-			bad(w, "目标文件不存在：请上传本地样本，或填写容器工作区内的文件路径")
-			return
-		}
-		id := newID()
-		t := now()
-		mode := fmt.Sprint(p["mode"])
 		workflowType, workflowErr := normalizeWorkflowType(fmt.Sprint(p["workflow_type"]))
 		if workflowErr != nil {
 			bad(w, workflowErr.Error())
+			return
+		}
+		mode := fmt.Sprint(p["mode"])
+		resolved := ""
+		if workflowType == "authorized_pentest" {
+			if err := validateAuthorizedEndpoint(target, strings.TrimSpace(fmt.Sprint(p["endpoint"]))); err != nil {
+				bad(w, err.Error())
+				return
+			}
+		} else if target != "" && target != "<nil>" {
+			var err error
+			resolved, err = s.safePath(target)
+			if err != nil {
+				bad(w, err.Error())
+				return
+			}
+			if st, statErr := os.Stat(resolved); statErr != nil || st.IsDir() {
+				bad(w, "目标文件不存在：请上传本地样本，或填写容器工作区内的文件路径")
+				return
+			}
+		} else if workflowType == "reverse_analysis" || workflowType == "binary_patch" {
+			bad(w, "该作业需要上传本地样本，或填写容器工作区内的文件路径")
 			return
 		}
 		workflowParams, workflowParamsErr := s.workflowParameters(workflowType, p)
@@ -821,11 +831,24 @@ func (s *Server) experiments(w http.ResponseWriter, r *http.Request) {
 				opts["reconstruct_gui"] = true
 			}
 		}
+		id := newID()
+		t := now()
+		status := "queued"
+		if workflowType == "memory_patch" || workflowType == "process_injection" {
+			status = "awaiting_ai_plan"
+		}
+		nameTarget := filepath.Base(resolved)
+		if workflowType == "authorized_pentest" {
+			nameTarget = strings.TrimSpace(fmt.Sprint(p["endpoint"]))
+		}
+		if nameTarget == "" || nameTarget == "." || nameTarget == string(filepath.Separator) {
+			nameTarget = "意图任务"
+		}
 		x := Experiment{
-			Schema: 1, SchemaVersion: 1, ID: id, Sample: resolved, Name: workflowDisplayName(workflowType) + " · " + filepath.Base(resolved), Status: "queued",
+			Schema: 1, SchemaVersion: 1, ID: id, Sample: resolved, Name: workflowDisplayName(workflowType) + " · " + nameTarget, Status: status,
 			CreatedAt: t, UpdatedAt: t, Options: opts,
 			Metadata:  map[string]any{"source": "go-web", "execution_boundary": workflowExecutionBoundary(workflowType), "requires_confirmation": true, "workflow_type": workflowType, "workflow_params": workflowParams},
-			History:   []map[string]any{{"timestamp": t, "status": "queued", "detail": "created"}},
+			History:   []map[string]any{{"timestamp": t, "status": status, "detail": "created"}},
 			Artifacts: []map[string]any{}, Reconstruction: reconstructionState(ReconstructionState{}),
 		}
 		x.Orchestration = newOrchestrationState(x)
@@ -835,9 +858,13 @@ func (s *Server) experiments(w http.ResponseWriter, r *http.Request) {
 		if provider := strings.TrimSpace(fmt.Sprint(p["provider"])); provider != "" && provider != "<nil>" {
 			x.Metadata["provider"] = provider
 		}
-		err = s.saveExperiment(x)
+		err := s.saveExperiment(x)
 		if err == nil {
-			s.appendEvent(id, "queued", "queued", "任务已进入队列", nil)
+			if status == "awaiting_ai_plan" {
+				s.appendEvent(id, "ai_patch_plan_required", status, "已记录修改意图，等待大模型生成可审查的执行方案", map[string]any{"workflow_type": workflowType})
+			} else {
+				s.appendEvent(id, "queued", "queued", "任务已进入队列", nil)
+			}
 		}
 		if err != nil {
 			respond(w, nil, err)
@@ -943,6 +970,14 @@ func (s *Server) experiment(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(parts) == 2 && parts[1] == "runtime-marks" {
 		s.runtimeMarks(w, r, id)
+		return
+	}
+	if len(parts) == 3 && parts[1] == "workflow" && (parts[2] == "ai-plan" || parts[2] == "ai-confirm") && r.Method == http.MethodPost {
+		if parts[2] == "ai-plan" {
+			s.workflowAIPlan(w, r, id)
+		} else {
+			s.workflowAIConfirm(w, r, id)
+		}
 		return
 	}
 	if len(parts) != 2 || r.Method != "POST" {
@@ -2274,6 +2309,14 @@ func workflowDisplayName(workflow string) string {
 	}[workflow]
 }
 
+func workflowPlanConfirmed(experiment Experiment) bool {
+	params, ok := experiment.Metadata["workflow_params"].(map[string]any)
+	if !ok || fmt.Sprint(params["plan_status"]) != "confirmed" || strings.TrimSpace(fmt.Sprint(params["plan_id"])) == "" {
+		return false
+	}
+	return true
+}
+
 func workflowExecutionBoundary(workflow string) string {
 	if workflow == "authorized_pentest" {
 		return "plan-only"
@@ -2301,59 +2344,86 @@ func workflowStages(workflow string) [][2]string {
 
 func (s *Server) workflowParameters(workflow string, payload map[string]any) (map[string]any, error) {
 	params := map[string]any{}
-	pidRaw := strings.TrimSpace(fmt.Sprint(payload["pid"]))
-	if workflow == "memory_patch" || workflow == "process_injection" {
-		pid, err := strconv.Atoi(pidRaw)
-		if err != nil || pid <= 0 {
-			return nil, errors.New("动态进程作业需要正整数 pid")
+	field := func(name string, required bool) (string, error) {
+		value := strings.TrimSpace(fmt.Sprint(payload[name]))
+		if value == "<nil>" {
+			value = ""
 		}
-		params["pid"] = pid
+		if len(value) > 4000 {
+			return "", fmt.Errorf("%s 不能超过 4000 个字符", name)
+		}
+		if required && value == "" {
+			return "", fmt.Errorf("%s 不能为空", name)
+		}
+		return value, nil
 	}
 	switch workflow {
 	case "authorized_pentest":
-		objective := strings.TrimSpace(fmt.Sprint(payload["objective"]))
-		if objective == "" || objective == "<nil>" {
-			return nil, errors.New("授权渗透计划需要目标说明")
+		objective, err := field("objective", true)
+		if err != nil {
+			return nil, errors.New("授权渗透计划需要测试目标")
+		}
+		endpoint, err := field("endpoint", true)
+		if err != nil {
+			return nil, errors.New("授权渗透计划需要域名或 URL")
+		}
+		scope, err := field("authorization_scope", true)
+		if err != nil {
+			return nil, errors.New("授权渗透计划需要明确授权范围")
 		}
 		params["objective"] = objective
-		if endpoint := strings.TrimSpace(fmt.Sprint(payload["endpoint"])); endpoint != "" && endpoint != "<nil>" {
-			params["endpoint"] = endpoint
+		params["endpoint"] = endpoint
+		params["authorization_scope"] = scope
+		if contextInfo, _ := field("context", false); contextInfo != "" {
+			params["context"] = contextInfo
 		}
-	case "memory_patch":
-		address := strings.TrimSpace(fmt.Sprint(payload["address"]))
-		dataHex := compactHex(fmt.Sprint(payload["data"]))
-		expectedHex := compactHex(fmt.Sprint(payload["expected"]))
-		if address == "" || address == "<nil>" {
-			return nil, errors.New("动态内存补丁需要 address")
+	case "binary_patch", "memory_patch", "process_injection":
+		instruction, err := field("instruction", true)
+		if err != nil || len([]rune(instruction)) < 4 {
+			return nil, errors.New("补丁作业需要至少 4 个字符的修改需求")
 		}
-		if dataHex == "" || expectedHex == "" {
-			return nil, errors.New("动态内存补丁需要 data 和 expected")
+		params["instruction"] = instruction
+		params["plan_status"] = "required"
+		if constraints, _ := field("constraints", false); constraints != "" {
+			params["constraints"] = constraints
 		}
-		params["address"] = address
-		params["data_hex"] = dataHex
-		params["expected_hex"] = expectedHex
-	case "process_injection":
-		dll := strings.TrimSpace(fmt.Sprint(payload["dll"]))
-		resolved, err := s.resolveWorkflowPath(dll)
-		if err != nil {
-			return nil, errors.New("进程内注入 DLL 路径无效")
+		if validation, _ := field("validation_requirements", false); validation != "" {
+			params["validation_requirements"] = validation
 		}
-		info, statErr := os.Stat(resolved)
-		if statErr != nil || info.IsDir() {
-			return nil, errors.New("进程内注入 DLL 文件不存在")
+		if workflow == "memory_patch" || workflow == "process_injection" {
+			targetProcess, targetErr := field("target_process", true)
+			authorization, authorizationErr := field("authorization_statement", true)
+			if targetErr != nil || authorizationErr != nil || len([]rune(authorization)) < 4 {
+				return nil, errors.New("动态进程作业需要目标进程说明和明确授权依据")
+			}
+			params["target_process"] = targetProcess
+			params["authorization_statement"] = authorization
 		}
-		params["dll_path"] = resolved
-		params["declared_dll_path"] = resolved
-		method := strings.TrimSpace(fmt.Sprint(payload["injection_method"]))
-		if method == "" || method == "<nil>" {
-			method = "load_library"
+		if workflow == "process_injection" {
+			if moduleSource, _ := field("module_source", false); moduleSource != "" {
+				params["module_source"] = moduleSource
+			}
 		}
-		if method != "load_library" && method != "manual_map" {
-			return nil, errors.New("不支持的注入方法")
-		}
-		params["method"] = method
 	}
 	return params, nil
+}
+
+func validateAuthorizedEndpoint(target, endpoint string) error {
+	value := strings.TrimSpace(endpoint)
+	if value == "" || value == "<nil>" {
+		value = strings.TrimSpace(target)
+	}
+	if value == "" || value == "<nil>" || len(value) > 2048 || strings.IndexAny(value, " \r\n\t") >= 0 {
+		return errors.New("授权渗透计划需要有效的域名或 HTTP(S) URL")
+	}
+	if !strings.Contains(value, "://") {
+		value = "https://" + value
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" {
+		return errors.New("授权渗透计划只接受有效的域名或 HTTP(S) URL")
+	}
+	return nil
 }
 
 func (s *Server) resolveWorkflowPath(raw string) (string, error) {
@@ -2690,6 +2760,9 @@ func (s *Server) startConfirmed(id string, r *http.Request) (Experiment, error) 
 			return x, errors.New("only queued or planned jobs can run")
 		}
 		workflow := workflowTypeOf(x)
+		if (workflow == "memory_patch" || workflow == "process_injection") && !workflowPlanConfirmed(x) {
+			return x, errors.New("动态补丁必须先完成 AI 方案生成、审查和人工确认")
+		}
 		if workflowExecutionBoundary(workflow) == "plan-only" {
 			if x.Metadata == nil {
 				x.Metadata = map[string]any{}
@@ -2825,6 +2898,10 @@ func (s *Server) startConfirmed(id string, r *http.Request) (Experiment, error) 
 		return x, errors.New("only queued or planned jobs can run")
 	}
 	workflow := workflowTypeOf(x)
+	if (workflow == "memory_patch" || workflow == "process_injection") && !workflowPlanConfirmed(x) {
+		s.mu.Unlock()
+		return x, errors.New("动态补丁必须先完成 AI 方案生成、审查和人工确认")
+	}
 	if workflowExecutionBoundary(workflow) == "plan-only" {
 		if x.Metadata == nil {
 			x.Metadata = map[string]any{}

@@ -88,6 +88,27 @@ type EventRecord = {
   message: string;
   data?: Record<string, unknown>;
 };
+type AIWorkflowPlan = {
+  id: string;
+  experiment_id: string;
+  workflow: WorkflowType;
+  status: string;
+  instruction: string;
+  target_identity: string;
+  location_basis: string;
+  pid?: number;
+  address?: string;
+  expected_hex?: string;
+  data_hex?: string;
+  dll_path?: string;
+  method?: string;
+  evidence: string[];
+  validation: string[];
+  risks: string[];
+  rollback: string[];
+  provider?: string;
+  model?: string;
+};
 type Orchestration = {
   flow: { id: string; title?: string; status: string; created_at?: string; updated_at?: string };
   tasks: Array<{ id: string; title?: string; status: string; input?: string; result?: string }>;
@@ -1677,12 +1698,14 @@ function CreateDialog({
   const [message, setMessage] = useState("");
   const [objective, setObjective] = useState("");
   const [endpoint, setEndpoint] = useState("");
-  const [address, setAddress] = useState("");
-  const [replacement, setReplacement] = useState("");
-  const [expected, setExpected] = useState("");
-  const [pid, setPid] = useState("");
-  const [dll, setDll] = useState("");
-  const [injectionMethod, setInjectionMethod] = useState("load_library");
+  const [authorizationScope, setAuthorizationScope] = useState("");
+  const [contextInfo, setContextInfo] = useState("");
+  const [instruction, setInstruction] = useState("");
+  const [targetProcess, setTargetProcess] = useState("");
+  const [constraints, setConstraints] = useState("");
+  const [validationRequirements, setValidationRequirements] = useState("");
+  const [authorizationStatement, setAuthorizationStatement] = useState("");
+  const [moduleSource, setModuleSource] = useState("");
   const workflow = WORKFLOW_DEFS.find((item) => item.id === workflowType) || WORKFLOW_DEFS[0];
   const upload = async (file: File) => {
     setBusy(true);
@@ -1698,9 +1721,6 @@ function CreateDialog({
       const p = await r.json();
       if (r.ok) {
         setTarget(p.path);
-        if (workflowType === "process_injection" && /\.dll$/i.test(file.name)) {
-          setDll(p.path);
-        }
         setMessage(
           `上传完成：${file.name}（${Math.ceil(Number(p.size || file.size) / 1024 / 1024)} 兆字节）`,
         );
@@ -1721,29 +1741,33 @@ function CreateDialog({
     if (workflowType === "authorized_pentest") {
       payload.objective = objective;
       payload.endpoint = endpoint;
+      payload.authorization_scope = authorizationScope;
+      payload.context = contextInfo;
     }
-    if (workflowType === "memory_patch") {
-      payload.pid = pid;
-      payload.address = address;
-      payload.data = replacement;
-      payload.expected = expected;
+    if (["binary_patch", "memory_patch", "process_injection"].includes(workflowType)) {
+      payload.instruction = instruction;
+      payload.constraints = constraints;
+      payload.validation_requirements = validationRequirements;
+    }
+    if (workflowType === "memory_patch" || workflowType === "process_injection") {
+      payload.target_process = targetProcess;
+      payload.authorization_statement = authorizationStatement;
     }
     if (workflowType === "process_injection") {
-      payload.pid = pid;
-      payload.dll = dll;
-      payload.injection_method = injectionMethod;
+      payload.module_source = moduleSource;
     }
     return payload;
   };
   const canCreate = () => {
-    if (!target) return false;
-    if (workflowType === "authorized_pentest") return !!objective.trim();
-    if (workflowType === "memory_patch") return !!pid.trim() && !!address.trim() && !!replacement.trim() && !!expected.trim();
-    if (workflowType === "process_injection") return !!pid.trim() && !!dll.trim();
-    return true;
+    if (workflowType === "authorized_pentest") {
+      return !!endpoint.trim() && !!objective.trim() && !!authorizationScope.trim();
+    }
+    if (workflowType === "reverse_analysis") return !!target.trim();
+    if (workflowType === "binary_patch") return !!target.trim() && instruction.trim().length >= 4;
+    return targetProcess.trim().length >= 2 && instruction.trim().length >= 4 && authorizationStatement.trim().length >= 4;
   };
   const create = async () => {
-    if (/^[A-Za-z]:[\\/]/.test(target)) {
+    if (workflowType !== "authorized_pentest" && /^[A-Za-z]:[\\/]/.test(target)) {
       setMessage("容器无法读取宿主机盘符路径，请先上传到工作区。 ");
       return;
     }
@@ -1797,25 +1821,21 @@ function CreateDialog({
             );
           })}
         </div>
-        <label className="dropZone">
-          <HardDriveUpload size={24} />
-          <b>{busy ? "正在上传，请稍候" : workflowType === "process_injection" ? "上传样本或 DLL" : "选择本地样本"}</b>
-          <span>文件写入工作区，不会自动执行。</span>
-          <input
-            type="file"
-            disabled={busy}
-            onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])}
-          />
-        </label>
-        <div className="workflowFormGrid">
-          <label>
-            目标路径
-            <input
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              placeholder="上传后自动生成，或填写工作区内文件路径"
-            />
+        {workflowType !== "authorized_pentest" && (
+          <label className="dropZone">
+            <HardDriveUpload size={24} />
+            <b>{busy ? "正在上传，请稍候" : workflowType === "reverse_analysis" ? "选择本地样本" : "上传目标程序或样本"}</b>
+            <span>{workflowType === "memory_patch" || workflowType === "process_injection" ? "可选。AI 将结合样本和需求生成可审查方案。" : "文件写入工作区，不会自动执行。"}</span>
+            <input type="file" disabled={busy} onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
           </label>
+        )}
+        <div className="workflowFormGrid">
+          {workflowType !== "authorized_pentest" && (
+            <label>
+              目标程序或样本
+              <input value={target} onChange={(e) => setTarget(e.target.value)} placeholder={workflowType === "memory_patch" || workflowType === "process_injection" ? "可选，上传后自动生成工作区路径" : "上传后自动生成，或填写工作区内文件路径"} />
+            </label>
+          )}
           <label>
             作业模式
             <input value={workflow.summary} readOnly />
@@ -1823,53 +1843,56 @@ function CreateDialog({
           {workflowType === "authorized_pentest" && (
             <>
               <label>
-                目标说明
-                <input value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="例如：审查登录接口暴露面" />
+                域名或 URL
+                <input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} placeholder="https://example.com 或 example.com" />
               </label>
               <label>
-                目标端点
-                <input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} placeholder="可选，仅用于路由计划" />
+                授权范围
+                <input value={authorizationScope} onChange={(e) => setAuthorizationScope(e.target.value)} placeholder="例如：仅 example.com/api，禁止压测和数据修改" />
+              </label>
+              <label className="fullSpan">
+                测试目标
+                <textarea rows={3} value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="例如：审查登录、会话和越权风险，输出验证步骤与证据清单" />
+              </label>
+              <label className="fullSpan">
+                补充信息
+                <textarea rows={2} value={contextInfo} onChange={(e) => setContextInfo(e.target.value)} placeholder="可选：测试账号、时间窗口、联系人和已知技术栈" />
               </label>
             </>
           )}
-          {workflowType === "memory_patch" && (
+          {["binary_patch", "memory_patch", "process_injection"].includes(workflowType) && (
+            <>
+              <label className="fullSpan">
+                修改需求
+                <textarea rows={4} value={instruction} onChange={(e) => setInstruction(e.target.value)} placeholder={workflowType === "binary_patch" ? "描述希望修改的程序行为，AI 将分析样本并生成离线补丁方案" : workflowType === "memory_patch" ? "描述运行时希望改变的行为，AI 将定位目标并生成地址、预期原值、写入值和回滚方案" : "描述需要在目标进程中实现的授权功能，AI 将生成模块与注入、验证和清理方案"} />
+              </label>
+              <label>
+                约束条件
+                <input value={constraints} onChange={(e) => setConstraints(e.target.value)} placeholder="例如：不得修改磁盘文件，重启后恢复" />
+              </label>
+              <label>
+                验证要求
+                <input value={validationRequirements} onChange={(e) => setValidationRequirements(e.target.value)} placeholder="例如：验证目标行为并保留前后证据" />
+              </label>
+            </>
+          )}
+          {(workflowType === "memory_patch" || workflowType === "process_injection") && (
             <>
               <label>
-                PID
-                <input value={pid} onChange={(e) => setPid(e.target.value)} placeholder="目标进程 PID" />
+                目标进程或程序
+                <input value={targetProcess} onChange={(e) => setTargetProcess(e.target.value)} placeholder="进程名称、窗口特征或本地程序标识" />
               </label>
               <label>
-                地址
-                <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="例如 0x401000" />
-              </label>
-              <label>
-                新字节
-                <input value={replacement} onChange={(e) => setReplacement(e.target.value)} placeholder="十六进制，例如 90cc" />
-              </label>
-              <label>
-                预期原字节
-                <input value={expected} onChange={(e) => setExpected(e.target.value)} placeholder="十六进制，例如 558b" />
+                授权依据
+                <input value={authorizationStatement} onChange={(e) => setAuthorizationStatement(e.target.value)} placeholder="确认该本地目标归你所有或已获明确授权" />
               </label>
             </>
           )}
           {workflowType === "process_injection" && (
-            <>
-              <label>
-                PID
-                <input value={pid} onChange={(e) => setPid(e.target.value)} placeholder="目标进程 PID" />
-              </label>
-              <label>
-                DLL 路径
-                <input value={dll} onChange={(e) => setDll(e.target.value)} placeholder="工作区内 DLL 路径" />
-              </label>
-              <label>
-                注入方式
-                <select value={injectionMethod} onChange={(e) => setInjectionMethod(e.target.value)}>
-                  <option value="load_library">load_library</option>
-                  <option value="manual_map">manual_map</option>
-                </select>
-              </label>
-            </>
+            <label className="fullSpan">
+              模块来源
+              <input value={moduleSource} onChange={(e) => setModuleSource(e.target.value)} placeholder="可选：由 AI 生成受控模块，或说明工作区内已有模块及用途" />
+            </label>
           )}
         </div>
         {message && <div className="inlineMsg">{message}</div>}
@@ -1910,6 +1933,8 @@ function FlowDrawer({
   const [actionMessage, setActionMessage] = useState("");
   const [orchestration, setOrchestration] = useState<Orchestration | null>(null);
   const [orchestrationLoading, setOrchestrationLoading] = useState(false);
+  const [workflowPlan, setWorkflowPlan] = useState<AIWorkflowPlan | null>(null);
+  const [workflowPlanBusy, setWorkflowPlanBusy] = useState("");
   const [drawerTab, setDrawerTab] = useState<"execution" | "orchestration">("execution");
   const [, setClock] = useState(0);
   useEffect(() => {
@@ -1938,6 +1963,38 @@ function FlowDrawer({
     void loadOrchestration(controller.signal);
     return () => controller.abort();
   }, [drawerTab, loadOrchestration]);
+  const workflowType = String(experiment.metadata?.workflow_type || "") as WorkflowType;
+  const needsAIWorkflowPlan = workflowType === "memory_patch" || workflowType === "process_injection";
+  const aiPlanMeta = (experiment.metadata?.workflow_ai_plan || null) as Record<string, unknown> | null;
+  const createWorkflowPlan = async () => {
+    setWorkflowPlanBusy("plan");
+    setActionMessage("");
+    try {
+      const response = await fetch(`/api/experiments/${experiment.id}/workflow/ai-plan`, { method: "POST", headers: headers({ "Content-Type": "application/json" }), body: "{}" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "AI 计划生成失败");
+      setWorkflowPlan(payload.plan as AIWorkflowPlan);
+      setActionMessage("AI 已生成待审查方案，请核对目标、底层参数、风险和回滚步骤。");
+      await onChanged();
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : String(error));
+    } finally { setWorkflowPlanBusy(""); }
+  };
+  const confirmWorkflowPlan = async () => {
+    if (!workflowPlan || !confirm("确认该 AI 补丁方案及其底层参数，允许进入执行确认？")) return;
+    setWorkflowPlanBusy("confirm");
+    setActionMessage("");
+    try {
+      const response = await fetch(`/api/experiments/${experiment.id}/workflow/ai-confirm`, { method: "POST", headers: headers({ "Content-Type": "application/json" }), body: JSON.stringify({ plan_id: workflowPlan.id, confirmation: "CONFIRM_AI_WORKFLOW_PLAN" }) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "AI 计划确认失败");
+      setWorkflowPlan({ ...(payload.plan as AIWorkflowPlan), status: "confirmed" });
+      setActionMessage("AI 补丁方案已确认，现在可以进行最终执行确认。");
+      await onChanged();
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : String(error));
+    } finally { setWorkflowPlanBusy(""); }
+  };
   const action = async (name: "execute" | "cancel" | "retry") => {
     if (!canWrite) {
       setActionMessage("只读角色不能执行、取消或重试任务。");
@@ -2169,6 +2226,45 @@ function FlowDrawer({
             ? `人工确认：${date(confirmationEvent.timestamp)}${confirmationEvent.data?.subject ? ` · ${String(confirmationEvent.data.subject)}` : ""}`
             : "等待人工确认；点击“确认执行”后才会启动。"}
         </div>
+        {needsAIWorkflowPlan && (
+          <section className="workflowPlanPanel">
+            <div className="sectionHeading">
+              <div>
+                <span>AI 动态补丁方案</span>
+                <h3>{workflowPlan ? (workflowPlan.status === "confirmed" ? "已确认，可执行" : "待人工审查") : "等待 AI 生成"}</h3>
+              </div>
+              <span className={`pill ${workflowPlan?.status === "confirmed" ? "done" : "partial"}`}>{workflowPlan?.status === "confirmed" ? "已确认" : "未确认"}</span>
+            </div>
+            {!workflowPlan && !aiPlanMeta?.id && (
+              <div className="workflowPlanEmpty">
+                <p>用户需求已保存。AI 将从目标程序和授权信息中生成目标身份、定位依据、PID、地址、字节或模块路径，并附验证与回滚证据。</p>
+                <button className="primaryBtn" disabled={!canWrite || !!workflowPlanBusy || experiment.status !== "awaiting_ai_plan"} onClick={() => void createWorkflowPlan()}>
+                  {workflowPlanBusy === "plan" ? <Loader2 className="spin" size={15} /> : <Zap size={15} />}生成 AI 方案
+                </button>
+              </div>
+            )}
+            {workflowPlan && (
+              <>
+                <div className="workflowPlanGrid">
+                  <div><span>目标身份</span><b>{workflowPlan.target_identity}</b></div>
+                  <div><span>定位依据</span><b>{workflowPlan.location_basis}</b></div>
+                  {workflowPlan.pid && <div><span>PID</span><code>{workflowPlan.pid}</code></div>}
+                  {workflowPlan.address && <div><span>地址</span><code>{workflowPlan.address}</code></div>}
+                  {workflowPlan.expected_hex && <div><span>预期原字节</span><code>{workflowPlan.expected_hex}</code></div>}
+                  {workflowPlan.data_hex && <div><span>写入字节</span><code>{workflowPlan.data_hex}</code></div>}
+                  {workflowPlan.dll_path && <div><span>模块路径</span><code>{workflowPlan.dll_path}</code></div>}
+                  {workflowPlan.method && <div><span>执行方式</span><code>{workflowPlan.method}</code></div>}
+                </div>
+                <div className="workflowPlanLists">
+                  <div><span>证据</span>{workflowPlan.evidence.map((item) => <p key={`e-${item}`}>{item}</p>)}</div>
+                  <div><span>验证</span>{workflowPlan.validation.map((item) => <p key={`v-${item}`}>{item}</p>)}</div>
+                  <div><span>风险与回滚</span>{[...workflowPlan.risks, ...workflowPlan.rollback].map((item) => <p key={`r-${item}`}>{item}</p>)}</div>
+                </div>
+                {workflowPlan.status !== "confirmed" && <button className="primaryBtn" disabled={!canWrite || !!workflowPlanBusy} onClick={() => void confirmWorkflowPlan()}>{workflowPlanBusy === "confirm" ? <Loader2 className="spin" size={15} /> : <ShieldCheck size={15} />}确认 AI 方案</button>}
+              </>
+            )}
+          </section>
+        )}
         <section className="reconstructionGate">
           <div className="sectionHeading">
             <div>
@@ -2316,7 +2412,8 @@ function FlowDrawer({
             disabled={
               !canWrite ||
               !!busy ||
-              !["queued", "planned"].includes(experiment.status)
+              !["queued", "planned"].includes(experiment.status) ||
+              (needsAIWorkflowPlan && aiPlanMeta?.status !== "confirmed")
             }
             onClick={() => void action("execute")}
           >

@@ -265,6 +265,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--cyan); box-shado
 .workflowChip span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
 .workflowFormGrid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .workflowFormGrid label { margin:0; }
+.workflowFormGrid .fullSpan { grid-column:1 / -1; }
+.workflowFormGrid textarea { min-height:82px; line-height:1.55; }
 .modal header, .drawer header { display: flex; align-items: start; justify-content: space-between; gap: 14px; }
 .modal header p, .drawer header p { margin: 0 0 5px; color: var(--muted); font-size: 11px; }
 .modal h2, .drawer h2 { margin: 0; font-size: 20px; }
