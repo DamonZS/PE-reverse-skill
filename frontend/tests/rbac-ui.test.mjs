@@ -39,6 +39,14 @@ test("源码保存按钮可点击并在没有修改时给出原因", () => {
   assert.match(app, /当前无修改，点击可查看提示/);
 });
 
+test("流程列表和最近流程支持删除", () => {
+  assert.match(app, /method: "DELETE"/);
+  assert.match(app, /删除流程「/);
+  assert.match(app, /<ExperimentTable items=\{data\.experiments\.slice\(0, 8\)\} onDelete=/);
+  assert.match(app, /<ExperimentTable items=\{items\} onSelect=\{onSelect\} selectedId=\{selected\?\.id\} onDelete=/);
+  assert.match(app, /运行中的流程不能删除，请先取消或等待结束/);
+});
+
 test("前端工作台接入文件、终端和 ToolCall 控制", () => {
   assert.match(app, /fileAction\("batch-copy"/);
   assert.match(app, /fileAction\("batch-move"/);

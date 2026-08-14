@@ -882,6 +882,10 @@ func (s *Server) experiment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := parts[0]
+	if len(parts) == 1 && r.Method == http.MethodDelete {
+		s.deleteExperiment(w, r, id)
+		return
+	}
 	if len(parts) == 1 && r.Method == "GET" {
 		x, err := s.loadExperiment(id)
 		if err == nil && (x.Status == "completed" || x.Status == "partial" || x.Status == "failed") {
@@ -1011,6 +1015,51 @@ func (s *Server) experiment(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (s *Server) deleteExperiment(w http.ResponseWriter, r *http.Request, id string) {
+	x, err := s.mutateExperiment(id, func(experiment *Experiment) error {
+		if experimentDeleted(*experiment) {
+			return sql.ErrNoRows
+		}
+		if experiment.Status == "running" {
+			return errors.New("运行中的流程不能删除，请先取消或等待结束")
+		}
+		if experiment.Metadata == nil {
+			experiment.Metadata = map[string]any{}
+		}
+		nowStr := now()
+		experiment.Metadata["deleted_at"] = nowStr
+		experiment.Metadata["deleted_by"] = actorSubject(s.authenticate(r))
+		experiment.UpdatedAt = nowStr
+		experiment.History = append(experiment.History, map[string]any{"timestamp": nowStr, "status": experiment.Status, "detail": "deleted from workspace list"})
+		if experiment.Orchestration != nil {
+			experiment.Orchestration.UpdatedAt = nowStr
+			experiment.Orchestration.Flow.UpdatedAt = nowStr
+		}
+		return nil
+	})
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	s.appendEvent(id, "deleted", x.Status, "流程已从列表删除，工作区制品保留", map[string]any{"deleted_at": x.Metadata["deleted_at"]})
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "id": id})
+}
+
+func actorSubject(who *identity) string {
+	if who == nil || strings.TrimSpace(who.Subject) == "" {
+		return "anonymous"
+	}
+	return who.Subject
+}
+
+func experimentDeleted(x Experiment) bool {
+	if x.Metadata == nil {
+		return false
+	}
+	value, ok := x.Metadata["deleted_at"]
+	return ok && strings.TrimSpace(fmt.Sprint(value)) != "" && fmt.Sprint(value) != "<nil>"
 }
 
 func (s *Server) executionActor(r *http.Request) (*identity, error) {
@@ -4979,6 +5028,9 @@ func (s *Server) listExperiments() ([]Experiment, error) {
 			if err = json.Unmarshal(payload, &x); err != nil {
 				return nil, err
 			}
+			if experimentDeleted(x) {
+				continue
+			}
 			if strings.TrimSpace(x.Name) == "" {
 				x.Name = filepath.Base(x.Sample)
 			}
@@ -4991,6 +5043,9 @@ func (s *Server) listExperiments() ([]Experiment, error) {
 	for _, p := range paths {
 		var x Experiment
 		if readFileJSON(p, &x) == nil {
+			if experimentDeleted(x) {
+				continue
+			}
 			if strings.TrimSpace(x.Name) == "" {
 				x.Name = filepath.Base(x.Sample)
 			}

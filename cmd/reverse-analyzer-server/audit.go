@@ -49,6 +49,8 @@ func auditDescriptor(r *http.Request) (auditRecordDescriptor, bool) {
 		}
 		if len(parts) == 2 && r.Method == http.MethodPost {
 			descriptor.Action = "experiment.create"
+		} else if len(parts) == 3 && r.Method == http.MethodDelete {
+			descriptor.Action = "experiment.delete"
 		} else if len(parts) >= 4 {
 			switch parts[3] {
 			case "execute", "cancel", "retry":

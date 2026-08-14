@@ -189,6 +189,85 @@ func TestCreateFlowRequiresWorkspaceTarget(t *testing.T) {
 	}
 }
 
+func TestExperimentDeleteHidesFlowButKeepsArtifactWorkspace(t *testing.T) {
+	s, root := testServer(t, "")
+	if err := os.WriteFile(filepath.Join(root, "sample.bin"), []byte("MZ"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	created := request(t, s, http.MethodPost, "/api/experiments", "", map[string]any{"target": "sample.bin"})
+	if created.Code != http.StatusCreated {
+		t.Fatal(created.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(created.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	id := payload["experiment"].(map[string]any)["id"].(string)
+	analysisDir := filepath.Join(root, "experiments", id, "analysis")
+	if err := os.MkdirAll(analysisDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(analysisDir, "evidence.txt"), []byte("keep"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	deleted := request(t, s, http.MethodDelete, "/api/experiments/"+id, "", nil)
+	if deleted.Code != http.StatusOK {
+		t.Fatalf("delete status=%d body=%s", deleted.Code, deleted.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(analysisDir, "evidence.txt")); err != nil {
+		t.Fatalf("soft delete must keep artifacts: %v", err)
+	}
+	listed, err := s.listExperiments()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range listed {
+		if item.ID == id {
+			t.Fatalf("deleted experiment leaked into list: %#v", item)
+		}
+	}
+	current, err := s.loadExperiment(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !experimentDeleted(current) {
+		t.Fatalf("missing deleted_at metadata: %#v", current.Metadata)
+	}
+}
+
+func TestExperimentDeleteRejectsRunningFlow(t *testing.T) {
+	s, root := testServer(t, "")
+	if err := os.WriteFile(filepath.Join(root, "sample.bin"), []byte("MZ"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	created := request(t, s, http.MethodPost, "/api/experiments", "", map[string]any{"target": "sample.bin"})
+	if created.Code != http.StatusCreated {
+		t.Fatal(created.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(created.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	id := payload["experiment"].(map[string]any)["id"].(string)
+	if _, err := s.mutateExperiment(id, func(experiment *Experiment) error {
+		experiment.Status = "running"
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	deleted := request(t, s, http.MethodDelete, "/api/experiments/"+id, "", nil)
+	if deleted.Code == http.StatusOK {
+		t.Fatal("running experiment should not be deleted")
+	}
+	listed, err := s.listExperiments()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 1 || listed[0].ID != id {
+		t.Fatalf("running experiment should remain listed: %#v", listed)
+	}
+}
+
 func TestEventEndpointsRejectUnknownExperiment(t *testing.T) {
 	s, _ := testServer(t, "")
 	id := strings.Repeat("f", 32)
@@ -1846,6 +1925,7 @@ func TestAuditDescriptorCoversCriticalWrites(t *testing.T) {
 		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/execute":                "experiment.execute",
 		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/cancel":                 "experiment.cancel",
 		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/retry":                  "experiment.retry",
+		http.MethodDelete + " /api/experiments/" + strings.Repeat("a", 32):                           "experiment.delete",
 		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/build":                  "source.build",
 		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/terminal":               "terminal.execute",
 		http.MethodPost + " /api/experiments/" + strings.Repeat("a", 32) + "/terminal/session/stop":  "terminal.cancel",

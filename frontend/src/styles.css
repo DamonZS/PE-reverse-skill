@@ -151,6 +151,8 @@ code, pre { font-family: "Cascadia Mono", "Consolas", monospace; }
 .ghostBtn { border-color: var(--line); background: #0b1714; color: var(--soft); }
 .ghostBtn:hover { border-color: #457568; }
 .iconBtn { width: 34px; height: 34px; padding: 0; border-color: var(--line); background: transparent; color: var(--soft); }
+.iconBtn.danger { border-color: rgba(240, 127, 119, .45); color: var(--red); }
+.iconBtn.danger:hover { background: rgba(240, 127, 119, .1); }
 
 .banner {
   display: flex; align-items: center; gap: 9px; margin-bottom: 16px; padding: 12px 14px;
@@ -161,7 +163,7 @@ code, pre { font-family: "Cascadia Mono", "Consolas", monospace; }
 .table { display: grid; gap: 7px; }
 .tableRow {
   width: 100%; border: 1px solid #1d3831; border-radius: 8px; background: #0a1814;
-  display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 14px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto; gap: 14px;
   align-items: center; color: var(--soft); padding: 13px; text-align: left;
 }
 .tableRow:hover { border-color: #37695e; background: #0e211c; }

@@ -466,6 +466,25 @@ export default function App() {
     });
     return () => controller.abort();
   }, [selectedExperiment?.id]);
+  const deleteExperiment = async (experiment: Experiment) => {
+    if (experiment.status === "running") {
+      setError("运行中的流程不能删除，请先取消或等待结束");
+      return;
+    }
+    const ok = window.confirm(`删除流程「${experiment.name || experiment.id}」？\n\n列表记录会移除，已生成的分析证据和制品仍保留在工作区。`);
+    if (!ok) return;
+    const r = await fetch(`/api/experiments/${experiment.id}`, { method: "DELETE", headers: headers() });
+    const p = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      setError(p.error || `删除流程失败：${r.status}`);
+      return;
+    }
+    if (selectedExperiment?.id === experiment.id) {
+      setSelectedExperiment(null);
+      setEvents([]);
+    }
+    await refresh();
+  };
   const filtered = useMemo(
     () =>
       data.experiments.filter((x) =>
@@ -561,7 +580,7 @@ export default function App() {
         </header>
         <section className="content">
           {error && <Banner text={`无法读取真实数据：${error}`} />}{" "}
-          {view === "overview" && <Overview data={data} onOpen={setView} />}{" "}
+          {view === "overview" && <Overview data={data} onOpen={setView} onDelete={deleteExperiment} canDelete={identity?.role !== "viewer"} />}{" "}
           {view === "experiments" && (
             <Experiments
               items={filtered}
@@ -577,6 +596,7 @@ export default function App() {
               events={events}
               identity={identity}
               onChanged={refresh}
+              onDelete={deleteExperiment}
             />
           )}{" "}
           {view === "catalog" && (
@@ -633,9 +653,13 @@ export default function App() {
 function Overview({
   data,
   onOpen,
+  onDelete,
+  canDelete,
 }: {
   data: Workspace;
   onOpen: (v: View) => void;
+  onDelete: (x: Experiment) => void;
+  canDelete: boolean;
 }) {
   const s = data.summary;
   return (
@@ -675,7 +699,7 @@ function Overview({
         action="打开工作台"
         onAction={() => onOpen("experiments")}
       >
-        <ExperimentTable items={data.experiments.slice(0, 8)} />
+        <ExperimentTable items={data.experiments.slice(0, 8)} onDelete={canDelete ? onDelete : undefined} />
       </Panel>
     </>
   );
@@ -690,6 +714,7 @@ function Experiments({
   events,
   identity,
   onChanged,
+  onDelete,
 }: {
   items: Experiment[];
   query: string;
@@ -700,6 +725,7 @@ function Experiments({
   events: EventRecord[];
   identity: Identity;
   onChanged: () => Promise<void>;
+  onDelete: (x: Experiment) => void;
 }) {
   const selectedWorkflow = selected ? workflowDef(selected.metadata?.workflow_type) : null;
   return (
@@ -734,7 +760,7 @@ function Experiments({
               新建作业
             </button>
           </Toolbar>
-          <ExperimentTable items={items} onSelect={onSelect} selectedId={selected?.id} />
+          <ExperimentTable items={items} onSelect={onSelect} selectedId={selected?.id} onDelete={identity?.role !== "viewer" ? onDelete : undefined} />
         </Panel>
       </div>
       <div className="workbenchMain">
@@ -776,16 +802,20 @@ function ExperimentTable({
   items,
   onSelect,
   selectedId,
+  onDelete,
 }: {
   items: Experiment[];
   onSelect?: (x: Experiment) => void;
   selectedId?: string;
+  onDelete?: (x: Experiment) => void;
 }) {
   if (!items.length) return <Empty text="当前没有任务记录" />;
   return (
     <div className="table">
       {items.map((x) => (
-        <button className={`tableRow ${selectedId === x.id ? "active" : ""}`} key={x.id} onClick={() => onSelect?.(x)}>
+        <div className={`tableRow ${selectedId === x.id ? "active" : ""}`} key={x.id} onClick={() => onSelect?.(x)} role="button" tabIndex={0} onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") onSelect?.(x);
+        }}>
           <span>
             <FileSearch size={17} />
             <b>{x.name || "未命名任务"}</b>
@@ -794,7 +824,15 @@ function ExperimentTable({
           <span className={`pill ${tone(x.status)}`}>{status(x.status)}</span>
           <code>{Object.keys(x.options || {}).join(", ") || "默认"}</code>
           <small>{date(x.updated_at)}</small>
-        </button>
+          {onDelete && (
+            <button className="iconBtn danger" disabled={x.status === "running"} title={x.status === "running" ? "运行中的流程不能删除" : "删除流程"} onClick={(event) => {
+              event.stopPropagation();
+              onDelete(x);
+            }} type="button">
+              <Trash2 size={15} />
+            </button>
+          )}
+        </div>
       ))}
     </div>
   );
