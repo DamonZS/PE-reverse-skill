@@ -81,6 +81,19 @@ func TestDatabaseOutageReturnsServiceUnavailable(t *testing.T) {
 	}
 }
 
+func TestCORSAllowsSameOriginModuleRequests(t *testing.T) {
+	s, _ := testServer(t, "")
+	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8090/assets/index.js", nil)
+	request.Host = "127.0.0.1:8090"
+	request.Header.Set("Origin", "http://127.0.0.1:8090")
+	request.Header.Set("Sec-Fetch-Dest", "script")
+	response := httptest.NewRecorder()
+	s.ServeHTTP(response, request)
+	if response.Code == http.StatusForbidden {
+		t.Fatalf("same-origin module request was blocked: %s", response.Body.String())
+	}
+}
+
 func TestCORSUsesExplicitAllowlist(t *testing.T) {
 	s, _ := testServer(t, "secret")
 	s.cfg.AllowedOrigins = map[string]bool{"https://console.example": true}
@@ -126,6 +139,33 @@ func TestHTTPServerHasBoundedConnectionTimeouts(t *testing.T) {
 	}
 	if server.MaxHeaderBytes > 1<<20 {
 		t.Fatalf("HTTP headers are too large: %d", server.MaxHeaderBytes)
+	}
+}
+
+func TestStaticFrontendPreventsStaleBundleWhiteScreen(t *testing.T) {
+	s, _ := testServer(t, "")
+	assets := filepath.Join(s.cfg.Frontend, "assets")
+	if err := os.MkdirAll(assets, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(assets, "index-current.js"), []byte("console.log('ready')"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	index := request(t, s, http.MethodGet, "/", "", nil)
+	if index.Code != http.StatusOK || index.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("index cache policy=%d %#v", index.Code, index.Header())
+	}
+	asset := request(t, s, http.MethodGet, "/assets/index-current.js", "", nil)
+	if asset.Code != http.StatusOK || !strings.Contains(asset.Header().Get("Cache-Control"), "immutable") {
+		t.Fatalf("asset cache policy=%d %#v", asset.Code, asset.Header())
+	}
+	missing := request(t, s, http.MethodGet, "/assets/index-stale.js", "", nil)
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("stale asset must be 404, got %d %s", missing.Code, missing.Body.String())
+	}
+	if strings.Contains(missing.Body.String(), "<html>go</html>") {
+		t.Fatal("stale asset incorrectly fell back to index.html")
 	}
 }
 func TestCreateFlowRequiresWorkspaceTarget(t *testing.T) {
@@ -2101,6 +2141,115 @@ func TestAnalysisArgsRoutesReconstructionZipToArchivePipeline(t *testing.T) {
 	joined = strings.Join(analysisArgs(x, `C:\workspace\out`), " ")
 	if !strings.Contains(joined, "reverse_analyzer analyze") || !strings.Contains(joined, "--reconstruct") {
 		t.Fatalf("unexpected native pipeline args: %s", joined)
+	}
+}
+
+func TestAnalysisArgsRouteWorkflowSpecificCommands(t *testing.T) {
+	authorized := Experiment{
+		Sample: `C:\workspace\target.exe`,
+		Metadata: map[string]any{
+			"workflow_type":   "authorized_pentest",
+			"workflow_params": map[string]any{"objective": "review login surface", "endpoint": "https://example.test/api"},
+		},
+	}
+	joined := strings.Join(analysisArgs(authorized, `C:\workspace\out`), " ")
+	for _, expected := range []string{"reverse_analyzer skills route review login surface", "--target C:\\workspace\\target.exe", "--endpoint https://example.test/api", "--limit 3"} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("authorized workflow missing %q: %s", expected, joined)
+		}
+	}
+
+	memory := Experiment{
+		Metadata: map[string]any{
+			"workflow_type":   "memory_patch",
+			"workflow_params": map[string]any{"pid": 4321, "address": "0x401000", "data_hex": "90cc", "expected_hex": "558b"},
+		},
+	}
+	joined = strings.Join(analysisArgs(memory, `C:\workspace\out`), " ")
+	for _, expected := range []string{"capability run", "memory_runtime", "--pid 4321", "address=0x401000", "data_hex=90cc", "expected_hex=558b", "--rollback"} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("memory workflow missing %q: %s", expected, joined)
+		}
+	}
+
+	injection := Experiment{
+		Metadata: map[string]any{
+			"workflow_type":   "process_injection",
+			"workflow_params": map[string]any{"pid": 9876, "dll_path": `C:\workspace\mods\agent.dll`, "declared_dll_path": `C:\workspace\mods\agent.dll`, "method": "manual_map"},
+		},
+	}
+	joined = strings.Join(analysisArgs(injection, `C:\workspace\out`), " ")
+	for _, expected := range []string{"injector", "--pid 9876", "dll_path=C:\\workspace\\mods\\agent.dll", "declared_dll_path=C:\\workspace\\mods\\agent.dll", "method=manual_map"} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("injection workflow missing %q: %s", expected, joined)
+		}
+	}
+}
+
+func TestWorkflowParametersRequireWorkspaceDllAndExistingFile(t *testing.T) {
+	s, root := testServer(t, "")
+	dllDir := filepath.Join(root, "mods")
+	if err := os.MkdirAll(dllDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	dllPath := filepath.Join(dllDir, "agent.dll")
+	if err := os.WriteFile(dllPath, []byte("MZ"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	params, err := s.workflowParameters("process_injection", map[string]any{"pid": 1234, "dll": "mods/agent.dll", "injection_method": "manual_map"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if params["dll_path"] != dllPath || params["declared_dll_path"] != dllPath {
+		t.Fatalf("unexpected dll mapping: %#v", params)
+	}
+	if _, err = s.workflowParameters("process_injection", map[string]any{"pid": 1234, "dll": "../outside.dll"}); err == nil {
+		t.Fatal("path escape should be rejected")
+	}
+	if _, err = s.workflowParameters("process_injection", map[string]any{"pid": 1234, "dll": "mods/missing.dll"}); err == nil {
+		t.Fatal("missing dll should be rejected")
+	}
+}
+
+func TestStartConfirmedPlanOnlyKeepsExperimentPlanned(t *testing.T) {
+	s, root := testServer(t, "")
+	sample := filepath.Join(root, "sample.bin")
+	if err := os.WriteFile(sample, []byte("MZ"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	created := request(t, s, http.MethodPost, "/api/experiments", "", map[string]any{"target": "sample.bin", "workflow_type": "authorized_pentest", "objective": "inspect login flow"})
+	if created.Code != http.StatusCreated {
+		t.Fatal(created.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(created.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	id := payload["experiment"].(map[string]any)["id"].(string)
+	response := request(t, s, http.MethodPost, "/api/experiments/"+id+"/execute", "", map[string]any{"confirmation": confirmation})
+	if response.Code != http.StatusOK {
+		t.Fatalf("execute status=%d body=%s", response.Code, response.Body.String())
+	}
+	current, err := s.loadExperiment(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.Status != "planned" {
+		t.Fatalf("plan-only workflow should remain planned: %#v", current)
+	}
+	if _, running := s.running[id]; running {
+		t.Fatal("plan-only workflow must not reserve a running worker")
+	}
+	events, err := s.events(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joinedTypes := []string{}
+	for _, event := range events {
+		joinedTypes = append(joinedTypes, event.Type)
+	}
+	if !containsString(joinedTypes, "execution_planned") || containsString(joinedTypes, "started") {
+		t.Fatalf("unexpected plan-only events: %#v", joinedTypes)
 	}
 }
 

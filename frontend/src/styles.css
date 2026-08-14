@@ -165,9 +165,32 @@ code, pre { font-family: "Cascadia Mono", "Consolas", monospace; }
   align-items: center; color: var(--soft); padding: 13px; text-align: left;
 }
 .tableRow:hover { border-color: #37695e; background: #0e211c; }
+.tableRow.active { border-color: var(--cyan); background: #112822; box-shadow: inset 2px 0 var(--cyan); }
 .tableRow > span:first-child { display: grid; grid-template-columns: 22px minmax(0, 1fr); column-gap: 9px; align-items: center; }
 .tableRow b, .tableRow small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tableRow small, .tableRow code { color: var(--muted); font-size: 10px; }
+
+.workbenchShell { display:grid; grid-template-columns: 420px minmax(0,1fr); gap:16px; align-items:start; }
+.workbenchSidebar { display:grid; gap:16px; min-width:0; }
+.workbenchMain { min-width:0; display:grid; gap:12px; }
+.workbenchHeader { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; border:1px solid var(--line); border-radius:10px; background:rgba(14,26,22,.9); padding:18px 20px; }
+.workbenchHeader p { margin:0 0 4px; color:var(--muted); font-size:11px; }
+.workbenchHeader h2 { margin:0; font-size:20px; }
+.workbenchHeaderMeta { display:grid; justify-items:end; gap:7px; }
+.workbenchHeaderMeta code { color:var(--muted); font-size:10px; }
+.workbenchEmpty { min-height:420px; display:grid; place-items:center; align-content:center; gap:10px; color:var(--muted); text-align:center; }
+.workbenchEmpty b { color:var(--soft); font-size:14px; }
+.workbenchEmpty span { max-width:460px; font-size:11px; line-height:1.6; }
+.workflowCardList { display:grid; gap:10px; }
+.workflowCard { border:1px solid #24463e; border-radius:8px; background:#081511; color:var(--soft); padding:14px; text-align:left; display:grid; gap:7px; }
+.workflowCard:hover { border-color:#4b8f80; background:#0d201a; }
+.workflowCardHead { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:11px; }
+.workflowCard b { font-size:13px; }
+.workflowCard small { color:var(--muted); font-size:10px; line-height:1.5; }
+.workflowCard.cyan svg, .workflowCard.cyan b { color:var(--cyan); }
+.workflowCard.green svg, .workflowCard.green b { color:var(--green); }
+.workflowCard.amber svg, .workflowCard.amber b { color:var(--amber); }
+.workflowCard.violet svg, .workflowCard.violet b { color:var(--violet); }
 
 .pill {
   display: inline-flex; align-items: center; width: fit-content; border: 1px solid currentColor;
@@ -227,6 +250,13 @@ input:focus, select:focus, textarea:focus { border-color: var(--cyan); box-shado
   border-radius: 14px; background: #0d1c18; padding: 22px; box-shadow: 0 24px 90px rgba(0,0,0,.48);
   display: grid; gap: 15px;
 }
+.wideModal { width:min(860px, calc(100% - 32px)); }
+.workflowPicker { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
+.workflowChip { min-height:42px; display:flex; align-items:center; justify-content:center; gap:7px; border:1px solid var(--line); border-radius:8px; background:#081310; color:var(--muted); padding:0 10px; }
+.workflowChip.active { border-color:var(--cyan); background:#112822; color:var(--cyan); }
+.workflowChip span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; }
+.workflowFormGrid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.workflowFormGrid label { margin:0; }
 .modal header, .drawer header { display: flex; align-items: start; justify-content: space-between; gap: 14px; }
 .modal header p, .drawer header p { margin: 0 0 5px; color: var(--muted); font-size: 11px; }
 .modal h2, .drawer h2 { margin: 0; font-size: 20px; }
@@ -248,6 +278,14 @@ input:focus, select:focus, textarea:focus { border-color: var(--cyan); box-shado
   position: fixed; inset: 0 0 0 auto; width: min(680px, 100%); z-index: 35;
   border-left: 1px solid var(--line); background: #0a1714; padding: 22px;
   box-shadow: -24px 0 80px rgba(0,0,0,.42); overflow: auto;
+}
+.flowWorkspace {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #0a1714;
+  padding: 22px;
+  overflow: auto;
+  min-height: 720px;
 }
 .drawerMeta { display: grid; gap: 10px; margin: 18px 0; }
 .drawerMeta code, .drawerMeta small { color: var(--muted); overflow-wrap: anywhere; }

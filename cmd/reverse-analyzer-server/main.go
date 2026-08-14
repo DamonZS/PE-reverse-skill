@@ -20,6 +20,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -425,7 +426,7 @@ func (s *Server) maintenanceActive() bool {
 
 func (s *Server) applyCORS(w http.ResponseWriter, r *http.Request) bool {
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
-	if origin == "" {
+	if origin == "" || sameOriginRequest(r, origin) {
 		return true
 	}
 	if !s.cfg.AllowedOrigins[origin] {
@@ -442,6 +443,28 @@ func (s *Server) applyCORS(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	return true
+}
+
+func sameOriginRequest(r *http.Request, origin string) bool {
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return false
+	}
+	requestHost := strings.TrimSpace(r.Host)
+	if requestHost == "" {
+		return false
+	}
+	return strings.EqualFold(parsed.Scheme, requestScheme(r)) && strings.EqualFold(parsed.Host, requestHost)
+}
+
+func requestScheme(r *http.Request) string {
+	if strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https") {
+		return "https"
+	}
+	if r.TLS != nil {
+		return "https"
+	}
+	return "http"
 }
 
 func (s *Server) clientIP(r *http.Request) string {
@@ -767,6 +790,16 @@ func (s *Server) experiments(w http.ResponseWriter, r *http.Request) {
 		id := newID()
 		t := now()
 		mode := fmt.Sprint(p["mode"])
+		workflowType, workflowErr := normalizeWorkflowType(fmt.Sprint(p["workflow_type"]))
+		if workflowErr != nil {
+			bad(w, workflowErr.Error())
+			return
+		}
+		workflowParams, workflowParamsErr := s.workflowParameters(workflowType, p)
+		if workflowParamsErr != nil {
+			bad(w, workflowParamsErr.Error())
+			return
+		}
 		opts := map[string]any{}
 		if mode == "pe-reconstruction" {
 			opts["reconstruct"] = true
@@ -789,9 +822,9 @@ func (s *Server) experiments(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		x := Experiment{
-			Schema: 1, SchemaVersion: 1, ID: id, Sample: resolved, Name: filepath.Base(resolved), Status: "queued",
+			Schema: 1, SchemaVersion: 1, ID: id, Sample: resolved, Name: workflowDisplayName(workflowType) + " · " + filepath.Base(resolved), Status: "queued",
 			CreatedAt: t, UpdatedAt: t, Options: opts,
-			Metadata:  map[string]any{"source": "go-web", "execution_boundary": "plan-only", "requires_confirmation": true},
+			Metadata:  map[string]any{"source": "go-web", "execution_boundary": workflowExecutionBoundary(workflowType), "requires_confirmation": true, "workflow_type": workflowType, "workflow_params": workflowParams},
 			History:   []map[string]any{{"timestamp": t, "status": "queued", "detail": "created"}},
 			Artifacts: []map[string]any{}, Reconstruction: reconstructionState(ReconstructionState{}),
 		}
@@ -925,7 +958,7 @@ func (s *Server) experiment(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		x, err := s.startConfirmed(id, r)
-		respond(w, map[string]any{"experiment": x, "running": err == nil}, err)
+		respond(w, map[string]any{"experiment": x, "running": err == nil && x.Status == "running"}, err)
 	case "cancel":
 		x, err := s.cancelAudited(id, r, s.authenticate(r))
 		respond(w, map[string]any{"experiment": x}, err)
@@ -2213,17 +2246,138 @@ func (s *Server) flowTemplates(w http.ResponseWriter, r *http.Request) {
 	}})
 }
 
+func normalizeWorkflowType(raw string) (string, error) {
+	value := strings.TrimSpace(strings.ToLower(raw))
+	if value == "" || value == "<nil>" {
+		return "reverse_analysis", nil
+	}
+	switch value {
+	case "reverse_analysis", "authorized_pentest", "binary_patch", "memory_patch", "process_injection":
+		return value, nil
+	default:
+		return "", errors.New("不支持的作业类型")
+	}
+}
+
+func workflowTypeOf(experiment Experiment) string {
+	workflow, _ := normalizeWorkflowType(fmt.Sprint(experiment.Metadata["workflow_type"]))
+	return workflow
+}
+
+func workflowDisplayName(workflow string) string {
+	return map[string]string{
+		"reverse_analysis":   "逆向分析",
+		"authorized_pentest": "授权渗透计划",
+		"binary_patch":       "二进制补丁",
+		"memory_patch":       "动态内存补丁",
+		"process_injection":  "进程内注入",
+	}[workflow]
+}
+
+func workflowExecutionBoundary(workflow string) string {
+	if workflow == "authorized_pentest" {
+		return "plan-only"
+	}
+	if workflow == "memory_patch" || workflow == "process_injection" {
+		return "windows-local-operator"
+	}
+	return "isolated-worker"
+}
+
+func workflowStages(workflow string) [][2]string {
+	switch workflow {
+	case "authorized_pentest":
+		return [][2]string{{"范围与目标建模", "记录目标、范围和可用接口，生成可审计工作流计划"}, {"技能与工具路由", "按目标类型选择已注册的本地技能和工具依赖"}, {"执行前复核", "等待操作人员在具备对应执行器后提交确认"}}
+	case "binary_patch":
+		return [][2]string{{"二进制证据", "读取目标身份、偏移和预映像字节"}, {"补丁计划", "生成等长替换计划并验证前置条件"}, {"副本验证与回滚", "在独立输出副本上验证结果并保留回滚证据"}}
+	case "memory_patch":
+		return [][2]string{{"进程身份与读前证据", "校验 PID、映像身份和目标地址预映像"}, {"受控内存写入", "通过 memory_runtime 执行带预条件的写入"}, {"结果验证与回滚", "记录执行证据并按请求执行回滚验证"}}
+	case "process_injection":
+		return [][2]string{{"进程与 DLL 身份", "校验 PID、DLL 哈希和体系结构兼容性"}, {"受控注入计划", "生成 LoadLibrary 或 manual map 的可审计计划"}, {"执行证据与清理", "收集注入结果、回滚和清理证据"}}
+	default:
+		return [][2]string{{"证据与静态分析", "收集目标文件、字符串、导入和基础分析证据"}, {"语义与源码重构", "生成语义中间表示和可编辑源码工程"}, {"构建与行为验证", "验证重构工程的构建和行为等价性"}}
+	}
+}
+
+func (s *Server) workflowParameters(workflow string, payload map[string]any) (map[string]any, error) {
+	params := map[string]any{}
+	pidRaw := strings.TrimSpace(fmt.Sprint(payload["pid"]))
+	if workflow == "memory_patch" || workflow == "process_injection" {
+		pid, err := strconv.Atoi(pidRaw)
+		if err != nil || pid <= 0 {
+			return nil, errors.New("动态进程作业需要正整数 pid")
+		}
+		params["pid"] = pid
+	}
+	switch workflow {
+	case "authorized_pentest":
+		objective := strings.TrimSpace(fmt.Sprint(payload["objective"]))
+		if objective == "" || objective == "<nil>" {
+			return nil, errors.New("授权渗透计划需要目标说明")
+		}
+		params["objective"] = objective
+		if endpoint := strings.TrimSpace(fmt.Sprint(payload["endpoint"])); endpoint != "" && endpoint != "<nil>" {
+			params["endpoint"] = endpoint
+		}
+	case "memory_patch":
+		address := strings.TrimSpace(fmt.Sprint(payload["address"]))
+		dataHex := compactHex(fmt.Sprint(payload["data"]))
+		expectedHex := compactHex(fmt.Sprint(payload["expected"]))
+		if address == "" || address == "<nil>" {
+			return nil, errors.New("动态内存补丁需要 address")
+		}
+		if dataHex == "" || expectedHex == "" {
+			return nil, errors.New("动态内存补丁需要 data 和 expected")
+		}
+		params["address"] = address
+		params["data_hex"] = dataHex
+		params["expected_hex"] = expectedHex
+	case "process_injection":
+		dll := strings.TrimSpace(fmt.Sprint(payload["dll"]))
+		resolved, err := s.resolveWorkflowPath(dll)
+		if err != nil {
+			return nil, errors.New("进程内注入 DLL 路径无效")
+		}
+		info, statErr := os.Stat(resolved)
+		if statErr != nil || info.IsDir() {
+			return nil, errors.New("进程内注入 DLL 文件不存在")
+		}
+		params["dll_path"] = resolved
+		params["declared_dll_path"] = resolved
+		method := strings.TrimSpace(fmt.Sprint(payload["injection_method"]))
+		if method == "" || method == "<nil>" {
+			method = "load_library"
+		}
+		if method != "load_library" && method != "manual_map" {
+			return nil, errors.New("不支持的注入方法")
+		}
+		params["method"] = method
+	}
+	return params, nil
+}
+
+func (s *Server) resolveWorkflowPath(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" || value == "<nil>" {
+		return "", errors.New("invalid path")
+	}
+	return s.safePath(value)
+}
+
 func newOrchestrationState(experiment Experiment) *OrchestrationState {
+	stages := workflowStages(workflowTypeOf(experiment))
+	subtasks := make([]OrchestrationSubtask, 0, len(stages))
+	for index, stage := range stages {
+		subtasks = append(subtasks, OrchestrationSubtask{
+			ID: experiment.ID + "-subtask-" + strconv.Itoa(index+1), TaskID: experiment.ID,
+			Title: stage[0], Description: stage[1], Status: "waiting", Result: "等待执行",
+		})
+	}
 	return &OrchestrationState{
-		Version: 1,
-		Flow:    OrchestrationFlow{ID: experiment.ID, Title: experiment.Name, Status: experiment.Status, CreatedAt: experiment.CreatedAt, UpdatedAt: experiment.UpdatedAt},
-		Tasks:   []OrchestrationTask{{ID: experiment.ID, Title: experiment.Name, Status: experiment.Status, Input: experiment.Sample, Result: orchestrationResult(experiment)}},
-		Subtasks: []OrchestrationSubtask{
-			{ID: experiment.ID + "-subtask-1", TaskID: experiment.ID, Title: "证据与静态分析", Description: "收集目标文件、字符串、导入和基础分析证据", Status: "waiting", Result: "等待执行"},
-			{ID: experiment.ID + "-subtask-2", TaskID: experiment.ID, Title: "语义与源码重构", Description: "生成语义中间表示和可编辑源码工程", Status: "waiting", Result: "等待前置阶段"},
-			{ID: experiment.ID + "-subtask-3", TaskID: experiment.ID, Title: "构建与行为验证", Description: "验证重构工程的构建和行为等价性", Status: "waiting", Result: "等待前置阶段"},
-		},
-		ToolCalls: []OrchestrationToolCall{}, UpdatedAt: experiment.UpdatedAt,
+		Version:  1,
+		Flow:     OrchestrationFlow{ID: experiment.ID, Title: experiment.Name, Status: experiment.Status, CreatedAt: experiment.CreatedAt, UpdatedAt: experiment.UpdatedAt},
+		Tasks:    []OrchestrationTask{{ID: experiment.ID, Title: experiment.Name, Status: experiment.Status, Input: experiment.Sample, Result: orchestrationResult(experiment)}},
+		Subtasks: subtasks, ToolCalls: []OrchestrationToolCall{}, UpdatedAt: experiment.UpdatedAt,
 	}
 }
 
@@ -2268,25 +2422,43 @@ func applyOrchestrationEvent(state *OrchestrationState, event Event) {
 		state.Subtasks[index].Result = result
 		state.Subtasks[index].UpdatedAt = event.Timestamp
 	}
+	finishBefore := func(index int, result string) {
+		for current := 0; current < index; current++ {
+			if state.Subtasks[current].Status == "waiting" || state.Subtasks[current].Status == "running" {
+				setSubtask(current, "finished", result)
+			}
+		}
+	}
+	containsAny := func(values ...string) bool {
+		for _, value := range values {
+			if strings.Contains(event.Type, value) {
+				return true
+			}
+		}
+		return false
+	}
 	switch {
 	case event.Type == "queued":
 		setSubtask(0, "waiting", "等待执行")
+	case event.Type == "execution_confirmed":
+		setSubtask(0, "running", event.Message)
 	case event.Type == "started" || event.Type == "progress" || event.Type == "provider_broker_started" || event.Type == "provider_fallback":
 		setSubtask(0, "running", event.Message)
 	case event.Type == "result_summary":
 		setSubtask(0, "finished", event.Message)
-		setSubtask(1, "running", "开始生成语义与源码工程")
+		setSubtask(1, "running", state.Subtasks[1].Title+"进行中")
 	case event.Type == "project_readiness" || strings.HasPrefix(event.Type, "model_") || event.Type == "model_reconstruction_recorded":
-		setSubtask(0, "finished", "静态分析证据已记录")
+		finishBefore(1, "前置证据已记录")
 		setSubtask(1, "running", event.Message)
-	case event.Type == "build_started" || strings.HasPrefix(event.Type, "automated_build") || event.Type == "build_repair_recorded":
-		setSubtask(0, "finished", "静态分析证据已记录")
-		setSubtask(1, "finished", "源码工程已生成")
+	case event.Type == "build_started" || strings.HasPrefix(event.Type, "automated_build") || event.Type == "build_repair_recorded" || strings.HasPrefix(event.Type, "patch_") || containsAny("memory_runtime", "injector"):
+		finishBefore(2, "前置阶段已完成")
 		setSubtask(2, "running", event.Message)
 	case event.Type == "build_completed" || strings.HasPrefix(event.Type, "behavior_") || event.Type == "behavior_repair_recorded":
-		setSubtask(0, "finished", "静态分析证据已记录")
-		setSubtask(1, "finished", "源码工程已生成")
+		finishBefore(2, "前置阶段已完成")
 		setSubtask(2, event.Status, event.Message)
+	case event.Status == "completed" && (strings.HasPrefix(event.Type, "patch_") || containsAny("memory_runtime", "injector")):
+		finishBefore(2, "前置阶段已完成")
+		setSubtask(2, "finished", event.Message)
 	case event.Status == "failed" || event.Status == "cancelled":
 		for index := range state.Subtasks {
 			if state.Subtasks[index].Status == "running" {
@@ -2295,7 +2467,7 @@ func applyOrchestrationEvent(state *OrchestrationState, event Event) {
 		}
 	}
 	controlEvent := strings.HasPrefix(event.Type, "tool_call_")
-	if !controlEvent && (strings.Contains(event.Type, "model") || strings.Contains(event.Type, "provider") || strings.Contains(event.Type, "tool")) {
+	if !controlEvent && (strings.Contains(event.Type, "model") || strings.Contains(event.Type, "provider") || strings.Contains(event.Type, "tool") || strings.Contains(event.Type, "memory_runtime") || strings.Contains(event.Type, "injector")) {
 		toolCallID := fmt.Sprintf("%s-tool-%d", state.Flow.ID, event.Sequence)
 		state.ToolCalls = append(state.ToolCalls, OrchestrationToolCall{
 			ID:        toolCallID,
@@ -2496,33 +2668,70 @@ func (s *Server) startConfirmed(id string, r *http.Request) (Experiment, error) 
 	if err != nil {
 		return Experiment{}, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), s.cfg.Timeout)
 	var x Experiment
 	var eventData map[string]any
 	if s.db != nil {
 		tx, txErr := s.db.BeginTx(r.Context(), nil)
 		if txErr != nil {
-			cancel()
 			return x, txErr
 		}
 		defer tx.Rollback()
 		if txErr = s.setAuditTransactionContext(tx, r, who, "experiment.execute"); txErr != nil {
-			cancel()
 			return x, txErr
 		}
 		var payload []byte
 		if txErr = tx.QueryRowContext(r.Context(), `SELECT payload FROM experiments WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, id, s.cfg.Workspace).Scan(&payload); txErr != nil {
-			cancel()
 			return x, txErr
 		}
 		if txErr = json.Unmarshal(payload, &x); txErr != nil {
-			cancel()
 			return x, txErr
 		}
 		if x.Status != "queued" && x.Status != "planned" {
-			cancel()
 			return x, errors.New("only queued or planned jobs can run")
 		}
+		workflow := workflowTypeOf(x)
+		if workflowExecutionBoundary(workflow) == "plan-only" {
+			if x.Metadata == nil {
+				x.Metadata = map[string]any{}
+			}
+			confirmedAt := now()
+			x.Metadata["execution_confirmation"] = map[string]any{"actor": who.Subject, "role": who.Role, "timestamp": confirmedAt, "source": who.Source}
+			x = s.status(x, "planned", "已确认授权渗透计划，等待具备执行器后调度")
+			x.Metadata["execution_boundary"] = workflowExecutionBoundary(workflow)
+			payload, txErr = json.Marshal(x)
+			if txErr != nil {
+				return x, txErr
+			}
+			result, txErr := tx.ExecContext(r.Context(), `UPDATE experiments SET status=$1,updated_at=$2,payload=$3::jsonb WHERE id=$4 AND workspace_id=$5 AND status IN ('queued','planned')`, x.Status, x.UpdatedAt, string(payload), id, s.cfg.Workspace)
+			if txErr != nil {
+				return x, txErr
+			}
+			rows, rowsErr := result.RowsAffected()
+			if rowsErr != nil || rows != 1 {
+				return x, errors.New("job execution was already claimed")
+			}
+			confirmedEvent, txErr := insertEventRecordTx(tx, id, "execution_confirmed", "completed", "人工确认已记录", map[string]any{"subject": who.Subject, "role": who.Role, "confirmed_at": confirmedAt})
+			if txErr != nil {
+				return x, txErr
+			}
+			plannedEvent, txErr := insertEventRecordTx(tx, id, "execution_planned", "planned", "授权渗透计划已确认，等待本地执行器", map[string]any{"workflow_type": workflow, "execution_boundary": workflowExecutionBoundary(workflow)})
+			if txErr != nil {
+				return x, txErr
+			}
+			x = s.ensureOrchestrationState(x, []Event{confirmedEvent, plannedEvent})
+			payload, txErr = json.Marshal(x)
+			if txErr != nil {
+				return x, txErr
+			}
+			if _, txErr = tx.ExecContext(r.Context(), `UPDATE experiments SET updated_at=$1,payload=$2::jsonb WHERE id=$3 AND workspace_id=$4 AND status='planned'`, x.UpdatedAt, string(payload), id, s.cfg.Workspace); txErr != nil {
+				return x, txErr
+			}
+			if txErr = tx.Commit(); txErr != nil {
+				return x, txErr
+			}
+			return x, nil
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), s.cfg.Timeout)
 		x, eventData = s.confirmedRunningExperiment(x, who)
 		payload, txErr = json.Marshal(x)
 		if txErr != nil {
@@ -2593,38 +2802,57 @@ func (s *Server) startConfirmed(id string, r *http.Request) (Experiment, error) 
 			cancel()
 			return x, txErr
 		}
-	} else {
-		s.mu.Lock()
-		if _, exists := s.running[id]; exists {
-			s.mu.Unlock()
-			cancel()
-			return x, errors.New("job execution was already claimed")
-		}
-		err = readFileJSON(s.experimentPath(id), &x)
-		if err != nil {
-			s.mu.Unlock()
-			cancel()
-			return x, err
-		}
-		if x.Status != "queued" && x.Status != "planned" {
-			s.mu.Unlock()
-			cancel()
-			return x, errors.New("only queued or planned jobs can run")
-		}
-		x, eventData = s.confirmedRunningExperiment(x, who)
-		err = writeFileJSON(s.experimentPath(id), x)
-		if err != nil {
-			s.mu.Unlock()
-			cancel()
-			return x, err
-		}
-		s.running[id] = cancel
+		s.workers.Add(1)
+		go func() {
+			defer s.workers.Done()
+			s.run(ctx, x)
+		}()
+		return x, nil
+	}
+
+	s.mu.Lock()
+	if _, exists := s.running[id]; exists {
 		s.mu.Unlock()
+		return x, errors.New("job execution was already claimed")
 	}
-	if s.db == nil {
-		s.appendEvent(id, "execution_confirmed", "completed", "人工确认已记录", eventData)
-		s.appendEvent(id, "started", "running", "任务执行器已启动", nil)
+	err = readFileJSON(s.experimentPath(id), &x)
+	if err != nil {
+		s.mu.Unlock()
+		return x, err
 	}
+	if x.Status != "queued" && x.Status != "planned" {
+		s.mu.Unlock()
+		return x, errors.New("only queued or planned jobs can run")
+	}
+	workflow := workflowTypeOf(x)
+	if workflowExecutionBoundary(workflow) == "plan-only" {
+		if x.Metadata == nil {
+			x.Metadata = map[string]any{}
+		}
+		confirmedAt := now()
+		x.Metadata["execution_confirmation"] = map[string]any{"actor": who.Subject, "role": who.Role, "timestamp": confirmedAt, "source": who.Source}
+		x.Metadata["execution_boundary"] = workflowExecutionBoundary(workflow)
+		x = s.status(x, "planned", "已确认授权渗透计划，等待具备执行器后调度")
+		if err = writeFileJSON(s.experimentPath(id), x); err != nil {
+			s.mu.Unlock()
+			return x, err
+		}
+		s.mu.Unlock()
+		s.appendEvent(id, "execution_confirmed", "completed", "人工确认已记录", map[string]any{"subject": who.Subject, "role": who.Role, "confirmed_at": confirmedAt})
+		s.appendEvent(id, "execution_planned", "planned", "授权渗透计划已确认，等待本地执行器", map[string]any{"workflow_type": workflow, "execution_boundary": workflowExecutionBoundary(workflow)})
+		return x, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), s.cfg.Timeout)
+	x, eventData = s.confirmedRunningExperiment(x, who)
+	if err = writeFileJSON(s.experimentPath(id), x); err != nil {
+		s.mu.Unlock()
+		cancel()
+		return x, err
+	}
+	s.running[id] = cancel
+	s.mu.Unlock()
+	s.appendEvent(id, "execution_confirmed", "completed", "人工确认已记录", eventData)
+	s.appendEvent(id, "started", "running", "任务执行器已启动", nil)
 	s.workers.Add(1)
 	go func() {
 		defer s.workers.Done()
@@ -3667,6 +3895,28 @@ func containsString(values []string, expected string) bool {
 }
 
 func analysisArgs(x Experiment, out string) []string {
+	workflow := workflowTypeOf(x)
+	params, _ := x.Metadata["workflow_params"].(map[string]any)
+	if workflow == "authorized_pentest" {
+		objective := strings.TrimSpace(fmt.Sprint(params["objective"]))
+		if objective == "" || objective == "<nil>" {
+			objective = "authorized assessment"
+		}
+		args := []string{"-m", "reverse_analyzer", "skills", "route", objective, "--limit", "3"}
+		if sample := strings.TrimSpace(x.Sample); sample != "" {
+			args = append(args, "--target", sample)
+		}
+		if endpoint := strings.TrimSpace(fmt.Sprint(params["endpoint"])); endpoint != "" && endpoint != "<nil>" {
+			args = append(args, "--endpoint", endpoint)
+		}
+		return args
+	}
+	if workflow == "memory_patch" {
+		return []string{"-m", "reverse_analyzer", "capability", "run", "--capability", "memory_runtime", "--action", "write", "--pid", fmt.Sprint(params["pid"]), "--out", out, "--param", "address=" + fmt.Sprint(params["address"]), "--param", "data_hex=" + fmt.Sprint(params["data_hex"]), "--param", "expected_hex=" + fmt.Sprint(params["expected_hex"]), "--rollback"}
+	}
+	if workflow == "process_injection" {
+		return []string{"-m", "reverse_analyzer", "capability", "run", "--capability", "injector", "--action", "inject", "--pid", fmt.Sprint(params["pid"]), "--out", out, "--param", "dll_path=" + fmt.Sprint(params["dll_path"]), "--param", "declared_dll_path=" + fmt.Sprint(params["declared_dll_path"]), "--param", "method=" + fmt.Sprint(params["method"]), "--rollback"}
+	}
 	reconstruct, _ := x.Options["reconstruct"].(bool)
 	if reconstruct && strings.EqualFold(filepath.Ext(x.Sample), ".zip") {
 		return []string{"-m", "reverse_analyzer.archive_reconstruct", x.Sample, "--out", out}
@@ -4476,14 +4726,25 @@ func (s *Server) pythonJSON(timeout time.Duration, args ...string) (map[string]a
 }
 
 func (s *Server) static(w http.ResponseWriter, r *http.Request) {
-	p := filepath.Join(s.cfg.Frontend, filepath.Clean("/"+r.URL.Path))
+	cleanPath := filepath.Clean("/" + r.URL.Path)
+	p := filepath.Join(s.cfg.Frontend, cleanPath)
 	if st, err := os.Stat(p); err == nil && !st.IsDir() {
 		if t := mime.TypeByExtension(filepath.Ext(p)); t != "" {
 			w.Header().Set("Content-Type", t)
 		}
+		if strings.HasPrefix(r.URL.Path, "/assets/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "no-store")
+		}
 		http.ServeFile(w, r, p)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/assets/") || filepath.Ext(r.URL.Path) != "" {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
 	http.ServeFile(w, r, filepath.Join(s.cfg.Frontend, "index.html"))
 }
 func (s *Server) safePath(raw string) (string, error) {
@@ -4575,7 +4836,9 @@ func (s *Server) listExperiments() ([]Experiment, error) {
 			if err = json.Unmarshal(payload, &x); err != nil {
 				return nil, err
 			}
-			x.Name = filepath.Base(x.Sample)
+			if strings.TrimSpace(x.Name) == "" {
+				x.Name = filepath.Base(x.Sample)
+			}
 			items = append(items, x)
 		}
 		return items, rows.Err()
@@ -4585,7 +4848,9 @@ func (s *Server) listExperiments() ([]Experiment, error) {
 	for _, p := range paths {
 		var x Experiment
 		if readFileJSON(p, &x) == nil {
-			x.Name = filepath.Base(x.Sample)
+			if strings.TrimSpace(x.Name) == "" {
+				x.Name = filepath.Base(x.Sample)
+			}
 			items = append(items, x)
 		}
 	}

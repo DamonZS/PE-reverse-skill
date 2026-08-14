@@ -46,6 +46,12 @@ type View =
   | "environment"
   | "knowledge"
   | "access";
+type WorkflowType =
+  | "reverse_analysis"
+  | "authorized_pentest"
+  | "binary_patch"
+  | "memory_patch"
+  | "process_injection";
 type ReconstructionState = {
   stage: string;
   analysis_complete: boolean;
@@ -173,6 +179,61 @@ const EMPTY: Workspace = {
   knowledge: [],
 };
 const CONFIRMATION = "EXECUTE_LOCAL_ANALYSIS";
+const WORKFLOW_DEFS: Array<{
+  id: WorkflowType;
+  title: string;
+  summary: string;
+  detail: string;
+  icon: typeof FileSearch;
+  tone: "cyan" | "amber" | "green" | "violet";
+  mode: string;
+}> = [
+  {
+    id: "reverse_analysis",
+    title: "逆向分析",
+    summary: "静态证据、源码重构、构建与行为验证",
+    detail: "面向本地样本的完整分析主链路。",
+    icon: FileSearch,
+    tone: "cyan",
+    mode: "pe-reconstruction",
+  },
+  {
+    id: "authorized_pentest",
+    title: "授权渗透计划",
+    summary: "只生成目标、范围与技能路由计划",
+    detail: "当前版本不会发起网络探测，只保留可审计计划。",
+    icon: ShieldCheck,
+    tone: "amber",
+    mode: "evidence-first",
+  },
+  {
+    id: "binary_patch",
+    title: "二进制补丁",
+    summary: "离线字节计划、验证与回滚副本",
+    detail: "创建后进入补丁工作区执行 inspect/plan/apply/verify/rollback。",
+    icon: Wrench,
+    tone: "green",
+    mode: "pe-reconstruction",
+  },
+  {
+    id: "memory_patch",
+    title: "动态内存补丁",
+    summary: "基于 PID、地址与预期字节的受控写入",
+    detail: "通过 memory_runtime 执行带回滚的进程内修改。",
+    icon: Zap,
+    tone: "violet",
+    mode: "evidence-first",
+  },
+  {
+    id: "process_injection",
+    title: "进程内注入",
+    summary: "DLL 身份校验、注入计划、结果与清理证据",
+    detail: "通过 injector 执行 load_library 或 manual_map。",
+    icon: Terminal,
+    tone: "amber",
+    mode: "evidence-first",
+  },
+];
 const NAV = [
   {
     id: "overview" as View,
@@ -225,13 +286,16 @@ function headers(extra: Record<string, string> = {}) {
 function initialAccessToken() {
   return localStorage.getItem("reverseAnalyzerWebToken") || "";
 }
+function workflowDef(raw: unknown) {
+  return WORKFLOW_DEFS.find((item) => item.id === raw) || null;
+}
 
 export default function App() {
   const [view, setView] = useState<View>("overview");
   const [data, setData] = useState<Workspace>(EMPTY);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [drawer, setDrawer] = useState<Experiment | null>(null);
+  const [selectedExperiment, setSelectedExperiment] = useState<Experiment | null>(null);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [token, setToken] = useState(initialAccessToken);
@@ -240,6 +304,7 @@ export default function App() {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [catalogAsset, setCatalogAsset] = useState<CatalogItem | null>(null);
+  const [createWorkflow, setCreateWorkflow] = useState<WorkflowType | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [providersLoading, setProvidersLoading] = useState(false);
   const refresh = async () => {
@@ -314,16 +379,16 @@ export default function App() {
       void refreshProviders();
   }, [view, identity?.role]);
   useEffect(() => {
-    if (!drawer) return;
+    if (!selectedExperiment) return;
     const controller = new AbortController();
-    const id = drawer.id;
+    const id = selectedExperiment.id;
     const syncExperiment = async () => {
       const r = await fetch(`/api/experiments/${id}`, {
         headers: headers(),
         cache: "no-store",
         signal: controller.signal,
       });
-      if (r.ok) setDrawer(await r.json());
+      if (r.ok) setSelectedExperiment(await r.json());
     };
     const stream = async () => {
       setEvents([]);
@@ -375,7 +440,7 @@ export default function App() {
         setError(e instanceof Error ? e.message : String(e));
     });
     return () => controller.abort();
-  }, [drawer?.id]);
+  }, [selectedExperiment?.id]);
   const filtered = useMemo(
     () =>
       data.experiments.filter((x) =>
@@ -458,7 +523,10 @@ export default function App() {
             </button>
             <button
               className="primaryBtn"
-              onClick={() => setCreateOpen(true)}
+              onClick={() => {
+                setCreateWorkflow(null);
+                setCreateOpen(true);
+              }}
               disabled={!connected || identity?.role === "viewer"}
             >
               <HardDriveUpload size={16} />
@@ -474,11 +542,16 @@ export default function App() {
               items={filtered}
               query={query}
               setQuery={setQuery}
-              onSelect={setDrawer}
-              onCreate={() => {
+              selected={selectedExperiment}
+              onSelect={setSelectedExperiment}
+              onCreate={(workflow) => {
                 setCatalogAsset(null);
+                setCreateWorkflow(workflow || null);
                 setCreateOpen(true);
               }}
+              events={events}
+              identity={identity}
+              onChanged={refresh}
             />
           )}{" "}
           {view === "catalog" && (
@@ -487,6 +560,7 @@ export default function App() {
               loading={catalogLoading}
               onUse={(item) => {
                 setCatalogAsset(item);
+                setCreateWorkflow(null);
                 setCreateOpen(true);
               }}
             />
@@ -512,26 +586,19 @@ export default function App() {
       {createOpen && identity?.role !== "viewer" && (
         <CreateDialog
           asset={catalogAsset}
+          initialWorkflow={createWorkflow}
           onClose={() => {
             setCreateOpen(false);
             setCatalogAsset(null);
+            setCreateWorkflow(null);
           }}
           onCreated={async (x) => {
             setCreateOpen(false);
             setCatalogAsset(null);
             await refresh();
             setView("experiments");
-            setDrawer(x);
+            setSelectedExperiment(x);
           }}
-        />
-      )}
-      {drawer && (
-        <FlowDrawer
-          experiment={drawer}
-          events={events}
-          identity={identity}
-          onClose={() => setDrawer(null)}
-          onChanged={refresh}
         />
       )}
     </div>
@@ -592,39 +659,108 @@ function Experiments({
   items,
   query,
   setQuery,
+  selected,
   onSelect,
   onCreate,
+  events,
+  identity,
+  onChanged,
 }: {
   items: Experiment[];
   query: string;
   setQuery: (s: string) => void;
+  selected: Experiment | null;
   onSelect: (x: Experiment) => void;
-  onCreate: () => void;
+  onCreate: (workflow?: WorkflowType) => void;
+  events: EventRecord[];
+  identity: Identity;
+  onChanged: () => Promise<void>;
 }) {
+  const selectedWorkflow = selected ? workflowDef(selected.metadata?.workflow_type) : null;
   return (
-    <Panel title="流程工作台" wide>
-      <Toolbar query={query} setQuery={setQuery}>
-        <button className="primaryBtn" onClick={onCreate}>
-          <HardDriveUpload size={16} />
-          上传或选择样本
-        </button>
-      </Toolbar>
-      <ExperimentTable items={items} onSelect={onSelect} />
-    </Panel>
+    <section className="workbenchShell">
+      <div className="workbenchSidebar">
+        <Panel title="五类作业入口">
+          <div className="workflowCardList">
+            {WORKFLOW_DEFS.map((workflow) => {
+              const Icon = workflow.icon;
+              return (
+                <button
+                  className={`workflowCard ${workflow.tone}`}
+                  key={workflow.id}
+                  onClick={() => onCreate(workflow.id)}
+                  type="button"
+                >
+                  <div className="workflowCardHead">
+                    <Icon size={17} />
+                    <span>{workflow.title}</span>
+                  </div>
+                  <b>{workflow.summary}</b>
+                  <small>{workflow.detail}</small>
+                </button>
+              );
+            })}
+          </div>
+        </Panel>
+        <Panel title="流程列表" wide>
+          <Toolbar query={query} setQuery={setQuery}>
+            <button className="primaryBtn" onClick={() => onCreate()}>
+              <HardDriveUpload size={16} />
+              新建作业
+            </button>
+          </Toolbar>
+          <ExperimentTable items={items} onSelect={onSelect} selectedId={selected?.id} />
+        </Panel>
+      </div>
+      <div className="workbenchMain">
+        {selected ? (
+          <>
+            <div className="workbenchHeader">
+              <div>
+                <p>{selectedWorkflow?.title || "流程详情"}</p>
+                <h2>{selected.name || selected.id}</h2>
+              </div>
+              <div className="workbenchHeaderMeta">
+                <span className={`pill ${tone(selected.status)}`}>{status(selected.status)}</span>
+                <code>{selected.id}</code>
+              </div>
+            </div>
+            <FlowDrawer
+              embedded
+              experiment={selected}
+              events={events}
+              identity={identity}
+              onClose={() => undefined}
+              onChanged={onChanged}
+            />
+          </>
+        ) : (
+          <Panel title="流程工作区" wide>
+            <div className="workbenchEmpty">
+              <FileSearch size={20} />
+              <b>选择一个作业进入工作区</b>
+              <span>左侧保留任务列表，右侧固定显示编排、日志、终端、文件和补丁入口。</span>
+            </div>
+          </Panel>
+        )}
+      </div>
+    </section>
   );
 }
 function ExperimentTable({
   items,
   onSelect,
+  selectedId,
 }: {
   items: Experiment[];
   onSelect?: (x: Experiment) => void;
+  selectedId?: string;
 }) {
   if (!items.length) return <Empty text="当前没有任务记录" />;
   return (
     <div className="table">
       {items.map((x) => (
-        <button className="tableRow" key={x.id} onClick={() => onSelect?.(x)}>
+        <button className={`tableRow ${selectedId === x.id ? "active" : ""}`} key={x.id} onClick={() => onSelect?.(x)}>
           <span>
             <FileSearch size={17} />
             <b>{x.name || "未命名任务"}</b>
@@ -1406,23 +1542,35 @@ function AccessControl({ workspace }: { workspace: string }) {
 
 function CreateDialog({
   asset,
+  initialWorkflow,
   onClose,
   onCreated,
 }: {
   asset?: CatalogItem | null;
+  initialWorkflow?: WorkflowType | null;
   onClose: () => void;
   onCreated: (x: Experiment) => Promise<void>;
 }) {
+  const defaultWorkflow: WorkflowType = initialWorkflow || (asset?.routes.includes("gui")
+    ? "reverse_analysis"
+    : asset?.name.toLowerCase().includes("inject")
+      ? "process_injection"
+      : asset?.name.toLowerCase().includes("patch")
+        ? "binary_patch"
+        : "reverse_analysis");
+  const [workflowType, setWorkflowType] = useState<WorkflowType>(defaultWorkflow);
   const [target, setTarget] = useState("");
-  const [mode, setMode] = useState(
-    asset?.routes.includes("gui")
-      ? "gui-evidence"
-      : asset?.name.toLowerCase().includes("ghidra")
-        ? "pe-reconstruction"
-        : "evidence-first",
-  );
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [objective, setObjective] = useState("");
+  const [endpoint, setEndpoint] = useState("");
+  const [address, setAddress] = useState("");
+  const [replacement, setReplacement] = useState("");
+  const [expected, setExpected] = useState("");
+  const [pid, setPid] = useState("");
+  const [dll, setDll] = useState("");
+  const [injectionMethod, setInjectionMethod] = useState("load_library");
+  const workflow = WORKFLOW_DEFS.find((item) => item.id === workflowType) || WORKFLOW_DEFS[0];
   const upload = async (file: File) => {
     setBusy(true);
     setMessage(`正在上传 ${file.name}`);
@@ -1437,8 +1585,8 @@ function CreateDialog({
       const p = await r.json();
       if (r.ok) {
         setTarget(p.path);
-        if (/\.(zip|exe|dll|apk|ipa)$/i.test(file.name)) {
-          setMode("pe-reconstruction");
+        if (workflowType === "process_injection" && /\.dll$/i.test(file.name)) {
+          setDll(p.path);
         }
         setMessage(
           `上传完成：${file.name}（${Math.ceil(Number(p.size || file.size) / 1024 / 1024)} 兆字节）`,
@@ -1450,18 +1598,47 @@ function CreateDialog({
       setBusy(false);
     }
   };
+  const createPayload = () => {
+    const payload: Record<string, unknown> = {
+      target,
+      mode: workflow.mode,
+      workflow_type: workflowType,
+      requested_asset: asset?.id || "",
+    };
+    if (workflowType === "authorized_pentest") {
+      payload.objective = objective;
+      payload.endpoint = endpoint;
+    }
+    if (workflowType === "memory_patch") {
+      payload.pid = pid;
+      payload.address = address;
+      payload.data = replacement;
+      payload.expected = expected;
+    }
+    if (workflowType === "process_injection") {
+      payload.pid = pid;
+      payload.dll = dll;
+      payload.injection_method = injectionMethod;
+    }
+    return payload;
+  };
+  const canCreate = () => {
+    if (!target) return false;
+    if (workflowType === "authorized_pentest") return !!objective.trim();
+    if (workflowType === "memory_patch") return !!pid.trim() && !!address.trim() && !!replacement.trim() && !!expected.trim();
+    if (workflowType === "process_injection") return !!pid.trim() && !!dll.trim();
+    return true;
+  };
   const create = async () => {
     if (/^[A-Za-z]:[\\/]/.test(target)) {
-      setMessage(
-        "容器无法读取宿主机盘符路径，请点击上方“选择本地样本”完成上传",
-      );
+      setMessage("容器无法读取宿主机盘符路径，请先上传到工作区。 ");
       return;
     }
     setBusy(true);
     const r = await fetch("/api/experiments", {
       method: "POST",
       headers: headers({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ target, mode, requested_asset: asset?.id || "" }),
+      body: JSON.stringify(createPayload()),
     });
     const p = await r.json();
     setBusy(false);
@@ -1471,11 +1648,11 @@ function CreateDialog({
   return (
     <div className="modalLayer">
       <button className="scrim" onClick={onClose} />
-      <section className="modal">
+      <section className="modal wideModal">
         <header>
           <div>
-            <p>新建流程</p>
-            <h2>上传样本或选择工作区文件</h2>
+            <p>新建作业</p>
+            <h2>{workflow.title}</h2>
           </div>
           <button className="iconBtn" onClick={onClose}>
             <X size={17} />
@@ -1491,45 +1668,103 @@ function CreateDialog({
             </div>
           </div>
         )}
+        <div className="workflowPicker">
+          {WORKFLOW_DEFS.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                className={`workflowChip ${workflowType === item.id ? "active" : ""}`}
+                key={item.id}
+                onClick={() => setWorkflowType(item.id)}
+                type="button"
+              >
+                <Icon size={15} />
+                <span>{item.title}</span>
+              </button>
+            );
+          })}
+        </div>
         <label className="dropZone">
           <HardDriveUpload size={24} />
-          <b>{busy ? "正在上传，请稍候" : "选择本地样本"}</b>
-          <span>支持最大 512 兆字节；文件写入上传目录，不会自动执行</span>
+          <b>{busy ? "正在上传，请稍候" : workflowType === "process_injection" ? "上传样本或 DLL" : "选择本地样本"}</b>
+          <span>文件写入工作区，不会自动执行。</span>
           <input
             type="file"
             disabled={busy}
-            onChange={(e) =>
-              e.target.files?.[0] && void upload(e.target.files[0])
-            }
+            onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])}
           />
         </label>
-        <label>
-          目标路径
-          <input
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-            placeholder="上传后自动生成，无需填写宿主机盘符路径"
-          />
-        </label>
-        <label>
-          分析模式
-          <select value={mode} onChange={(e) => setMode(e.target.value)}>
-            <option value="evidence-first">证据优先</option>
-            <option value="pe-reconstruction">可执行文件深度分析与源码还原</option>
-            <option value="protocol-review">协议捕获审查</option>
-            <option value="gui-evidence">图形界面证据流水线</option>
-          </select>
-        </label>
+        <div className="workflowFormGrid">
+          <label>
+            目标路径
+            <input
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              placeholder="上传后自动生成，或填写工作区内文件路径"
+            />
+          </label>
+          <label>
+            作业模式
+            <input value={workflow.summary} readOnly />
+          </label>
+          {workflowType === "authorized_pentest" && (
+            <>
+              <label>
+                目标说明
+                <input value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="例如：审查登录接口暴露面" />
+              </label>
+              <label>
+                目标端点
+                <input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} placeholder="可选，仅用于路由计划" />
+              </label>
+            </>
+          )}
+          {workflowType === "memory_patch" && (
+            <>
+              <label>
+                PID
+                <input value={pid} onChange={(e) => setPid(e.target.value)} placeholder="目标进程 PID" />
+              </label>
+              <label>
+                地址
+                <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="例如 0x401000" />
+              </label>
+              <label>
+                新字节
+                <input value={replacement} onChange={(e) => setReplacement(e.target.value)} placeholder="十六进制，例如 90cc" />
+              </label>
+              <label>
+                预期原字节
+                <input value={expected} onChange={(e) => setExpected(e.target.value)} placeholder="十六进制，例如 558b" />
+              </label>
+            </>
+          )}
+          {workflowType === "process_injection" && (
+            <>
+              <label>
+                PID
+                <input value={pid} onChange={(e) => setPid(e.target.value)} placeholder="目标进程 PID" />
+              </label>
+              <label>
+                DLL 路径
+                <input value={dll} onChange={(e) => setDll(e.target.value)} placeholder="工作区内 DLL 路径" />
+              </label>
+              <label>
+                注入方式
+                <select value={injectionMethod} onChange={(e) => setInjectionMethod(e.target.value)}>
+                  <option value="load_library">load_library</option>
+                  <option value="manual_map">manual_map</option>
+                </select>
+              </label>
+            </>
+          )}
+        </div>
         {message && <div className="inlineMsg">{message}</div>}
         <footer>
           <button className="ghostBtn" onClick={onClose}>
             取消
           </button>
-          <button
-            className="primaryBtn"
-            disabled={busy || !target}
-            onClick={() => void create()}
-          >
+          <button className="primaryBtn" disabled={busy || !canCreate()} onClick={() => void create()}>
             {busy ? <Loader2 className="spin" /> : <Play size={16} />}创建计划
           </button>
         </footer>
@@ -1544,12 +1779,14 @@ function FlowDrawer({
   identity,
   onClose,
   onChanged,
+  embedded = false,
 }: {
   experiment: Experiment;
   events: EventRecord[];
   identity: Identity;
   onClose: () => void;
   onChanged: () => Promise<void>;
+  embedded?: boolean;
 }) {
   const canWrite = ["admin", "analyst"].includes(identity?.role || "");
   const [busy, setBusy] = useState("");
@@ -1728,15 +1965,17 @@ function FlowDrawer({
   );
   return (
     <>
-      <aside className={`drawer ${drawerTab === "orchestration" ? "orchestrationMode" : ""}`}>
+      <aside className={`${embedded ? "flowWorkspace" : "drawer"} ${drawerTab === "orchestration" ? "orchestrationMode" : ""}`}>
         <header>
           <div>
             <p>流程详情</p>
             <h2>{experiment.name || experiment.id}</h2>
           </div>
-          <button className="iconBtn" onClick={onClose} title="关闭">
-            <X size={17} />
-          </button>
+          {!embedded && (
+            <button className="iconBtn" onClick={onClose} title="关闭">
+              <X size={17} />
+            </button>
+          )}
         </header>
         <div className="drawerMeta">
           <span className={`pill ${tone(experiment.status)}`}>
