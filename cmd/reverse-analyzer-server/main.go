@@ -3205,8 +3205,22 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 	}
 	selected, fallback := s.selectProvider(requested)
 	runtimeProvider := selected.Name
-	processEnv := []string{"REVERSE_ANALYZER_PROVIDER=" + runtimeProvider, "REVERSE_ANALYZER_WORKER_NETWORK=none"}
-	envNames := []string{"REVERSE_ANALYZER_PROVIDER", "REVERSE_ANALYZER_WORKER_NETWORK"}
+	isolatedWorker := s.cfg.RunnerURL != "" || s.cfg.SandboxRuntime == "docker" || s.cfg.SandboxRuntime == "podman"
+	_, workerKnowledgeDir, workerSessionsDir, workerReportsDir := workerRuntimePaths(s.cfg.Workspace, out, isolatedWorker)
+	processEnv := []string{
+		"REVERSE_ANALYZER_PROVIDER=" + runtimeProvider,
+		"REVERSE_ANALYZER_WORKER_NETWORK=none",
+		"REVERSE_ANALYZER_KNOWLEDGE_DIR=" + workerKnowledgeDir,
+		"REVERSE_ANALYZER_SESSIONS_DIR=" + workerSessionsDir,
+		"REVERSE_ANALYZER_REPORTS_DIR=" + workerReportsDir,
+	}
+	envNames := []string{
+		"REVERSE_ANALYZER_PROVIDER",
+		"REVERSE_ANALYZER_WORKER_NETWORK",
+		"REVERSE_ANALYZER_KNOWLEDGE_DIR",
+		"REVERSE_ANALYZER_SESSIONS_DIR",
+		"REVERSE_ANALYZER_REPORTS_DIR",
+	}
 	workerNetwork := "none"
 	var brokerCancel context.CancelFunc
 	if selected.Kind == "openai-compatible" {
@@ -3249,16 +3263,14 @@ func (s *Server) run(ctx context.Context, x Experiment) {
 			}
 			workerBrokerRoot = filepath.ToSlash(filepath.Join("/workspace", relativeBroker))
 		}
-		processEnv = []string{
-			"REVERSE_ANALYZER_PROVIDER=" + runtimeProvider,
-			"REVERSE_ANALYZER_WORKER_NETWORK=none",
+		processEnv = append(processEnv,
 			"REVERSE_ANALYZER_OPENAI_ENABLED=1",
-			"OPENAI_MODEL=" + selected.Model,
-			"REVERSE_ANALYZER_PROVIDER_BROKER_DIR=" + workerBrokerRoot,
-			"REVERSE_ANALYZER_PROVIDER_TIMEOUT=" + env("REVERSE_ANALYZER_PROVIDER_TIMEOUT", "60"),
-			"REVERSE_ANALYZER_PROVIDER_MAX_OUTPUT_TOKENS=" + env("REVERSE_ANALYZER_PROVIDER_MAX_OUTPUT_TOKENS", "4096"),
-		}
-		envNames = []string{"REVERSE_ANALYZER_PROVIDER", "REVERSE_ANALYZER_WORKER_NETWORK", "REVERSE_ANALYZER_OPENAI_ENABLED", "OPENAI_MODEL", "REVERSE_ANALYZER_PROVIDER_BROKER_DIR", "REVERSE_ANALYZER_PROVIDER_TIMEOUT", "REVERSE_ANALYZER_PROVIDER_MAX_OUTPUT_TOKENS"}
+			"OPENAI_MODEL="+selected.Model,
+			"REVERSE_ANALYZER_PROVIDER_BROKER_DIR="+workerBrokerRoot,
+			"REVERSE_ANALYZER_PROVIDER_TIMEOUT="+env("REVERSE_ANALYZER_PROVIDER_TIMEOUT", "60"),
+			"REVERSE_ANALYZER_PROVIDER_MAX_OUTPUT_TOKENS="+env("REVERSE_ANALYZER_PROVIDER_MAX_OUTPUT_TOKENS", "4096"),
+		)
+		envNames = append(envNames, "REVERSE_ANALYZER_OPENAI_ENABLED", "OPENAI_MODEL", "REVERSE_ANALYZER_PROVIDER_BROKER_DIR", "REVERSE_ANALYZER_PROVIDER_TIMEOUT", "REVERSE_ANALYZER_PROVIDER_MAX_OUTPUT_TOKENS")
 		if !workerEvent("provider_broker_started", "running", "模型请求代理已启动，分析 worker 保持无网络", map[string]any{"provider": selected.Name, "model": selected.Model, "worker_network": "none", "broker": true}) {
 			cancel()
 			return
@@ -4145,6 +4157,21 @@ func byteSize(size int64) string {
 		return fmt.Sprintf("%.1f KB", float64(size)/1024)
 	}
 	return fmt.Sprintf("%.1f MB", float64(size)/(1024*1024))
+}
+
+func workerRuntimePaths(workspace, out string, isolated bool) (string, string, string, string) {
+	runtimeRoot := filepath.Join(out, ".runtime")
+	workerRuntimeRoot := runtimeRoot
+	if isolated {
+		relativeRuntime, relativeErr := filepath.Rel(workspace, runtimeRoot)
+		if relativeErr == nil && relativeRuntime != ".." && !strings.HasPrefix(relativeRuntime, ".."+string(filepath.Separator)) {
+			workerRuntimeRoot = filepath.ToSlash(filepath.Join("/workspace", relativeRuntime))
+		}
+	}
+	return runtimeRoot,
+		filepath.ToSlash(filepath.Join(workerRuntimeRoot, "knowledge")),
+		filepath.ToSlash(filepath.Join(workerRuntimeRoot, "sessions")),
+		filepath.ToSlash(filepath.Join(workerRuntimeRoot, "reports"))
 }
 
 func (s *Server) startWorkerExecution(ctx context.Context, pythonArgs, processEnv, envNames []string, network string) (workerExecution, error) {

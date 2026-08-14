@@ -2177,6 +2177,25 @@ func TestSandboxWorkerReceivesProviderEnvironment(t *testing.T) {
 	}
 }
 
+func TestAnalysisWorkerUsesExperimentScopedRuntimeDirectories(t *testing.T) {
+	s, root := testServer(t, "")
+	out := filepath.Join(root, "experiments", "job-1", "analysis")
+	runtimeRoot, knowledgeDir, sessionsDir, reportsDir := workerRuntimePaths(s.cfg.Workspace, out, true)
+	if runtimeRoot != filepath.Join(out, ".runtime") {
+		t.Fatalf("runtime root mismatch: %s", runtimeRoot)
+	}
+	wantRoot := filepath.ToSlash(filepath.Join("/workspace", "experiments", "job-1", "analysis", ".runtime"))
+	if knowledgeDir != filepath.ToSlash(filepath.Join(wantRoot, "knowledge")) {
+		t.Fatalf("knowledge dir mismatch: %s", knowledgeDir)
+	}
+	if sessionsDir != filepath.ToSlash(filepath.Join(wantRoot, "sessions")) {
+		t.Fatalf("sessions dir mismatch: %s", sessionsDir)
+	}
+	if reportsDir != filepath.ToSlash(filepath.Join(wantRoot, "reports")) {
+		t.Fatalf("reports dir mismatch: %s", reportsDir)
+	}
+}
+
 func TestSandboxWorkerCanShareDaemonVisibleNamedWorkspaceVolume(t *testing.T) {
 	s, _ := testServer(t, "")
 	s.cfg.SandboxRuntime = "docker"

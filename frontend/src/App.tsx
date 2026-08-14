@@ -2795,10 +2795,6 @@ function OrchestrationView({
     setExpanded(initial);
   }, [data?.flow.id, fileTree]);
 
-  useEffect(() => {
-    void loadTerminalSessions();
-  }, [data?.flow.id]);
-
   if (loading) return <div className="orchestrationState"><Loader2 className="spin" />正在读取编排数据</div>;
   if (!data) return <Empty text="暂无编排数据" />;
   const task = data.tasks[0];
@@ -2836,6 +2832,9 @@ function OrchestrationView({
       setTerminalSessions([]);
     }
   };
+  useEffect(() => {
+    void loadTerminalSessions();
+  }, [data?.flow.id]);
   const loadTerminalOutput = async (sessionId: string, incremental = false) => {
     setTerminalBusy(`terminal:${sessionId}`);
     try {
