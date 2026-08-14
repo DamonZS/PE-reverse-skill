@@ -82,6 +82,30 @@ jobs:
           name: reverse-analyzer-${{ github.sha }}
           path: reverse-analyzer-image.tar.gz
           retention-days: 7
+      - name: 清理远端发布空间
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.ALIYUN_HOST }}
+          username: ${{ secrets.ALIYUN_USER }}
+          key: ${{ secrets.ALIYUN_SSH_KEY }}
+          port: ${{ secrets.ALIYUN_PORT }}
+          command_timeout: 10m
+          script: |
+            set -eu
+            ROOT=/opt/pe-reverse-analyzer
+            mkdir -p "$ROOT/releases"
+            echo "上传前清理历史发布与无引用 Docker 数据"
+            find "$ROOT/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
+              | sort -nr \
+              | awk 'NR > 1 {sub(/^[^ ]+ /, ""); print}' \
+              | while IFS= read -r stale_release; do
+                  test -n "$stale_release" && rm -rf -- "$stale_release"
+                done
+            docker container prune -f
+            docker builder prune -af
+            docker image prune -af
+            df -h "$ROOT" /var/lib/docker 2>/dev/null || df -h "$ROOT"
+            docker system df || true
       - name: 上传发布文件
         uses: appleboy/scp-action@v1
         with:
@@ -109,8 +133,36 @@ jobs:
             set -eu
             ROOT=/opt/pe-reverse-analyzer
             RELEASE="$ROOT/releases/${{ github.sha }}"
-            test -s "$RELEASE/reverse-analyzer-image.tar.gz"
-            gzip -dc "$RELEASE/reverse-analyzer-image.tar.gz" | docker load
+            ARCHIVE="$RELEASE/reverse-analyzer-image.tar.gz"
+            test -s "$ARCHIVE"
+
+            echo "部署前磁盘与 Docker 占用"
+            df -h "$ROOT" /var/lib/docker 2>/dev/null || df -h "$ROOT"
+            docker system df || true
+
+            # 保留当前发布和最近一个旧发布，清理更早的完整镜像归档。
+            find "$ROOT/releases" -mindepth 1 -maxdepth 1 -type d ! -path "$RELEASE" -printf '%T@ %p\n' \
+              | sort -nr \
+              | awk 'NR > 1 {sub(/^[^ ]+ /, ""); print}' \
+              | while IFS= read -r stale_release; do
+                  test -n "$stale_release" && rm -rf -- "$stale_release"
+                done
+
+            # prune -a 只删除无容器引用的镜像，不影响当前运行服务及持久卷。
+            docker container prune -f
+            docker builder prune -af
+            docker image prune -af
+
+            docker_root=$(docker info --format '{{.DockerRootDir}}')
+            archive_bytes=$(stat -c %s "$ARCHIVE")
+            available_kb=$(df -Pk "$docker_root" | awk 'NR == 2 {print $4}')
+            required_kb=$((archive_bytes / 1024 * 4 + 1048576))
+            if [ "$available_kb" -lt "$required_kb" ]; then
+              echo "Docker 数据盘空间不足：可用 ${available_kb} KiB，至少需要 ${required_kb} KiB" >&2
+              exit 1
+            fi
+
+            gzip -dc "$ARCHIVE" | docker load
             cp "$RELEASE/deploy/compose.aliyun.yml" "$ROOT/compose.yml"
             cp "$RELEASE/deploy/nginx.aliyun.conf" "$ROOT/nginx.conf"
             sh "$RELEASE/deploy/install-codegraph.sh" "$RELEASE"
@@ -125,7 +177,8 @@ jobs:
             export REVERSE_ANALYZER_IMAGE="reverse-analyzer:${{ github.sha }}"
             export REVERSE_ANALYZER_RUNNER_IMAGE="reverse-analyzer-runner:${{ github.sha }}"
             docker compose --project-name pe-reverse-analyzer --env-file "$ROOT/deploy.env" -f "$ROOT/compose.yml" up -d --remove-orphans
-            docker image prune -f --filter "until=168h"
+            docker image prune -af
+            docker builder prune -af
             for i in $(seq 1 60); do
               curl -fsS http://127.0.0.1:8090/readyz >/dev/null && break
               test "$i" -lt 60

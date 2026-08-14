@@ -99,6 +99,13 @@ func TestAliyunWorkflowPackagesAndDeploysRunnerImage(t *testing.T) {
 		"openssl rand -hex 32 > \"$ROOT/secrets/runner_token\"",
 		"chown root:10001 \"$ROOT/secrets/postgres_password\" \"$ROOT/secrets/web_token\" \"$ROOT/secrets/runner_token\"",
 		"chmod 0640 \"$ROOT/secrets/postgres_password\" \"$ROOT/secrets/web_token\" \"$ROOT/secrets/runner_token\"",
+		"name: 清理远端发布空间",
+		"find \"$ROOT/releases\" -mindepth 1 -maxdepth 1 -type d ! -path \"$RELEASE\"",
+		"docker container prune -f",
+		"docker builder prune -af",
+		"docker image prune -af",
+		"docker_root=$(docker info --format '{{.DockerRootDir}}')",
+		"Docker 数据盘空间不足",
 	} {
 		if !strings.Contains(text, required) {
 			t.Fatalf("Aliyun deployment workflow missing runner image or secret contract %q", required)
