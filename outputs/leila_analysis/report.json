@@ -1,0 +1,6331 @@
+{
+  "sample": {
+    "session_id": "55500ecbf43b43d0a00fae2e25117646",
+    "target": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+    "status": "running",
+    "created_at": "2026-08-22T04:51:50.340118+00:00",
+    "updated_at": "2026-08-22T04:51:53.324534+00:00"
+  },
+  "evidence_integrity": {
+    "status": "ok",
+    "manifest_path": "evidence-manifest.json",
+    "manifest_id": "sha256:9fb768069804a2342f0980e3fe3af367146076d9edb4dd86de6ebe79cd57aee5",
+    "hash_algorithm": "sha256",
+    "covered_file_count": 20,
+    "unavailable_stage_count": 3,
+    "verification_command": "python -m reverse_analyzer evidence verify --manifest evidence-manifest.json"
+  },
+  "capability_audit": {},
+  "tool_trace": [
+    {
+      "tool_name": "file_info",
+      "tool_args": {
+        "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe"
+      },
+      "result": {
+        "tool": "file_info",
+        "status": "ok",
+        "data": {
+          "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+          "name": "reverse-analyzer-server.exe",
+          "size": 12585472,
+          "suffix": ".exe",
+          "is_file": true
+        },
+        "error": null,
+        "metadata": {},
+        "started_at": "2026-08-22T04:51:50.354370+00:00",
+        "finished_at": "2026-08-22T04:51:50.354425+00:00"
+      },
+      "error": null,
+      "iteration": 1,
+      "ok": true,
+      "status": "ok"
+    },
+    {
+      "tool_name": "hash",
+      "tool_args": {
+        "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe"
+      },
+      "result": {
+        "tool": "hash",
+        "status": "ok",
+        "data": {
+          "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+          "hashes": {
+            "md5": "4c9f4de998ff10a0c8ee27aabbb44c11",
+            "sha1": "6bd4bc50346b852edda33597c5f1a796652522ca",
+            "sha256": "f4e009622ecab4ef60201f5bf00f708c35a7a9209a124f0a5d9762fb89a60238"
+          }
+        },
+        "error": null,
+        "metadata": {},
+        "started_at": "2026-08-22T04:51:50.355133+00:00",
+        "finished_at": "2026-08-22T04:51:50.379930+00:00"
+      },
+      "error": null,
+      "iteration": 2,
+      "ok": true,
+      "status": "ok"
+    },
+    {
+      "tool_name": "strings_extract",
+      "tool_args": {
+        "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe"
+      },
+      "result": {
+        "tool": "strings_extract",
+        "status": "ok",
+        "data": {
+          "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+          "count": 151611,
+          "strings": [
+            "!This program cannot be run in DOS mode.",
+            ".text",
+            "`.rdata",
+            "@.data",
+            ".pdata",
+            "@.xdata",
+            "B/19",
+            "B/32",
+            "B/46",
+            "B/65",
+            "B/78",
+            "B/95",
+            "B/112",
+            "B.idata",
+            ".reloc",
+            "B.symtab",
+            " Go build ID: \"6i9Ksfo0uEEtjG8oH4ng/3RMLAUj0vCuKaqvvFngV/CHC5kqW1HfLrFmmY0DwE/0LLIGMSyacAJ8sY8gh6X\"",
+            "v(UH",
+            "|$XH",
+            "\\$xL",
+            "T$`L",
+            "L$hE",
+            "t$OL",
+            "d$pH",
+            "L$pf",
+            "|$hL",
+            "\\$EH9",
+            "L$pH",
+            "|$hH",
+            "t$XH9",
+            "|$xH)",
+            "|$`L",
+            "\\$;f",
+            "L$PH",
+            "T$xH",
+            "T$PH",
+            "t$xH9",
+            "|$`I",
+            "wDH)",
+            "|$ @",
+            "t$(D",
+            "t$(D",
+            "v=UH",
+            "D$ H",
+            "D$ H",
+            "8cpu.u",
+            "|$PH",
+            "T$pH",
+            "D$HL",
+            "T$`H)",
+            "\\$ M",
+            "\\$XH",
+            "onuzH",
+            "ofu]F",
+            "fuQH",
+            "t$@1",
+            "D$XH",
+            "D$`H",
+            "T$pH",
+            "L$(H",
+            "D$hf",
+            "D$hH",
+            "T$pH",
+            "L$P1",
+            "T$HH",
+            "D$xH",
+            "L$pH",
+            "D$pH",
+            "D$xH",
+            "L$PH",
+            "\\$8H",
+            "D$0L",
+            "T$pH",
+            "t$@H",
+            "|$PL",
+            "D$HD",
+            "T$`L",
+            "t$8H9",
+            "T$pH",
+            "D$`H",
+            "T$pH",
+            "D$LH",
+            "D$LH",
+            "L$GH",
+            "t$G!",
+            "\\$T@",
+            "|$F!",
+            "vIUH",
+            "D$0H",
+            "\\$81",
+            "D$0H",
+            "\\$8H",
+            "t$8H",
+            "t$0H",
+            "UUUUUUUUH!",
+            "33333333H!",
+            "oO f",
+            "oO0f",
+            "D$ L",
+            "w2fE",
+            "7fD9",
+            "w@fA",
+            "7fD9",
+            "D$ H",
+            "D$(I",
+            "D$ I",
+            "D$ L",
+            "D$0H",
+            "\\$8H",
+            "|$HE",
+            "D$PH",
+            "D$(H",
+            "L$8E",
+            "D$@H",
+            "D$XH",
+            "\\$`H",
+            "L$hH",
+            "\\$hH",
+            "L$0H",
+            "D$@H",
+            "L$XH",
+            "L$XH",
+            "D$@M",
+            "\\$hH",
+            "D$ H",
+            "L$(H",
+            "D$8H",
+            "L$XH",
+            "L$XH",
+            "\\$ H",
+            "D$8M",
+            "D$XH",
+            "\\$`H",
+            "|$pH",
+            "L$@H",
+            "D$`H",
+            "T$XH",
+            "T$pf",
+            "\\$ H",
+            "t$0H",
+            "D$81",
+            "T$0H9",
+            "L$(H",
+            "D$ H",
+            "D$Xf",
+            "T$(H",
+            "T$(H",
+            "t$8L",
+            "L$@H",
+            "D$0H",
+            "\\$8H",
+            "L$@H",
+            "|$HH",
+            "T$0H",
+            "L$@H",
+            "\\$8H",
+            "|$HH",
+            "D$0H",
+            "\\$8H",
+            "D$0H",
+            "L$@H",
+            "\\$8H",
+            "L$0H",
+            "\\$8H",
+            "|$@H",
+            "\\$8H",
+            "|$@H",
+            "\\$HH",
+            "|$XH",
+            "t$(H",
+            "\\$HH",
+            "|$XH",
+            "D$(D",
+            "\\$ H",
+            "T$HH",
+            "D$ L",
+            "D$`H",
+            "\\$hH",
+            "|$xH",
+            "t$@H",
+            "t$ L",
+            "D$`H",
+            "\\$hH",
+            "|$xf",
+            "t$ L",
+            "L$@D",
+            "\\$0M",
+            "d$8H",
+            "\\$8H",
+            "T$hH",
+            "\\$0H",
+            "T$@H",
+            "t$0L",
+            "T$HL",
+            "D$(H",
+            "T$HH",
+            "T$HH",
+            "t$(H",
+            "\\$hH",
+            "|$xI",
+            "T$hH",
+            "|$0H",
+            "D$@D",
+            "D$HH",
+            "t$(H",
+            "L$HH",
+            "L$HH",
+            "T$(H",
+            "|$0I",
+            "L$@H",
+            "L$`H",
+            "vWUH",
+            "D$ H",
+            "D$`H",
+            "\\$hH",
+            "D$0H",
+            "T$`H",
+            "t$@1",
+            "|$hL",
+            "L$(L",
+            "\\$HL",
+            "T$8H",
+            "\\$hH",
+            "|$8H",
+            "t$HH",
+            "D$0H",
+            "L$(H",
+            "T$`H",
+            "T$`H",
+            "t$0I",
+            "B!@H",
+            "D$8H",
+            "\\$@H",
+            "D$8H",
+            "L$HH",
+            "\\$@H",
+            "\\$@H",
+            "t$HH",
+            "\\$@H",
+            "|$HH",
+            "L$8H",
+            "L$8H",
+            "D$PH",
+            "\\$XH",
+            "|$hH",
+            "t$0H",
+            "D$PH",
+            "\\$XH",
+            "|$hH",
+            "D$0L",
+            "D$8D",
+            "T$ I",
+            "\\$(H",
+            "L$PH",
+            "T$8H",
+            "T$8H",
+            "L$XH",
+            "t$ H",
+            "|$0D",
+            "t$ H",
+            "D$`H",
+            "L$`H",
+            "D$8H",
+            "T$`D",
+            "T$HH",
+            "T$HH",
+            "D$@H",
+            "T$8H",
+            "t$ H",
+            "|$H1",
+            "L$hH",
+            "D$0H",
+            "L$HH",
+            "D$8H",
+            "D$8H",
+            "T$0I",
+            "\\$(L",
+            "L$(H",
+            "T$ H9",
+            "t$@H",
+            "T$8H",
+            "t$ H",
+            "|$HH",
+            "T$(1",
+            "D$P1",
+            "D$PH",
+            "\\$XH9H@v#H",
+            "L$8H",
+            "D$ H",
+            "T$(H",
+            "\\$XH9",
+            "D$ H",
+            "L$8H",
+            "T$0H",
+            "L$XH",
+            "v,UH",
+            "T$ H",
+            "D$8H",
+            "|$PH",
+            "D$8H",
+            "|$PH",
+            "\\$ H",
+            "T$ H",
+            "D$8H",
+            "\\$@H",
+            "|$PH",
+            "D$8H",
+            "\\$@H",
+            "|$PH",
+            "\\$ H",
+            "T$ H",
+            "D$8H",
+            "\\$@H",
+            "|$PH",
+            "D$8H",
+            "\\$@H",
+            "|$PH",
+            "D$ H",
+            "\\$ H",
+            "L$xH",
+            "|$ H",
+            "|$ 1",
+            "}_@8",
+            "T$8H",
+            "L$@H",
+            "t$(H",
+            "D$xH",
+            "L$@H",
+            "T$8H",
+            "t$(H",
+            "\\$xM",
+            ",$M9+t",
+            "t$PH",
+            "T$0H",
+            "L$PH",
+            "T$0H",
+            "D$`H",
+            "\\$hH",
+            "|$xH",
+            "T$@H",
+            "L$ fH",
+            "T$(L",
+            "T$8L",
+            "D$0L",
+            "L$HH",
+            "D$`H",
+            "L$ H",
+            "T$(H",
+            "\\$hH",
+            "L$HH",
+            "\\$0H",
+            "t$xf",
+            "t$xI",
+            "L$hH",
+            "\\$8H",
+            "L$@H",
+            "T$@H",
+            "D$`H",
+            "\\$hH",
+            "|$xL",
+            "\\$@H",
+            "|$ H",
+            "|$ H",
+            "D$0H",
+            "\\$8H",
+            "L$@@",
+            "|$HH",
+            "L$@H",
+            "L$8H",
+            "\\$0H",
+            "D$(H",
+            "\\$0f",
+            "T$(H",
+            "L$8f",
+            "$wCH",
+            "D$01",
+            "D$`H",
+            "\\$hH",
+            "|$xH",
+            "t$0I",
+            "T$ H",
+            "L$HM",
+            "L$(M",
+            "D$`H",
+            "T$ H",
+            "\\$hH",
+            "t$0H",
+            "|$xL",
+            "L$(L",
+            "\\$HD",
+            "l$8M",
+            "|$@H",
+            "L$HM",
+            "T$hH",
+            "|$8H",
+            "D$@L",
+            "T$(M",
+            "D$@L",
+            "D$ H",
+            "\\$HH",
+            "t$`H",
+            "D$@H",
+            "\\$HH",
+            "t$`L",
+            "D$ L",
+            "|$(D",
+            "D$@L",
+            "D$ L",
+            "D$(A",
+            "|$ H",
+            "|$ H",
+            "D$pH",
+            "\\$xH",
+            "D$0I",
+            "T$ H",
+            "T$PM",
+            "T$(M",
+            "D$pH",
+            "T$ H",
+            "\\$xH",
+            "D$0L",
+            "T$(L",
+            "d$PL",
+            "d$XD",
+            "|$@M",
+            "\\$8O",
+            "L$HH",
+            "T$PM",
+            "t$8H",
+            "t$8H",
+            "|$XL",
+            "L$pH",
+            "T$xH",
+            "|$@H",
+            "D$PD",
+            "L$pH",
+            "|$@H",
+            "T$PH",
+            "|$ H",
+            "|$ H",
+            "t$(f",
+            "D$hH",
+            "\\$pH",
+            "L$xH",
+            "T$(H",
+            "t$PH",
+            "L$xH",
+            "t$ H",
+            "L$PD",
+            "|$ H",
+            "t$@H",
+            "L$hH",
+            "|$(L",
+            "L$pH",
+            "t$xH",
+            "L$hH",
+            "|$(L",
+            "D$p1",
+            "t$PH",
+            "t$8H",
+            "T$0H",
+            "\\$pH",
+            "D$hH",
+            "L$HH",
+            "D$ H",
+            "L$0H",
+            "L$ H",
+            "L$ H",
+            "D$(H",
+            "\\$0H",
+            "L$8H",
+            "t$(H",
+            "I9x(u",
+            "D$0H",
+            "T$(H",
+            "D$8L",
+            "D$0H",
+            "D$PH",
+            "pXH9",
+            "L$0H",
+            "D$PH",
+            "L$0H",
+            "pXH9",
+            "xXH)",
+            "xXH9",
+            "T$(L",
+            "T$(H",
+            "D$PH",
+            "D$PH",
+            "D$Pf",
+            "T$(L",
+            "HXL)",
+            "T$ L",
+            "L$8L",
+            "t$PH",
+            "I9x(t",
+            "D$8H",
+            "T$ H",
+            "v0UH",
+            "|$/H",
+            "D$PH",
+            "T$0H",
+            "L$@M",
+            "L$`1",
+            "L$`E",
+            "\\$8M",
+            "d$hL",
+            "\\$XI",
+            "L$0H",
+            "L$HH",
+            "t$PH",
+            "|$XH",
+            "t$hH",
+            "D$HH",
+            "L$@H",
+            "T$0H",
+            "\\$8H",
+            "L$PH",
+            "D$hH",
+            "\\$pH",
+            "T$hf",
+            "D$8H",
+            "t$p1",
+            "L$0H",
+            "|$H1",
+            "|$HD",
+            "\\$(L",
+            "\\$PL",
+            "T$@H",
+            "t$xH",
+            "\\$pH",
+            "|$@H",
+            "t$PH",
+            "D$8H",
+            "L$0H",
+            "T$hH",
+            "\\$(H",
+            "D$`H",
+            "\\$hH",
+            "D$(H",
+            "D$(H",
+            "L$`D",
+            "\\$ H",
+            "L$0H",
+            "\\$8H",
+            "L$hH",
+            "D$@H",
+            "L$ H",
+            "L$H1",
+            "T$hH",
+            "|$0H",
+            "|$@H",
+            "H9D$8s",
+            "L$HH",
+            "T$@H",
+            "D$(H",
+            "D$pH",
+            "\\$xH",
+            "D$pH",
+            "\\$xH",
+            "L$xH",
+            "L$PH",
+            "t$@H",
+            "|$ L",
+            "D$pL",
+            "\\$pH",
+            "T$(H",
+            "D$0M",
+            "T$XM",
+            "T$8M",
+            "D$0H",
+            "L$PH",
+            "T$(H",
+            "t$@H",
+            "|$ L",
+            "D$pL",
+            "T$8M",
+            "d$XE",
+            "|$HA",
+            "T$XM",
+            "L$pH",
+            "\\$HH",
+            "D$pH",
+            "\\$xH",
+            "D$pH",
+            "\\$xH",
+            "L$xH",
+            "L$PH",
+            "t$@H",
+            "|$ L",
+            "D$pL",
+            "\\$pH",
+            "T$(H",
+            "D$0M",
+            "T$XM",
+            "T$8M",
+            "D$0H",
+            "L$PH",
+            "T$(H",
+            "t$@H",
+            "|$ L",
+            "D$pL",
+            "T$8M",
+            "d$XE",
+            "|$HA",
+            "T$XM",
+            "L$pH",
+            "t$HH",
+            "D$PH",
+            "D$PH",
+            "D$PH",
+            "D$PH",
+            "t$xH",
+            "|$@I",
+            "D$ H",
+            "L$PL",
+            "d$0H",
+            "D$(H",
+            "\\$XL",
+            "l$8M",
+            "D$(H",
+            "t$xH",
+            "|$@L",
+            "D$ L",
+            "L$PL",
+            "\\$XL",
+            "d$0M",
+            "l$8L",
+            "t$pA",
+            "t$pH",
+            "\\$HH",
+            "d$hA",
+            "T$`H",
+            "t$`H",
+            "D$hN",
+            "t$`H",
+            "L$`H",
+            "L$`H",
+            "T$hH",
+            "T$HH",
+            "t$ @",
+            "D$(H",
+            "L$0H",
+            "t$8H",
+            "|$(E1",
+            "D$(H",
+            "L$0H",
+            "|$8L",
+            "D$(1",
+            "D$pH",
+            "L$$H",
+            "D$8H",
+            "D$8H",
+            "L$xH",
+            "D$8H",
+            "D$XH",
+            "D$XH",
+            "D$8H",
+            "L$xH",
+            "|$(D",
+            "\\$pE1",
+            "l$PM",
+            "|$(L",
+            "D$8M",
+            "D$8M",
+            "T$@L",
+            "\\$0H",
+            "L$xH",
+            "T$@H",
+            "\\$pH",
+            "|$(D",
+            "\\$0f",
+            "T$HH",
+            "L$xH",
+            "v6UH",
+            "L$8H",
+            "L$8H",
+            "D$(H",
+            "\\$0H",
+            "L$8H",
+            "L$0H",
+            "t$8H",
+            "|$(E1",
+            "D$(H",
+            "\\$0H",
+            "L$8H",
+            "L$0H",
+            "|$8L",
+            "D$(1",
+            "D$pH",
+            "\\$xH",
+            "D$pH",
+            "\\$xH",
+            "L$(H",
+            "D$8H",
+            "D$8H",
+            "L$xH",
+            "D$8H",
+            "\\$pH",
+            "D$XH",
+            "D$XH",
+            "D$8H",
+            "L$xH",
+            "|$ L",
+            "\\$pE1",
+            "l$PM",
+            "|$ L",
+            "D$8M",
+            "D$8M",
+            "T$@L",
+            "\\$0H",
+            "L$xH",
+            "T$@H",
+            "\\$pH",
+            "|$ L",
+            "\\$0f",
+            "T$HH",
+            "L$xH",
+            "D$`H",
+            "\\$hH",
+            "D$`H",
+            "L$pH",
+            "\\$hH",
+            "L$8H",
+            "D$(H",
+            "D$(H",
+            "L$hH",
+            "D$(H",
+            "\\$`H",
+            "|$pH",
+            "D$HH",
+            "D$HH",
+            "D$(H",
+            "L$hH",
+            "|$ L",
+            "L$pH",
+            "\\$`E1",
+            "l$@M",
+            "|$ L",
+            "D$(M",
+            "D$(M",
+            "T$0H",
+            "L$hH",
+            "v7UH",
+            "L$8H",
+            "L$8H",
+            "L$XH",
+            "|$`H",
+            "T$PH",
+            "t$@H",
+            "|$ H",
+            "\\$0H",
+            "D$(M",
+            "L$hM",
+            "L$8L",
+            "T$HL",
+            "\\$pH",
+            "D$(H",
+            "T$PH",
+            "\\$0H",
+            "t$@H",
+            "|$ L",
+            "L$hM",
+            "L$pH",
+            "T$HH",
+            "L$XH",
+            "|$`H",
+            "T$PH",
+            "t$@H",
+            "|$ H",
+            "\\$0H",
+            "D$(M",
+            "L$hM",
+            "L$8L",
+            "T$HL",
+            "\\$pH",
+            "D$(H",
+            "T$PH",
+            "\\$0H",
+            "t$@H",
+            "|$ L",
+            "L$hM",
+            "L$pH",
+            "T$HH",
+            "D$XH",
+            "D$XH",
+            "D$XH",
+            "D$XH",
+            "T$xH",
+            "t$HH",
+            "|$(L",
+            "d$8H",
+            "D$0L",
+            "\\$`L",
+            "L$pL",
+            "l$@L",
+            "|$hH",
+            "D$0H",
+            "T$xH",
+            "t$HH",
+            "|$(L",
+            "\\$`L",
+            "d$8L",
+            "D$XM",
+            "\\$PH",
+            "T$xH",
+            "|$(L",
+            "\\$Pf",
+            "t$hH",
+            "t$pH",
+            "v<UH",
+            "L$8H",
+            "|$@H",
+            "L$8H",
+            "v:UH",
+            "v&UH",
+            "P(H9S(t",
+            "P H9S uqH",
+            "S0H9P0ug",
+            "P88S8u^",
+            "P98S9uUH",
+            "D$(H",
+            "\\$0H",
+            "T$0H",
+            "T$(H",
+            "T$0H",
+            "T$(H",
+            "vnUH",
+            "\\$HH",
+            "D$(H",
+            "L$HH",
+            "|$ H",
+            "|$ H",
+            "Ho b",
+            "Ho%\"",
+            "Ho-X",
+            "Ho0b",
+            "Ho b",
+            "Ho-8",
+            "Ho0b",
+            "Ho b",
+            "Ho%b",
+            "Ho(b",
+            "Ho%b O",
+            "Ho(b",
+            "%U O",
+            "Ho8b",
+            "Ho b",
+            "Ho%X#O",
+            "Ho-DEO",
+            "Ho5zEO",
+            "Ho8b",
+            "%0#O",
+            "Ho(b",
+            "Ho%x%O",
+            "Ho-$EO",
+            "Ho5ZEO",
+            "Ho8b",
+            "%P%O",
+            "Ho-N&O",
+            "Ho=0EO",
+            "%.&O",
+            "Ho%x'O",
+            "Ho8b",
+            "%P'O",
+            "Ho8b",
+            "%p(O",
+            "Ho8b",
+            "Ho b",
+            "Ho(b",
+            "Ho%8,O",
+            "Ho-dDO",
+            "Ho8b",
+            "Ho%X-O",
+            "Ho-DDO",
+            "Ho5zDO",
+            "Ho8b",
+            "%0-O",
+            "Ho(b",
+            "Ho%x/O",
+            "Ho-$DO",
+            "Ho5ZDO",
+            "Ho8b",
+            "%P/O",
+            "Ho0b",
+            "Ho%X1O",
+            "Ho5:DO",
+            "Ho8b",
+            "%01O",
+            "Ho b",
+            "-u-H",
+            "='?K",
+            "0rvA",
+            "9wpA",
+            "eugH",
+            "0r'A",
+            "D$Pf",
+            "0u>D",
+            ".u\"E",
+            "0uKM",
+            "D$8L",
+            "wPI9",
+            "trL9",
+            "T$0D",
+            "T$(L",
+            "L$ L",
+            "L$ L",
+            "T$0D",
+            "D$ H",
+            "D$0E1",
+            "0r5A",
+            "D$@H",
+            "\\$H1",
+            "T$ H",
+            "D$@H",
+            "\\$HH",
+            "L$ H9",
+            "L$ H",
+            "D$@H",
+            "\\$HH",
+            "85s9H",
+            "L$ H",
+            "|$(H)",
+            "D$@H",
+            "\\$HH",
+            "T$(H",
+            "|$(H",
+            "D$@f",
+            "L$HH",
+            "D$(M",
+            "t$(H",
+            "$wyH",
+            "|$2@",
+            "D$8H",
+            "D$4H",
+            "D$8H",
+            "u/z-",
+            "D$HH",
+            "D$HH",
+            "D$8H",
+            "L$7@",
+            "|$6@",
+            "L$7H",
+            "D$@H",
+            "D$8H",
+            "L$@f",
+            "u/z-",
+            "D$PH",
+            "D$PH",
+            "vDUH",
+            "D$(H",
+            "T$0H9",
+            "v-UH",
+            "D$ H",
+            "D$(f",
+            "@wvI",
+            "D$Pf",
+            "L$8H",
+            "\\$0H",
+            "D$(H",
+            "L$8H",
+            "D$(@",
+            "L$hH",
+            "|$'@",
+            "D$0H",
+            "+u0H",
+            "80u8",
+            "D$xI",
+            "T$@H9",
+            "D$`H",
+            "\\$XL",
+            "L$PH",
+            "D$`H",
+            "T$@H",
+            "\\$XL",
+            "\\$XH",
+            "\\$Xf",
+            "L$(@",
+            "|$0H",
+            "t$8L",
+            "|$0H",
+            "t$8L",
+            "D$(H",
+            "R|#H",
+            "D$(H",
+            "D$(H",
+            "5u+H",
+            "5u/H",
+            "T$^L",
+            "GurH",
+            "fu;H",
+            "T$_D",
+            "T$^H",
+            "T$wD",
+            "D$ @",
+            "|$(H",
+            "t$0L",
+            "|$(H",
+            "t$0L",
+            "D$`L"
+          ],
+          "truncated": true
+        },
+        "error": null,
+        "metadata": {},
+        "started_at": "2026-08-22T04:51:50.380719+00:00",
+        "finished_at": "2026-08-22T04:51:50.671062+00:00"
+      },
+      "error": null,
+      "iteration": 3,
+      "ok": true,
+      "status": "ok"
+    },
+    {
+      "tool_name": "pe_deep_scan",
+      "tool_args": {
+        "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe"
+      },
+      "result": {
+        "tool": "pe_deep_scan",
+        "status": "ok",
+        "data": {
+          "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+          "imports": [
+            {
+              "dll": "kernel32.dll",
+              "function_count": 48,
+              "functions": [
+                {
+                  "name": "GetProcAddress",
+                  "ordinal": null,
+                  "address": 5377094336,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "LoadLibraryExW",
+                  "ordinal": null,
+                  "address": 5377094344,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "WriteFile",
+                  "ordinal": null,
+                  "address": 5377094352,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "WriteConsoleW",
+                  "ordinal": null,
+                  "address": 5377094360,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "WerSetFlags",
+                  "ordinal": null,
+                  "address": 5377094368,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "WerGetFlags",
+                  "ordinal": null,
+                  "address": 5377094376,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "WaitForMultipleObjects",
+                  "ordinal": null,
+                  "address": 5377094384,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "WaitForSingleObject",
+                  "ordinal": null,
+                  "address": 5377094392,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "VirtualQuery",
+                  "ordinal": null,
+                  "address": 5377094400,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "VirtualFree",
+                  "ordinal": null,
+                  "address": 5377094408,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "VirtualAlloc",
+                  "ordinal": null,
+                  "address": 5377094416,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "TlsAlloc",
+                  "ordinal": null,
+                  "address": 5377094424,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "SwitchToThread",
+                  "ordinal": null,
+                  "address": 5377094432,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "SuspendThread",
+                  "ordinal": null,
+                  "address": 5377094440,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "SetWaitableTimer",
+                  "ordinal": null,
+                  "address": 5377094448,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "SetProcessPriorityBoost",
+                  "ordinal": null,
+                  "address": 5377094456,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "SetEvent",
+                  "ordinal": null,
+                  "address": 5377094464,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "SetErrorMode",
+                  "ordinal": null,
+                  "address": 5377094472,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "SetConsoleCtrlHandler",
+                  "ordinal": null,
+                  "address": 5377094480,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "RtlVirtualUnwind",
+                  "ordinal": null,
+                  "address": 5377094488,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "RtlLookupFunctionEntry",
+                  "ordinal": null,
+                  "address": 5377094496,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "ResumeThread",
+                  "ordinal": null,
+                  "address": 5377094504,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "RaiseFailFastException",
+                  "ordinal": null,
+                  "address": 5377094512,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "QueryPerformanceCounter",
+                  "ordinal": null,
+                  "address": 5377094520,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "PostQueuedCompletionStatus",
+                  "ordinal": null,
+                  "address": 5377094528,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "LoadLibraryExW",
+                  "ordinal": null,
+                  "address": 5377094536,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "SetThreadContext",
+                  "ordinal": null,
+                  "address": 5377094544,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "GetThreadContext",
+                  "ordinal": null,
+                  "address": 5377094552,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "GetSystemInfo",
+                  "ordinal": null,
+                  "address": 5377094560,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "GetSystemDirectoryA",
+                  "ordinal": null,
+                  "address": 5377094568,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "GetStdHandle",
+                  "ordinal": null,
+                  "address": 5377094576,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "GetQueuedCompletionStatusEx",
+                  "ordinal": null,
+                  "address": 5377094584,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "GetProcessAffinityMask",
+                  "ordinal": null,
+                  "address": 5377094592,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "GetProcAddress",
+                  "ordinal": null,
+                  "address": 5377094600,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "GetErrorMode",
+                  "ordinal": null,
+                  "address": 5377094608,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "GetEnvironmentStringsW",
+                  "ordinal": null,
+                  "address": 5377094616,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "GetCurrentThreadId",
+                  "ordinal": null,
+                  "address": 5377094624,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "GetConsoleMode",
+                  "ordinal": null,
+                  "address": 5377094632,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "FreeEnvironmentStringsW",
+                  "ordinal": null,
+                  "address": 5377094640,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "ExitProcess",
+                  "ordinal": null,
+                  "address": 5377094648,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "DuplicateHandle",
+                  "ordinal": null,
+                  "address": 5377094656,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "CreateWaitableTimerExW",
+                  "ordinal": null,
+                  "address": 5377094664,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "CreateThread",
+                  "ordinal": null,
+                  "address": 5377094672,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "CreateIoCompletionPort",
+                  "ordinal": null,
+                  "address": 5377094680,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "CreateEventA",
+                  "ordinal": null,
+                  "address": 5377094688,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "CloseHandle",
+                  "ordinal": null,
+                  "address": 5377094696,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "AddVectoredExceptionHandler",
+                  "ordinal": null,
+                  "address": 5377094704,
+                  "hint": 0,
+                  "bound": false
+                },
+                {
+                  "name": "AddVectoredContinueHandler",
+                  "ordinal": null,
+                  "address": 5377094712,
+                  "hint": 0,
+                  "bound": false
+                }
+              ]
+            }
+          ],
+          "exports": {
+            "count": 0,
+            "symbols": []
+          },
+          "resources": {
+            "count": 0,
+            "types": [],
+            "entries": []
+          },
+          "tls_callbacks": {
+            "count": 0,
+            "callbacks": []
+          },
+          "overlay": {
+            "present": false,
+            "offset": null,
+            "size": 0
+          },
+          "rich_header": {
+            "present": false,
+            "key": null,
+            "entry_count": 0
+          },
+          "entrypoint": {
+            "rva": 559040,
+            "section": ".text",
+            "section_rva": 4096,
+            "section_executable": true,
+            "anomaly": null
+          },
+          "section_anomalies": [
+            {
+              "section": ".xdata",
+              "entropy": 1.787112262798912,
+              "raw_size": 512,
+              "virtual_size": 180,
+              "reasons": [
+                "raw_size_exceeds_virtual_size"
+              ]
+            },
+            {
+              "section": "/19",
+              "entropy": 7.996339738557158,
+              "raw_size": 701952,
+              "virtual_size": 701873,
+              "reasons": [
+                "high_entropy"
+              ]
+            },
+            {
+              "section": "/32",
+              "entropy": 7.943523387348717,
+              "raw_size": 149504,
+              "virtual_size": 149018,
+              "reasons": [
+                "high_entropy"
+              ]
+            },
+            {
+              "section": "/46",
+              "entropy": 0.8556848540171443,
+              "raw_size": 512,
+              "virtual_size": 48,
+              "reasons": [
+                "raw_size_exceeds_virtual_size"
+              ]
+            },
+            {
+              "section": "/65",
+              "entropy": 7.99832328534933,
+              "raw_size": 1140736,
+              "virtual_size": 1140551,
+              "reasons": [
+                "high_entropy"
+              ]
+            },
+            {
+              "section": "/78",
+              "entropy": 7.997876549410377,
+              "raw_size": 710144,
+              "virtual_size": 709974,
+              "reasons": [
+                "high_entropy"
+              ]
+            },
+            {
+              "section": "/95",
+              "entropy": 7.995742607236831,
+              "raw_size": 276992,
+              "virtual_size": 276493,
+              "reasons": [
+                "high_entropy"
+              ]
+            },
+            {
+              "section": "/112",
+              "entropy": 7.786341658392834,
+              "raw_size": 18432,
+              "virtual_size": 18128,
+              "reasons": [
+                "high_entropy"
+              ]
+            }
+          ],
+          "iat_anomalies": [],
+          "shell_score": 100,
+          "shell_verdict": "likely_packed",
+          "shell_indicators": [
+            {
+              "kind": "section",
+              "section": ".xdata",
+              "reason": "raw_size_exceeds_virtual_size",
+              "weight": 10
+            },
+            {
+              "kind": "section",
+              "section": "/19",
+              "reason": "high_entropy",
+              "weight": 15
+            },
+            {
+              "kind": "section",
+              "section": "/32",
+              "reason": "high_entropy",
+              "weight": 15
+            },
+            {
+              "kind": "section",
+              "section": "/46",
+              "reason": "raw_size_exceeds_virtual_size",
+              "weight": 10
+            },
+            {
+              "kind": "section",
+              "section": "/65",
+              "reason": "high_entropy",
+              "weight": 15
+            },
+            {
+              "kind": "section",
+              "section": "/78",
+              "reason": "high_entropy",
+              "weight": 15
+            },
+            {
+              "kind": "section",
+              "section": "/95",
+              "reason": "high_entropy",
+              "weight": 15
+            },
+            {
+              "kind": "section",
+              "section": "/112",
+              "reason": "high_entropy",
+              "weight": 15
+            }
+          ]
+        },
+        "error": null,
+        "metadata": {},
+        "started_at": "2026-08-22T04:51:50.671976+00:00",
+        "finished_at": "2026-08-22T04:51:51.404346+00:00"
+      },
+      "error": null,
+      "iteration": 4,
+      "ok": true,
+      "status": "ok"
+    },
+    {
+      "tool_name": "packer_detect",
+      "tool_args": {
+        "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe"
+      },
+      "result": {
+        "tool": "packer_detect",
+        "status": "ok",
+        "data": {
+          "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+          "packed_likely": true,
+          "score": 100,
+          "indicators": [
+            {
+              "type": "high_entropy",
+              "section": "/19",
+              "entropy": 7.9963
+            },
+            {
+              "type": "high_entropy",
+              "section": "/32",
+              "entropy": 7.9435
+            },
+            {
+              "type": "high_entropy",
+              "section": "/65",
+              "entropy": 7.9983
+            },
+            {
+              "type": "high_entropy",
+              "section": "/78",
+              "entropy": 7.9979
+            },
+            {
+              "type": "high_entropy",
+              "section": "/95",
+              "entropy": 7.9957
+            },
+            {
+              "type": "high_entropy",
+              "section": "/112",
+              "entropy": 7.7863
+            }
+          ]
+        },
+        "error": null,
+        "metadata": {},
+        "started_at": "2026-08-22T04:51:51.405317+00:00",
+        "finished_at": "2026-08-22T04:51:52.261920+00:00"
+      },
+      "error": null,
+      "iteration": 5,
+      "ok": true,
+      "status": "ok"
+    },
+    {
+      "tool_name": "section_entropy_scan",
+      "tool_args": {
+        "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe"
+      },
+      "result": {
+        "tool": "section_entropy_scan",
+        "status": "ok",
+        "data": {
+          "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+          "sections": [
+            {
+              "name": ".text",
+              "offset": 1536,
+              "size": 4172800,
+              "virtual_address": 4096,
+              "entropy": 6.188389033546932
+            },
+            {
+              "name": ".rdata",
+              "offset": 4174336,
+              "size": 4205056,
+              "virtual_address": 4177920,
+              "entropy": 5.685035404026879
+            },
+            {
+              "name": ".data",
+              "offset": 8379392,
+              "size": 396288,
+              "virtual_address": 8384512,
+              "entropy": 5.901060245078486
+            },
+            {
+              "name": ".pdata",
+              "offset": 8775680,
+              "size": 92672,
+              "virtual_address": 42692608,
+              "entropy": 5.66982402677424
+            },
+            {
+              "name": ".xdata",
+              "offset": 8868352,
+              "size": 512,
+              "virtual_address": 42786816,
+              "entropy": 1.7871122627989118
+            },
+            {
+              "name": "/4",
+              "offset": 8868864,
+              "size": 512,
+              "virtual_address": 42790912,
+              "entropy": 5.672569187791102
+            },
+            {
+              "name": "/19",
+              "offset": 8869376,
+              "size": 701952,
+              "virtual_address": 42795008,
+              "entropy": 7.996339738557158
+            },
+            {
+              "name": "/32",
+              "offset": 9571328,
+              "size": 149504,
+              "virtual_address": 43499520,
+              "entropy": 7.943523387348714
+            },
+            {
+              "name": "/46",
+              "offset": 9720832,
+              "size": 512,
+              "virtual_address": 43651072,
+              "entropy": 0.8556848540171442
+            },
+            {
+              "name": "/65",
+              "offset": 9721344,
+              "size": 1140736,
+              "virtual_address": 43655168,
+              "entropy": 7.998323285349334
+            },
+            {
+              "name": "/78",
+              "offset": 10862080,
+              "size": 710144,
+              "virtual_address": 44797952,
+              "entropy": 7.997876549410379
+            },
+            {
+              "name": "/95",
+              "offset": 11572224,
+              "size": 276992,
+              "virtual_address": 45510656,
+              "entropy": 7.995742607236834
+            },
+            {
+              "name": "/112",
+              "offset": 11849216,
+              "size": 18432,
+              "virtual_address": 45789184,
+              "entropy": 7.786341658392833
+            },
+            {
+              "name": ".idata",
+              "offset": 11867648,
+              "size": 1536,
+              "virtual_address": 45809664,
+              "entropy": 4.22593235002151
+            },
+            {
+              "name": ".reloc",
+              "offset": 11869184,
+              "size": 76800,
+              "virtual_address": 45813760,
+              "entropy": 5.4321400545328355
+            },
+            {
+              "name": ".symtab",
+              "offset": 11945984,
+              "size": 639488,
+              "virtual_address": 45891584,
+              "entropy": 5.389928703898848
+            }
+          ],
+          "max_entropy": 7.998323285349334
+        },
+        "error": null,
+        "metadata": {},
+        "started_at": "2026-08-22T04:51:52.262818+00:00",
+        "finished_at": "2026-08-22T04:51:52.782628+00:00"
+      },
+      "error": null,
+      "iteration": 6,
+      "ok": true,
+      "status": "ok"
+    },
+    {
+      "tool_name": "pe_header_scan",
+      "tool_args": {
+        "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe"
+      },
+      "result": {
+        "tool": "pe_header_scan",
+        "status": "ok",
+        "data": {
+          "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+          "machine": 34404,
+          "number_of_sections": 16,
+          "timestamp": 0,
+          "entry_point": 559040,
+          "image_base": 5368709120,
+          "sections": [
+            {
+              "name": ".text",
+              "virtual_address": 4096,
+              "virtual_size": 4172721,
+              "raw_size": 4172800,
+              "entropy": 6.18838903354693
+            },
+            {
+              "name": ".rdata",
+              "virtual_address": 4177920,
+              "virtual_size": 4205008,
+              "raw_size": 4205056,
+              "entropy": 5.685035404026883
+            },
+            {
+              "name": ".data",
+              "virtual_address": 8384512,
+              "virtual_size": 34307680,
+              "raw_size": 396288,
+              "entropy": 5.9010602450784875
+            },
+            {
+              "name": ".pdata",
+              "virtual_address": 42692608,
+              "virtual_size": 92232,
+              "raw_size": 92672,
+              "entropy": 5.669824026774239
+            },
+            {
+              "name": ".xdata",
+              "virtual_address": 42786816,
+              "virtual_size": 180,
+              "raw_size": 512,
+              "entropy": 1.787112262798912
+            },
+            {
+              "name": "/4",
+              "virtual_address": 42790912,
+              "virtual_size": 340,
+              "raw_size": 512,
+              "entropy": 5.672569187791103
+            },
+            {
+              "name": "/19",
+              "virtual_address": 42795008,
+              "virtual_size": 701873,
+              "raw_size": 701952,
+              "entropy": 7.996339738557158
+            },
+            {
+              "name": "/32",
+              "virtual_address": 43499520,
+              "virtual_size": 149018,
+              "raw_size": 149504,
+              "entropy": 7.943523387348717
+            },
+            {
+              "name": "/46",
+              "virtual_address": 43651072,
+              "virtual_size": 48,
+              "raw_size": 512,
+              "entropy": 0.8556848540171443
+            },
+            {
+              "name": "/65",
+              "virtual_address": 43655168,
+              "virtual_size": 1140551,
+              "raw_size": 1140736,
+              "entropy": 7.99832328534933
+            },
+            {
+              "name": "/78",
+              "virtual_address": 44797952,
+              "virtual_size": 709974,
+              "raw_size": 710144,
+              "entropy": 7.997876549410377
+            },
+            {
+              "name": "/95",
+              "virtual_address": 45510656,
+              "virtual_size": 276493,
+              "raw_size": 276992,
+              "entropy": 7.995742607236831
+            },
+            {
+              "name": "/112",
+              "virtual_address": 45789184,
+              "virtual_size": 18128,
+              "raw_size": 18432,
+              "entropy": 7.786341658392834
+            },
+            {
+              "name": ".idata",
+              "virtual_address": 45809664,
+              "virtual_size": 1404,
+              "raw_size": 1536,
+              "entropy": 4.225932350021502
+            },
+            {
+              "name": ".reloc",
+              "virtual_address": 45813760,
+              "virtual_size": 76780,
+              "raw_size": 76800,
+              "entropy": 5.432140054532834
+            },
+            {
+              "name": ".symtab",
+              "virtual_address": 45891584,
+              "virtual_size": 638993,
+              "raw_size": 639488,
+              "entropy": 5.389928703898847
+            }
+          ],
+          "imports": [
+            {
+              "dll": "kernel32.dll",
+              "functions": [
+                {
+                  "name": "GetProcAddress",
+                  "ordinal": null,
+                  "address": 5377094336
+                },
+                {
+                  "name": "LoadLibraryExW",
+                  "ordinal": null,
+                  "address": 5377094344
+                },
+                {
+                  "name": "WriteFile",
+                  "ordinal": null,
+                  "address": 5377094352
+                },
+                {
+                  "name": "WriteConsoleW",
+                  "ordinal": null,
+                  "address": 5377094360
+                },
+                {
+                  "name": "WerSetFlags",
+                  "ordinal": null,
+                  "address": 5377094368
+                },
+                {
+                  "name": "WerGetFlags",
+                  "ordinal": null,
+                  "address": 5377094376
+                },
+                {
+                  "name": "WaitForMultipleObjects",
+                  "ordinal": null,
+                  "address": 5377094384
+                },
+                {
+                  "name": "WaitForSingleObject",
+                  "ordinal": null,
+                  "address": 5377094392
+                },
+                {
+                  "name": "VirtualQuery",
+                  "ordinal": null,
+                  "address": 5377094400
+                },
+                {
+                  "name": "VirtualFree",
+                  "ordinal": null,
+                  "address": 5377094408
+                },
+                {
+                  "name": "VirtualAlloc",
+                  "ordinal": null,
+                  "address": 5377094416
+                },
+                {
+                  "name": "TlsAlloc",
+                  "ordinal": null,
+                  "address": 5377094424
+                },
+                {
+                  "name": "SwitchToThread",
+                  "ordinal": null,
+                  "address": 5377094432
+                },
+                {
+                  "name": "SuspendThread",
+                  "ordinal": null,
+                  "address": 5377094440
+                },
+                {
+                  "name": "SetWaitableTimer",
+                  "ordinal": null,
+                  "address": 5377094448
+                },
+                {
+                  "name": "SetProcessPriorityBoost",
+                  "ordinal": null,
+                  "address": 5377094456
+                },
+                {
+                  "name": "SetEvent",
+                  "ordinal": null,
+                  "address": 5377094464
+                },
+                {
+                  "name": "SetErrorMode",
+                  "ordinal": null,
+                  "address": 5377094472
+                },
+                {
+                  "name": "SetConsoleCtrlHandler",
+                  "ordinal": null,
+                  "address": 5377094480
+                },
+                {
+                  "name": "RtlVirtualUnwind",
+                  "ordinal": null,
+                  "address": 5377094488
+                },
+                {
+                  "name": "RtlLookupFunctionEntry",
+                  "ordinal": null,
+                  "address": 5377094496
+                },
+                {
+                  "name": "ResumeThread",
+                  "ordinal": null,
+                  "address": 5377094504
+                },
+                {
+                  "name": "RaiseFailFastException",
+                  "ordinal": null,
+                  "address": 5377094512
+                },
+                {
+                  "name": "QueryPerformanceCounter",
+                  "ordinal": null,
+                  "address": 5377094520
+                },
+                {
+                  "name": "PostQueuedCompletionStatus",
+                  "ordinal": null,
+                  "address": 5377094528
+                },
+                {
+                  "name": "LoadLibraryExW",
+                  "ordinal": null,
+                  "address": 5377094536
+                },
+                {
+                  "name": "SetThreadContext",
+                  "ordinal": null,
+                  "address": 5377094544
+                },
+                {
+                  "name": "GetThreadContext",
+                  "ordinal": null,
+                  "address": 5377094552
+                },
+                {
+                  "name": "GetSystemInfo",
+                  "ordinal": null,
+                  "address": 5377094560
+                },
+                {
+                  "name": "GetSystemDirectoryA",
+                  "ordinal": null,
+                  "address": 5377094568
+                },
+                {
+                  "name": "GetStdHandle",
+                  "ordinal": null,
+                  "address": 5377094576
+                },
+                {
+                  "name": "GetQueuedCompletionStatusEx",
+                  "ordinal": null,
+                  "address": 5377094584
+                },
+                {
+                  "name": "GetProcessAffinityMask",
+                  "ordinal": null,
+                  "address": 5377094592
+                },
+                {
+                  "name": "GetProcAddress",
+                  "ordinal": null,
+                  "address": 5377094600
+                },
+                {
+                  "name": "GetErrorMode",
+                  "ordinal": null,
+                  "address": 5377094608
+                },
+                {
+                  "name": "GetEnvironmentStringsW",
+                  "ordinal": null,
+                  "address": 5377094616
+                },
+                {
+                  "name": "GetCurrentThreadId",
+                  "ordinal": null,
+                  "address": 5377094624
+                },
+                {
+                  "name": "GetConsoleMode",
+                  "ordinal": null,
+                  "address": 5377094632
+                },
+                {
+                  "name": "FreeEnvironmentStringsW",
+                  "ordinal": null,
+                  "address": 5377094640
+                },
+                {
+                  "name": "ExitProcess",
+                  "ordinal": null,
+                  "address": 5377094648
+                },
+                {
+                  "name": "DuplicateHandle",
+                  "ordinal": null,
+                  "address": 5377094656
+                },
+                {
+                  "name": "CreateWaitableTimerExW",
+                  "ordinal": null,
+                  "address": 5377094664
+                },
+                {
+                  "name": "CreateThread",
+                  "ordinal": null,
+                  "address": 5377094672
+                },
+                {
+                  "name": "CreateIoCompletionPort",
+                  "ordinal": null,
+                  "address": 5377094680
+                },
+                {
+                  "name": "CreateEventA",
+                  "ordinal": null,
+                  "address": 5377094688
+                },
+                {
+                  "name": "CloseHandle",
+                  "ordinal": null,
+                  "address": 5377094696
+                },
+                {
+                  "name": "AddVectoredExceptionHandler",
+                  "ordinal": null,
+                  "address": 5377094704
+                },
+                {
+                  "name": "AddVectoredContinueHandler",
+                  "ordinal": null,
+                  "address": 5377094712
+                }
+              ]
+            }
+          ]
+        },
+        "error": null,
+        "metadata": {},
+        "started_at": "2026-08-22T04:51:52.783592+00:00",
+        "finished_at": "2026-08-22T04:51:53.038265+00:00"
+      },
+      "error": null,
+      "iteration": 7,
+      "ok": true,
+      "status": "ok"
+    },
+    {
+      "tool_name": "yara_scan",
+      "tool_args": {
+        "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe"
+      },
+      "result": {
+        "tool": "yara_scan",
+        "status": "unavailable",
+        "data": {
+          "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+          "rules_path": "D:\\Project\\PE-reverse-skill\\rules\\yara",
+          "rule_files": [],
+          "matches": [],
+          "match_count": 0
+        },
+        "error": "optional dependency yara-python unavailable: No module named 'yara'",
+        "metadata": {},
+        "started_at": "2026-08-22T04:51:53.039168+00:00",
+        "finished_at": "2026-08-22T04:51:53.039559+00:00"
+      },
+      "error": null,
+      "iteration": 8,
+      "ok": false,
+      "status": "unavailable"
+    },
+    {
+      "tool_name": "engine_analyze",
+      "tool_args": {
+        "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+        "out_dir": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis"
+      },
+      "result": {
+        "tool": "engine_analyze",
+        "status": "ok",
+        "data": {
+          "status": "ok",
+          "schema_version": 1,
+          "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+          "platform": "windows-pe",
+          "engine": "unknown",
+          "confidence": 0.0,
+          "evidence": [
+            "No independently corroborated engine signal reached the detection threshold"
+          ],
+          "candidates": [
+            {
+              "engine": "unknown",
+              "score": 0.0,
+              "confidence": 0.0,
+              "evidence": [
+                "No independently corroborated engine signal reached the detection threshold"
+              ]
+            }
+          ],
+          "metadata": {
+            "status": "unavailable",
+            "schema_version": 1,
+            "engine": "unknown",
+            "managed_assembly_count": 0,
+            "managed_assembly_candidate_count": 0,
+            "managed_assemblies": [],
+            "managed_assembly_files": [],
+            "managed_type_definition_count": 0,
+            "managed_method_definition_count": 0,
+            "managed_field_definition_count": 0,
+            "global_metadata_present": false,
+            "global_metadata_file_present": false,
+            "global_metadata": {
+              "status": "unavailable",
+              "schema_version": 1,
+              "path": null,
+              "size": null,
+              "magic": null,
+              "magic_valid": false,
+              "version": null,
+              "header_size": null,
+              "table_count": 0,
+              "table_offsets": {},
+              "tables": [],
+              "errors": [
+                "global-metadata.dat not found"
+              ],
+              "error": "global-metadata.dat not found",
+              "string_count_scanned": 0,
+              "strings_truncated": false,
+              "definition_parser": "il2cpp-global-metadata-v1",
+              "definition_layout_supported": false,
+              "type_definition_count": 0,
+              "method_definition_count": 0,
+              "field_definition_count": 0,
+              "type_definition_record_count": 0,
+              "method_definition_record_count": 0,
+              "field_definition_record_count": 0,
+              "image_definition_count": 0,
+              "image_definition_record_count": 0,
+              "image_definition_record_size": null,
+              "method_definition_record_size": null,
+              "type_definitions": [],
+              "method_definitions": [],
+              "field_definitions": [],
+              "image_definitions": [],
+              "image_definition_errors": [],
+              "definition_errors": []
+            },
+            "global_metadata_header": {
+              "status": "unavailable",
+              "schema_version": 1,
+              "path": null,
+              "size": null,
+              "magic": null,
+              "magic_valid": false,
+              "version": null,
+              "header_size": null,
+              "table_count": 0,
+              "table_offsets": {},
+              "tables": [],
+              "errors": [
+                "global-metadata.dat not found"
+              ],
+              "error": "global-metadata.dat not found",
+              "string_count_scanned": 0,
+              "strings_truncated": false,
+              "definition_parser": "il2cpp-global-metadata-v1",
+              "definition_layout_supported": false,
+              "type_definition_count": 0,
+              "method_definition_count": 0,
+              "field_definition_count": 0,
+              "type_definition_record_count": 0,
+              "method_definition_record_count": 0,
+              "field_definition_record_count": 0,
+              "image_definition_count": 0,
+              "image_definition_record_count": 0,
+              "image_definition_record_size": null,
+              "method_definition_record_size": null,
+              "type_definitions": [],
+              "method_definitions": [],
+              "field_definitions": [],
+              "image_definitions": [],
+              "image_definition_errors": [],
+              "definition_errors": []
+            },
+            "global_metadata_files": [],
+            "global_metadata_version": null,
+            "global_metadata_tables": [],
+            "gameassembly_present": false,
+            "gameassembly_file_present": false,
+            "mono_present": false,
+            "unreal_reflection_strings": [],
+            "unreal_package_names": [],
+            "native_mapping_status": "unavailable",
+            "native_mapped_method_count": 0
+          },
+          "assets": {
+            "status": "unavailable",
+            "schema_version": 1,
+            "pak_count": 0,
+            "uasset_count": 0,
+            "umap_count": 0,
+            "pak_candidate_count": 0,
+            "uasset_candidate_count": 0,
+            "umap_candidate_count": 0,
+            "validated_package_count": 0,
+            "package_files": [],
+            "scene_like_asset_count": 0,
+            "asset_examples": [],
+            "resources_assets_present": false,
+            "resources_assets_count": 0,
+            "unity_asset_count": 0,
+            "unity_assets": [],
+            "unreal_package_names": [],
+            "unreal_asset_names": []
+          },
+          "symbols": {
+            "status": "unavailable",
+            "schema_version": 1,
+            "recovered_symbol_count": 0,
+            "recovered_symbols": [],
+            "symbol_records": [],
+            "type_symbols": [],
+            "method_symbols": [],
+            "field_symbols": [],
+            "mono_behaviour_symbols": [],
+            "monobehaviour_symbols": [],
+            "scriptable_object_symbols": [],
+            "ui_symbols": [],
+            "unreal_reflection_names": [],
+            "unreal_package_names": [],
+            "raw_string_markers": {
+              "mono_behaviour": [],
+              "scriptable_object": [],
+              "ui": []
+            }
+          },
+          "native_mapping": {
+            "status": "unavailable",
+            "schema_version": 1,
+            "engine": "unity-il2cpp",
+            "parser": "il2cpp-codegen-module-pe-v1",
+            "metadata_path": null,
+            "metadata_version": null,
+            "binary_path": null,
+            "binary_size": null,
+            "pe": {
+              "status": "unavailable",
+              "sections": [],
+              "errors": []
+            },
+            "eligible_method_count": 0,
+            "mapped_method_count": 0,
+            "codegen_modules": [],
+            "mappings": [],
+            "unmapped_methods": [],
+            "confidence": 0.0,
+            "provenance": {},
+            "errors": [],
+            "reason": null
+          },
+          "sdk_skeleton": {
+            "status": "unavailable",
+            "schema_version": 1,
+            "language": "c++17",
+            "kind": "static-evidence-skeleton",
+            "confidence": 0.0,
+            "declaration_count": 0,
+            "declarations": [],
+            "reflection_marker_count": 0,
+            "reflection_markers": [],
+            "package_paths": [],
+            "source": "",
+            "runtime_uobject_enumeration": false,
+            "sdk_dump_complete": false,
+            "provenance": {},
+            "limitations": [
+              "No runtime UObject traversal was performed.",
+              "Forward declarations do not prove class layout, inheritance, fields, or callable addresses.",
+              "Non-type reflection markers are retained as evidence and are not emitted as C++ types."
+            ]
+          },
+          "semantic_ir_fragment": {
+            "status": "unavailable",
+            "schema_version": 1,
+            "engine": "unknown",
+            "entities": [],
+            "relations": [],
+            "capabilities": [],
+            "summary": {
+              "entity_count": 0,
+              "relation_count": 0,
+              "resource_count": 0,
+              "ui_control_count": 0,
+              "native_mapped_method_count": 0,
+              "sdk_declaration_count": 0
+            },
+            "artifacts": []
+          },
+          "strategy": {
+            "name": "generic_engine_fingerprint",
+            "reason": "No dominant engine signal found; keep evidence for later fusion.",
+            "engine": "unknown",
+            "key": "unknown:generic_engine_fingerprint"
+          },
+          "diagnostics": [],
+          "artifacts": [
+            {
+              "name": "engine/fingerprint.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\fingerprint.json",
+              "kind": "engine-analysis"
+            },
+            {
+              "name": "engine/metadata.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\metadata.json",
+              "kind": "engine-analysis"
+            },
+            {
+              "name": "engine/assets.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\assets.json",
+              "kind": "engine-analysis"
+            },
+            {
+              "name": "engine/symbols.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\symbols.json",
+              "kind": "engine-analysis"
+            },
+            {
+              "name": "engine/native_mapping.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\native_mapping.json",
+              "kind": "engine-native-mapping"
+            },
+            {
+              "name": "engine/sdk_skeleton.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\sdk_skeleton.json",
+              "kind": "engine-sdk-skeleton"
+            },
+            {
+              "name": "engine/semantic_ir_fragment.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\semantic_ir_fragment.json",
+              "kind": "semantic-ir-fragment"
+            }
+          ]
+        },
+        "error": null,
+        "metadata": {},
+        "started_at": "2026-08-22T04:51:53.054798+00:00",
+        "finished_at": "2026-08-22T04:51:53.138061+00:00"
+      },
+      "error": null,
+      "iteration": 9,
+      "ok": true,
+      "status": "ok"
+    },
+    {
+      "tool_name": "android_analyze",
+      "tool_args": {
+        "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+        "out_dir": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis"
+      },
+      "result": {
+        "tool": "android_analyze",
+        "status": "ok",
+        "data": {
+          "status": "unavailable",
+          "package_type": "unknown",
+          "archive": {
+            "status": "unavailable",
+            "entry_count": 0,
+            "safe_entry_count": 0,
+            "unsafe_entry_count": 0,
+            "unsafe_entries": []
+          },
+          "framework": {
+            "name": "unknown",
+            "confidence": 0.0,
+            "score": 0.0,
+            "evidence": [
+              "Input is not an APK"
+            ],
+            "candidates": [
+              {
+                "name": "android_xml",
+                "score": 0.0,
+                "confidence": 0.0,
+                "evidence": []
+              },
+              {
+                "name": "jetpack_compose",
+                "score": 0.0,
+                "confidence": 0.0,
+                "evidence": []
+              },
+              {
+                "name": "flutter",
+                "score": 0.0,
+                "confidence": 0.0,
+                "evidence": []
+              },
+              {
+                "name": "react_native",
+                "score": 0.0,
+                "confidence": 0.0,
+                "evidence": []
+              },
+              {
+                "name": "unity",
+                "score": 0.0,
+                "confidence": 0.0,
+                "evidence": []
+              },
+              {
+                "name": "webview_hybrid",
+                "score": 0.0,
+                "confidence": 0.0,
+                "evidence": []
+              }
+            ],
+            "conflict": {
+              "is_conflicted": false,
+              "score": 0.0,
+              "runner_up": null,
+              "strong_candidates": []
+            },
+            "conflicts": [],
+            "scoring": "bounded-static-evidence-v1"
+          },
+          "manifest": {
+            "present": false,
+            "status": "unavailable",
+            "parser": "none",
+            "package": null,
+            "version_code": null,
+            "version_name": null,
+            "min_sdk": null,
+            "target_sdk": null,
+            "application": null,
+            "permissions": [],
+            "permission_count": 0,
+            "permission_hint_count": 0,
+            "activities": [],
+            "services": [],
+            "receivers": [],
+            "providers": [],
+            "component_counts": {
+              "activities": 0,
+              "services": 0,
+              "receivers": 0,
+              "providers": 0
+            },
+            "activity_hint_count": 0,
+            "uses_features": [],
+            "textual": false,
+            "element_count": 0,
+            "fallback_strings": [],
+            "warnings": []
+          },
+          "resources": {
+            "status": "unavailable",
+            "resource_arsc_present": false,
+            "resource_arsc_size": null,
+            "layout_count": 0,
+            "drawable_count": 0,
+            "values_count": 0,
+            "asset_count": 0,
+            "layout_examples": [],
+            "drawable_examples": [],
+            "layouts": [],
+            "drawables": [],
+            "layout_types": {},
+            "drawable_types": {},
+            "categories": {},
+            "web_asset_count": 0,
+            "limits": {
+              "max_examples": 40,
+              "max_xml_files_parsed": 64,
+              "max_bytes_per_xml": 1048576
+            }
+          },
+          "dex_summary": {
+            "status": "unavailable",
+            "dex_count": 0,
+            "parsed_count": 0,
+            "dex_files": [],
+            "files": [],
+            "totals": {
+              "string_ids": 0,
+              "type_ids": 0,
+              "proto_ids": 0,
+              "field_ids": 0,
+              "method_ids": 0,
+              "class_defs": 0
+            },
+            "string_ids": 0,
+            "type_ids": 0,
+            "proto_ids": 0,
+            "field_ids": 0,
+            "method_ids": 0,
+            "class_defs": 0,
+            "valid_count": 0,
+            "partial_count": 0,
+            "invalid_count": 0,
+            "string_evidence": [],
+            "limits": {
+              "max_dex_files": 32,
+              "max_bytes_per_dex": 16777216,
+              "max_string_ids_per_dex": 4096,
+              "max_string_evidence": 96
+            }
+          },
+          "native_libs": {
+            "status": "unavailable",
+            "count": 0,
+            "parsed_count": 0,
+            "abis": [],
+            "libs": [],
+            "entries": [],
+            "elf_count": 0,
+            "jni_export_count": 0,
+            "jni_exports": [],
+            "java_native_links": [],
+            "limits": {
+              "max_native_libraries": 128,
+              "max_bytes_per_library": 8388608,
+              "max_elf_symbols": 8192
+            }
+          },
+          "java_decompilation": {
+            "schema_version": 1,
+            "status": "unavailable",
+            "requested": false,
+            "provider": "jadx",
+            "reason": "JADX decompilation was not requested",
+            "dependency": {
+              "name": "jadx",
+              "state": "not_requested",
+              "executable": null,
+              "probe": {}
+            },
+            "command": [],
+            "command_metadata": {
+              "argv_only": true,
+              "shell": false,
+              "offline": true,
+              "target_code_executed": false
+            },
+            "returncode": null,
+            "stdout": "",
+            "stderr": "",
+            "output": {
+              "path": "android/jadx",
+              "file_count": 0,
+              "source_file_count": 0,
+              "java_file_count": 0,
+              "kotlin_file_count": 0,
+              "total_bytes": 0,
+              "files": []
+            },
+            "target": {
+              "sha256_before": null,
+              "sha256_after": null,
+              "unchanged": false
+            },
+            "capability_boundary": {
+              "provider_kind": "external",
+              "operation_kind": "offline_dex_java_kotlin_decompilation",
+              "dependency_state": "not_requested",
+              "required_tools": [
+                "jadx"
+              ],
+              "target_code_executed": false,
+              "network_access": false,
+              "content_recompiled": false
+            },
+            "warnings": [],
+            "artifact": "android/java_decompilation.json"
+          },
+          "semantic_ir_fragment": {
+            "schema_version": 1,
+            "source": "android_analyze",
+            "status": "unavailable",
+            "entities": [],
+            "relations": [],
+            "capabilities": [],
+            "summary": {
+              "entity_count": 0,
+              "relation_count": 0,
+              "capability_count": 0
+            },
+            "artifacts": [],
+            "limits": {
+              "max_components": 256,
+              "max_dex_files": 32,
+              "max_native_libraries": 128
+            }
+          },
+          "capability_boundary": {
+            "provider_kind": "builtin",
+            "operation_kind": "bounded_zip_static_analysis",
+            "dependency_state": "not_required",
+            "required_tools": [],
+            "content_recompiled": false,
+            "byte_preserving": true,
+            "signature_verification": "not_performed",
+            "code_executed": false,
+            "members_extracted": false
+          },
+          "strategy": {
+            "name": "unknown_static_unpack",
+            "key": "android:unknown_static_unpack",
+            "reason": "Static package structure preserves Android resources, DEX, and native-library evidence."
+          },
+          "warnings": [
+            "sample is not an APK"
+          ],
+          "artifacts": [
+            {
+              "name": "android/manifest.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\manifest.json",
+              "kind": "android-analysis"
+            },
+            {
+              "name": "android/resources.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\resources.json",
+              "kind": "android-analysis"
+            },
+            {
+              "name": "android/dex_summary.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\dex_summary.json",
+              "kind": "android-analysis"
+            },
+            {
+              "name": "android/native_libs.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\native_libs.json",
+              "kind": "android-analysis"
+            },
+            {
+              "name": "android/framework.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\framework.json",
+              "kind": "android-analysis"
+            },
+            {
+              "name": "android/java_decompilation.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\java_decompilation.json",
+              "kind": "android-analysis"
+            },
+            {
+              "name": "android/semantic_ir_fragment.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\semantic_ir_fragment.json",
+              "kind": "android-analysis"
+            }
+          ],
+          "error": "sample is not an APK",
+          "reason": "sample is not an APK"
+        },
+        "error": null,
+        "metadata": {},
+        "started_at": "2026-08-22T04:51:53.169642+00:00",
+        "finished_at": "2026-08-22T04:51:53.172997+00:00"
+      },
+      "error": null,
+      "iteration": 10,
+      "ok": false,
+      "status": "unavailable"
+    },
+    {
+      "tool_name": "protocol_analyze",
+      "tool_args": {
+        "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+        "out_dir": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis",
+        "strings": "strings_extract",
+        "dynamic_analysis": "derived",
+        "behavior_graph": "gui_behavior_graph",
+        "semantic_ir": "semantic_ir_build",
+        "gui_analysis": "derived"
+      },
+      "result": {
+        "tool": "protocol_analyze",
+        "status": "ok",
+        "data": {
+          "status": "ok",
+          "protocols": [],
+          "flows": [
+            {
+              "endpoint": "B.idata",
+              "kind": "host"
+            },
+            {
+              "endpoint": "B.symtab",
+              "kind": "host"
+            },
+            {
+              "endpoint": "time.DatH",
+              "kind": "host"
+            },
+            {
+              "endpoint": "time.LocH",
+              "kind": "host"
+            },
+            {
+              "endpoint": "time.LocL",
+              "kind": "host"
+            },
+            {
+              "endpoint": "time.UTCL",
+              "kind": "host"
+            },
+            {
+              "endpoint": "v.UH",
+              "kind": "host"
+            }
+          ],
+          "field_stats": {
+            "string_count": 2498,
+            "url_count": 0,
+            "host_count": 7,
+            "named_pipe_count": 0,
+            "format_count": 0,
+            "protocol_count": 0,
+            "capture_flow_count": 0,
+            "message_count": 0,
+            "protobuf_message_count": 0,
+            "request_response_pair_count": 0,
+            "field_count": 0,
+            "messages_with_fields": 0,
+            "fields": []
+          },
+          "inference": {
+            "primary_protocol": null,
+            "message_formats": [],
+            "probable_flow_count": 7,
+            "confidence": 0.0,
+            "request_response_pair_count": 0,
+            "field_count": 0,
+            "strategy": {
+              "name": "protocol_strings_dynamic_fusion",
+              "key": "protocol:protocol_strings_dynamic_fusion",
+              "reason": "Static strings plus dynamic/network hints provide low-friction passive protocol evidence."
+            }
+          },
+          "messages": [],
+          "field_statistics": [],
+          "request_response_pairs": [],
+          "semantic_ir_fragment": {
+            "status": "ok",
+            "schema_version": 1,
+            "source": "protocol",
+            "entities": [
+              {
+                "id": "protocol-flow:2f00753070db1010",
+                "kind": "dynamic_event",
+                "name": "time.LocL",
+                "confidence": 1.0,
+                "sources": [
+                  "protocol_capture"
+                ],
+                "attributes": {
+                  "domain": "network",
+                  "transport": null,
+                  "endpoint_a": null,
+                  "endpoint_b": null,
+                  "endpoint": "time.LocL",
+                  "message_count": 0
+                }
+              },
+              {
+                "id": "protocol-flow:63ae3452a5da35da",
+                "kind": "dynamic_event",
+                "name": "time.UTCL",
+                "confidence": 1.0,
+                "sources": [
+                  "protocol_capture"
+                ],
+                "attributes": {
+                  "domain": "network",
+                  "transport": null,
+                  "endpoint_a": null,
+                  "endpoint_b": null,
+                  "endpoint": "time.UTCL",
+                  "message_count": 0
+                }
+              },
+              {
+                "id": "protocol-flow:7f6d8a4334c03bf2",
+                "kind": "dynamic_event",
+                "name": "time.LocH",
+                "confidence": 1.0,
+                "sources": [
+                  "protocol_capture"
+                ],
+                "attributes": {
+                  "domain": "network",
+                  "transport": null,
+                  "endpoint_a": null,
+                  "endpoint_b": null,
+                  "endpoint": "time.LocH",
+                  "message_count": 0
+                }
+              },
+              {
+                "id": "protocol-flow:acf84892f148ef6b",
+                "kind": "dynamic_event",
+                "name": "B.symtab",
+                "confidence": 1.0,
+                "sources": [
+                  "protocol_capture"
+                ],
+                "attributes": {
+                  "domain": "network",
+                  "transport": null,
+                  "endpoint_a": null,
+                  "endpoint_b": null,
+                  "endpoint": "B.symtab",
+                  "message_count": 0
+                }
+              },
+              {
+                "id": "protocol-flow:d7bac12614bb5d5a",
+                "kind": "dynamic_event",
+                "name": "B.idata",
+                "confidence": 1.0,
+                "sources": [
+                  "protocol_capture"
+                ],
+                "attributes": {
+                  "domain": "network",
+                  "transport": null,
+                  "endpoint_a": null,
+                  "endpoint_b": null,
+                  "endpoint": "B.idata",
+                  "message_count": 0
+                }
+              },
+              {
+                "id": "protocol-flow:fc5e638f7a4cafb0",
+                "kind": "dynamic_event",
+                "name": "time.DatH",
+                "confidence": 1.0,
+                "sources": [
+                  "protocol_capture"
+                ],
+                "attributes": {
+                  "domain": "network",
+                  "transport": null,
+                  "endpoint_a": null,
+                  "endpoint_b": null,
+                  "endpoint": "time.DatH",
+                  "message_count": 0
+                }
+              },
+              {
+                "id": "protocol-flow:fed67d43ace1c1cd",
+                "kind": "dynamic_event",
+                "name": "v.UH",
+                "confidence": 1.0,
+                "sources": [
+                  "protocol_capture"
+                ],
+                "attributes": {
+                  "domain": "network",
+                  "transport": null,
+                  "endpoint_a": null,
+                  "endpoint_b": null,
+                  "endpoint": "v.UH",
+                  "message_count": 0
+                }
+              }
+            ],
+            "relations": [],
+            "capabilities": [
+              {
+                "id": "capability:network:d1065cf3f3fdb360",
+                "name": "network_protocol",
+                "category": "network",
+                "confidence": 0.6,
+                "entity_ids": [
+                  "protocol-flow:2f00753070db1010",
+                  "protocol-flow:63ae3452a5da35da",
+                  "protocol-flow:7f6d8a4334c03bf2",
+                  "protocol-flow:acf84892f148ef6b",
+                  "protocol-flow:d7bac12614bb5d5a",
+                  "protocol-flow:fc5e638f7a4cafb0",
+                  "protocol-flow:fed67d43ace1c1cd"
+                ],
+                "evidence_count": 7,
+                "attributes": {
+                  "protocols": [],
+                  "message_formats": [],
+                  "protobuf_shape_count": 0,
+                  "request_response_pair_count": 0
+                }
+              }
+            ],
+            "summary": {
+              "entity_count": 7,
+              "relation_count": 0,
+              "capability_count": 1,
+              "flow_count": 7,
+              "message_shape_count": 0,
+              "request_response_pair_count": 0
+            }
+          },
+          "warnings": [],
+          "artifacts": [
+            {
+              "name": "protocol/flows.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\protocol\\flows.json",
+              "kind": "protocol-analysis"
+            },
+            {
+              "name": "protocol/field_stats.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\protocol\\field_stats.json",
+              "kind": "protocol-analysis"
+            },
+            {
+              "name": "protocol/inference.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\protocol\\inference.json",
+              "kind": "protocol-analysis"
+            }
+          ]
+        },
+        "error": null,
+        "metadata": {},
+        "started_at": "2026-08-22T04:51:53.208395+00:00",
+        "finished_at": "2026-08-22T04:51:53.224993+00:00"
+      },
+      "error": null,
+      "iteration": 11,
+      "ok": true,
+      "status": "ok"
+    },
+    {
+      "tool_name": "gui_behavior_graph",
+      "tool_args": {
+        "fingerprint": {},
+        "decompiler": {},
+        "dynamic_analysis": {},
+        "gui_analysis": {},
+        "resources": {},
+        "state_machine": {},
+        "out_dir": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis"
+      },
+      "result": {
+        "tool": "gui_behavior_graph",
+        "status": "ok",
+        "data": {
+          "status": "ok",
+          "version": 1,
+          "nodes": [],
+          "edges": [],
+          "summary": {
+            "node_count": 0,
+            "edge_count": 0,
+            "type_counts": {
+              "function": 0,
+              "api": 0,
+              "dynamic_event": 0,
+              "ui_control": 0,
+              "ui_handler": 0,
+              "resource": 0,
+              "ui_state": 0,
+              "ui_action": 0
+            },
+            "node_type_counts": {
+              "function": 0,
+              "api": 0,
+              "dynamic_event": 0,
+              "ui_control": 0,
+              "ui_handler": 0,
+              "resource": 0,
+              "ui_state": 0,
+              "ui_action": 0
+            },
+            "counts": {
+              "function": 0,
+              "api": 0,
+              "dynamic_event": 0,
+              "ui_control": 0,
+              "ui_handler": 0,
+              "resource": 0,
+              "ui_state": 0,
+              "ui_action": 0
+            },
+            "linked_handler_count": 0,
+            "dynamic_event_count": 0,
+            "state_count": 0,
+            "transition_count": 0,
+            "function_count": 0,
+            "api_count": 0,
+            "ui_control_count": 0,
+            "ui_handler_count": 0,
+            "resource_count": 0,
+            "ui_state_count": 0,
+            "ui_action_count": 0
+          },
+          "artifacts": [
+            {
+              "name": "analysis_graph.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\analysis_graph.json",
+              "kind": "behavior-evidence-graph"
+            }
+          ]
+        },
+        "error": null,
+        "metadata": {},
+        "started_at": "2026-08-22T04:51:53.243586+00:00",
+        "finished_at": "2026-08-22T04:51:53.244168+00:00"
+      },
+      "error": null,
+      "iteration": 12,
+      "ok": true,
+      "status": "ok"
+    },
+    {
+      "tool_name": "semantic_ir_build",
+      "tool_args": {
+        "behavior_graph": {
+          "status": "ok",
+          "version": 1,
+          "nodes": [],
+          "edges": [],
+          "summary": {
+            "node_count": 0,
+            "edge_count": 0,
+            "type_counts": {
+              "function": 0,
+              "api": 0,
+              "dynamic_event": 0,
+              "ui_control": 0,
+              "ui_handler": 0,
+              "resource": 0,
+              "ui_state": 0,
+              "ui_action": 0
+            },
+            "node_type_counts": {
+              "function": 0,
+              "api": 0,
+              "dynamic_event": 0,
+              "ui_control": 0,
+              "ui_handler": 0,
+              "resource": 0,
+              "ui_state": 0,
+              "ui_action": 0
+            },
+            "counts": {
+              "function": 0,
+              "api": 0,
+              "dynamic_event": 0,
+              "ui_control": 0,
+              "ui_handler": 0,
+              "resource": 0,
+              "ui_state": 0,
+              "ui_action": 0
+            },
+            "linked_handler_count": 0,
+            "dynamic_event_count": 0,
+            "state_count": 0,
+            "transition_count": 0,
+            "function_count": 0,
+            "api_count": 0,
+            "ui_control_count": 0,
+            "ui_handler_count": 0,
+            "resource_count": 0,
+            "ui_state_count": 0,
+            "ui_action_count": 0
+          },
+          "artifacts": [
+            {
+              "name": "analysis_graph.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\analysis_graph.json",
+              "kind": "behavior-evidence-graph"
+            }
+          ]
+        },
+        "decompiler": {},
+        "dynamic_analysis": {},
+        "gui_analysis": {},
+        "engine_analysis": {
+          "status": "ok",
+          "schema_version": 1,
+          "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+          "platform": "windows-pe",
+          "engine": "unknown",
+          "confidence": 0.0,
+          "evidence": [
+            "No independently corroborated engine signal reached the detection threshold"
+          ],
+          "candidates": [
+            {
+              "engine": "unknown",
+              "score": 0.0,
+              "confidence": 0.0,
+              "evidence": [
+                "No independently corroborated engine signal reached the detection threshold"
+              ]
+            }
+          ],
+          "metadata": {
+            "status": "unavailable",
+            "schema_version": 1,
+            "engine": "unknown",
+            "managed_assembly_count": 0,
+            "managed_assembly_candidate_count": 0,
+            "managed_assemblies": [],
+            "managed_assembly_files": [],
+            "managed_type_definition_count": 0,
+            "managed_method_definition_count": 0,
+            "managed_field_definition_count": 0,
+            "global_metadata_present": false,
+            "global_metadata_file_present": false,
+            "global_metadata": {
+              "status": "unavailable",
+              "schema_version": 1,
+              "path": null,
+              "size": null,
+              "magic": null,
+              "magic_valid": false,
+              "version": null,
+              "header_size": null,
+              "table_count": 0,
+              "table_offsets": {},
+              "tables": [],
+              "errors": [
+                "global-metadata.dat not found"
+              ],
+              "error": "global-metadata.dat not found",
+              "string_count_scanned": 0,
+              "strings_truncated": false,
+              "definition_parser": "il2cpp-global-metadata-v1",
+              "definition_layout_supported": false,
+              "type_definition_count": 0,
+              "method_definition_count": 0,
+              "field_definition_count": 0,
+              "type_definition_record_count": 0,
+              "method_definition_record_count": 0,
+              "field_definition_record_count": 0,
+              "image_definition_count": 0,
+              "image_definition_record_count": 0,
+              "image_definition_record_size": null,
+              "method_definition_record_size": null,
+              "type_definitions": [],
+              "method_definitions": [],
+              "field_definitions": [],
+              "image_definitions": [],
+              "image_definition_errors": [],
+              "definition_errors": []
+            },
+            "global_metadata_header": {
+              "status": "unavailable",
+              "schema_version": 1,
+              "path": null,
+              "size": null,
+              "magic": null,
+              "magic_valid": false,
+              "version": null,
+              "header_size": null,
+              "table_count": 0,
+              "table_offsets": {},
+              "tables": [],
+              "errors": [
+                "global-metadata.dat not found"
+              ],
+              "error": "global-metadata.dat not found",
+              "string_count_scanned": 0,
+              "strings_truncated": false,
+              "definition_parser": "il2cpp-global-metadata-v1",
+              "definition_layout_supported": false,
+              "type_definition_count": 0,
+              "method_definition_count": 0,
+              "field_definition_count": 0,
+              "type_definition_record_count": 0,
+              "method_definition_record_count": 0,
+              "field_definition_record_count": 0,
+              "image_definition_count": 0,
+              "image_definition_record_count": 0,
+              "image_definition_record_size": null,
+              "method_definition_record_size": null,
+              "type_definitions": [],
+              "method_definitions": [],
+              "field_definitions": [],
+              "image_definitions": [],
+              "image_definition_errors": [],
+              "definition_errors": []
+            },
+            "global_metadata_files": [],
+            "global_metadata_version": null,
+            "global_metadata_tables": [],
+            "gameassembly_present": false,
+            "gameassembly_file_present": false,
+            "mono_present": false,
+            "unreal_reflection_strings": [],
+            "unreal_package_names": [],
+            "native_mapping_status": "unavailable",
+            "native_mapped_method_count": 0
+          },
+          "assets": {
+            "status": "unavailable",
+            "schema_version": 1,
+            "pak_count": 0,
+            "uasset_count": 0,
+            "umap_count": 0,
+            "pak_candidate_count": 0,
+            "uasset_candidate_count": 0,
+            "umap_candidate_count": 0,
+            "validated_package_count": 0,
+            "package_files": [],
+            "scene_like_asset_count": 0,
+            "asset_examples": [],
+            "resources_assets_present": false,
+            "resources_assets_count": 0,
+            "unity_asset_count": 0,
+            "unity_assets": [],
+            "unreal_package_names": [],
+            "unreal_asset_names": []
+          },
+          "symbols": {
+            "status": "unavailable",
+            "schema_version": 1,
+            "recovered_symbol_count": 0,
+            "recovered_symbols": [],
+            "symbol_records": [],
+            "type_symbols": [],
+            "method_symbols": [],
+            "field_symbols": [],
+            "mono_behaviour_symbols": [],
+            "monobehaviour_symbols": [],
+            "scriptable_object_symbols": [],
+            "ui_symbols": [],
+            "unreal_reflection_names": [],
+            "unreal_package_names": [],
+            "raw_string_markers": {
+              "mono_behaviour": [],
+              "scriptable_object": [],
+              "ui": []
+            }
+          },
+          "native_mapping": {
+            "status": "unavailable",
+            "schema_version": 1,
+            "engine": "unity-il2cpp",
+            "parser": "il2cpp-codegen-module-pe-v1",
+            "metadata_path": null,
+            "metadata_version": null,
+            "binary_path": null,
+            "binary_size": null,
+            "pe": {
+              "status": "unavailable",
+              "sections": [],
+              "errors": []
+            },
+            "eligible_method_count": 0,
+            "mapped_method_count": 0,
+            "codegen_modules": [],
+            "mappings": [],
+            "unmapped_methods": [],
+            "confidence": 0.0,
+            "provenance": {},
+            "errors": [],
+            "reason": null
+          },
+          "sdk_skeleton": {
+            "status": "unavailable",
+            "schema_version": 1,
+            "language": "c++17",
+            "kind": "static-evidence-skeleton",
+            "confidence": 0.0,
+            "declaration_count": 0,
+            "declarations": [],
+            "reflection_marker_count": 0,
+            "reflection_markers": [],
+            "package_paths": [],
+            "source": "",
+            "runtime_uobject_enumeration": false,
+            "sdk_dump_complete": false,
+            "provenance": {},
+            "limitations": [
+              "No runtime UObject traversal was performed.",
+              "Forward declarations do not prove class layout, inheritance, fields, or callable addresses.",
+              "Non-type reflection markers are retained as evidence and are not emitted as C++ types."
+            ]
+          },
+          "semantic_ir_fragment": {
+            "status": "unavailable",
+            "schema_version": 1,
+            "engine": "unknown",
+            "entities": [],
+            "relations": [],
+            "capabilities": [],
+            "summary": {
+              "entity_count": 0,
+              "relation_count": 0,
+              "resource_count": 0,
+              "ui_control_count": 0,
+              "native_mapped_method_count": 0,
+              "sdk_declaration_count": 0
+            },
+            "artifacts": []
+          },
+          "strategy": {
+            "name": "generic_engine_fingerprint",
+            "reason": "No dominant engine signal found; keep evidence for later fusion.",
+            "engine": "unknown",
+            "key": "unknown:generic_engine_fingerprint"
+          },
+          "diagnostics": [],
+          "artifacts": [
+            {
+              "name": "engine/fingerprint.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\fingerprint.json",
+              "kind": "engine-analysis"
+            },
+            {
+              "name": "engine/metadata.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\metadata.json",
+              "kind": "engine-analysis"
+            },
+            {
+              "name": "engine/assets.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\assets.json",
+              "kind": "engine-analysis"
+            },
+            {
+              "name": "engine/symbols.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\symbols.json",
+              "kind": "engine-analysis"
+            },
+            {
+              "name": "engine/native_mapping.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\native_mapping.json",
+              "kind": "engine-native-mapping"
+            },
+            {
+              "name": "engine/sdk_skeleton.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\sdk_skeleton.json",
+              "kind": "engine-sdk-skeleton"
+            },
+            {
+              "name": "engine/semantic_ir_fragment.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\semantic_ir_fragment.json",
+              "kind": "semantic-ir-fragment"
+            }
+          ]
+        },
+        "android_analysis": {
+          "status": "unavailable",
+          "package_type": "unknown",
+          "archive": {
+            "status": "unavailable",
+            "entry_count": 0,
+            "safe_entry_count": 0,
+            "unsafe_entry_count": 0,
+            "unsafe_entries": []
+          },
+          "framework": {
+            "name": "unknown",
+            "confidence": 0.0,
+            "score": 0.0,
+            "evidence": [
+              "Input is not an APK"
+            ],
+            "candidates": [
+              {
+                "name": "android_xml",
+                "score": 0.0,
+                "confidence": 0.0,
+                "evidence": []
+              },
+              {
+                "name": "jetpack_compose",
+                "score": 0.0,
+                "confidence": 0.0,
+                "evidence": []
+              },
+              {
+                "name": "flutter",
+                "score": 0.0,
+                "confidence": 0.0,
+                "evidence": []
+              },
+              {
+                "name": "react_native",
+                "score": 0.0,
+                "confidence": 0.0,
+                "evidence": []
+              },
+              {
+                "name": "unity",
+                "score": 0.0,
+                "confidence": 0.0,
+                "evidence": []
+              },
+              {
+                "name": "webview_hybrid",
+                "score": 0.0,
+                "confidence": 0.0,
+                "evidence": []
+              }
+            ],
+            "conflict": {
+              "is_conflicted": false,
+              "score": 0.0,
+              "runner_up": null,
+              "strong_candidates": []
+            },
+            "conflicts": [],
+            "scoring": "bounded-static-evidence-v1"
+          },
+          "manifest": {
+            "present": false,
+            "status": "unavailable",
+            "parser": "none",
+            "package": null,
+            "version_code": null,
+            "version_name": null,
+            "min_sdk": null,
+            "target_sdk": null,
+            "application": null,
+            "permissions": [],
+            "permission_count": 0,
+            "permission_hint_count": 0,
+            "activities": [],
+            "services": [],
+            "receivers": [],
+            "providers": [],
+            "component_counts": {
+              "activities": 0,
+              "services": 0,
+              "receivers": 0,
+              "providers": 0
+            },
+            "activity_hint_count": 0,
+            "uses_features": [],
+            "textual": false,
+            "element_count": 0,
+            "fallback_strings": [],
+            "warnings": []
+          },
+          "resources": {
+            "status": "unavailable",
+            "resource_arsc_present": false,
+            "resource_arsc_size": null,
+            "layout_count": 0,
+            "drawable_count": 0,
+            "values_count": 0,
+            "asset_count": 0,
+            "layout_examples": [],
+            "drawable_examples": [],
+            "layouts": [],
+            "drawables": [],
+            "layout_types": {},
+            "drawable_types": {},
+            "categories": {},
+            "web_asset_count": 0,
+            "limits": {
+              "max_examples": 40,
+              "max_xml_files_parsed": 64,
+              "max_bytes_per_xml": 1048576
+            }
+          },
+          "dex_summary": {
+            "status": "unavailable",
+            "dex_count": 0,
+            "parsed_count": 0,
+            "dex_files": [],
+            "files": [],
+            "totals": {
+              "string_ids": 0,
+              "type_ids": 0,
+              "proto_ids": 0,
+              "field_ids": 0,
+              "method_ids": 0,
+              "class_defs": 0
+            },
+            "string_ids": 0,
+            "type_ids": 0,
+            "proto_ids": 0,
+            "field_ids": 0,
+            "method_ids": 0,
+            "class_defs": 0,
+            "valid_count": 0,
+            "partial_count": 0,
+            "invalid_count": 0,
+            "string_evidence": [],
+            "limits": {
+              "max_dex_files": 32,
+              "max_bytes_per_dex": 16777216,
+              "max_string_ids_per_dex": 4096,
+              "max_string_evidence": 96
+            }
+          },
+          "native_libs": {
+            "status": "unavailable",
+            "count": 0,
+            "parsed_count": 0,
+            "abis": [],
+            "libs": [],
+            "entries": [],
+            "elf_count": 0,
+            "jni_export_count": 0,
+            "jni_exports": [],
+            "java_native_links": [],
+            "limits": {
+              "max_native_libraries": 128,
+              "max_bytes_per_library": 8388608,
+              "max_elf_symbols": 8192
+            }
+          },
+          "java_decompilation": {
+            "schema_version": 1,
+            "status": "unavailable",
+            "requested": false,
+            "provider": "jadx",
+            "reason": "JADX decompilation was not requested",
+            "dependency": {
+              "name": "jadx",
+              "state": "not_requested",
+              "executable": null,
+              "probe": {}
+            },
+            "command": [],
+            "command_metadata": {
+              "argv_only": true,
+              "shell": false,
+              "offline": true,
+              "target_code_executed": false
+            },
+            "returncode": null,
+            "stdout": "",
+            "stderr": "",
+            "output": {
+              "path": "android/jadx",
+              "file_count": 0,
+              "source_file_count": 0,
+              "java_file_count": 0,
+              "kotlin_file_count": 0,
+              "total_bytes": 0,
+              "files": []
+            },
+            "target": {
+              "sha256_before": null,
+              "sha256_after": null,
+              "unchanged": false
+            },
+            "capability_boundary": {
+              "provider_kind": "external",
+              "operation_kind": "offline_dex_java_kotlin_decompilation",
+              "dependency_state": "not_requested",
+              "required_tools": [
+                "jadx"
+              ],
+              "target_code_executed": false,
+              "network_access": false,
+              "content_recompiled": false
+            },
+            "warnings": [],
+            "artifact": "android/java_decompilation.json"
+          },
+          "semantic_ir_fragment": {
+            "schema_version": 1,
+            "source": "android_analyze",
+            "status": "unavailable",
+            "entities": [],
+            "relations": [],
+            "capabilities": [],
+            "summary": {
+              "entity_count": 0,
+              "relation_count": 0,
+              "capability_count": 0
+            },
+            "artifacts": [],
+            "limits": {
+              "max_components": 256,
+              "max_dex_files": 32,
+              "max_native_libraries": 128
+            }
+          },
+          "capability_boundary": {
+            "provider_kind": "builtin",
+            "operation_kind": "bounded_zip_static_analysis",
+            "dependency_state": "not_required",
+            "required_tools": [],
+            "content_recompiled": false,
+            "byte_preserving": true,
+            "signature_verification": "not_performed",
+            "code_executed": false,
+            "members_extracted": false
+          },
+          "strategy": {
+            "name": "unknown_static_unpack",
+            "key": "android:unknown_static_unpack",
+            "reason": "Static package structure preserves Android resources, DEX, and native-library evidence."
+          },
+          "warnings": [
+            "sample is not an APK"
+          ],
+          "artifacts": [
+            {
+              "name": "android/manifest.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\manifest.json",
+              "kind": "android-analysis"
+            },
+            {
+              "name": "android/resources.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\resources.json",
+              "kind": "android-analysis"
+            },
+            {
+              "name": "android/dex_summary.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\dex_summary.json",
+              "kind": "android-analysis"
+            },
+            {
+              "name": "android/native_libs.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\native_libs.json",
+              "kind": "android-analysis"
+            },
+            {
+              "name": "android/framework.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\framework.json",
+              "kind": "android-analysis"
+            },
+            {
+              "name": "android/java_decompilation.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\java_decompilation.json",
+              "kind": "android-analysis"
+            },
+            {
+              "name": "android/semantic_ir_fragment.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\semantic_ir_fragment.json",
+              "kind": "android-analysis"
+            }
+          ],
+          "error": "sample is not an APK",
+          "reason": "sample is not an APK"
+        },
+        "ios_analysis": {},
+        "protocol_analysis": {
+          "status": "ok",
+          "protocols": [],
+          "flows": [
+            {
+              "endpoint": "B.idata",
+              "kind": "host"
+            },
+            {
+              "endpoint": "B.symtab",
+              "kind": "host"
+            },
+            {
+              "endpoint": "time.DatH",
+              "kind": "host"
+            },
+            {
+              "endpoint": "time.LocH",
+              "kind": "host"
+            },
+            {
+              "endpoint": "time.LocL",
+              "kind": "host"
+            },
+            {
+              "endpoint": "time.UTCL",
+              "kind": "host"
+            },
+            {
+              "endpoint": "v.UH",
+              "kind": "host"
+            }
+          ],
+          "field_stats": {
+            "string_count": 2498,
+            "url_count": 0,
+            "host_count": 7,
+            "named_pipe_count": 0,
+            "format_count": 0,
+            "protocol_count": 0,
+            "capture_flow_count": 0,
+            "message_count": 0,
+            "protobuf_message_count": 0,
+            "request_response_pair_count": 0,
+            "field_count": 0,
+            "messages_with_fields": 0,
+            "fields": []
+          },
+          "inference": {
+            "primary_protocol": null,
+            "message_formats": [],
+            "probable_flow_count": 7,
+            "confidence": 0.0,
+            "request_response_pair_count": 0,
+            "field_count": 0,
+            "strategy": {
+              "name": "protocol_strings_dynamic_fusion",
+              "key": "protocol:protocol_strings_dynamic_fusion",
+              "reason": "Static strings plus dynamic/network hints provide low-friction passive protocol evidence."
+            }
+          },
+          "messages": [],
+          "field_statistics": [],
+          "request_response_pairs": [],
+          "semantic_ir_fragment": {
+            "status": "ok",
+            "schema_version": 1,
+            "source": "protocol",
+            "entities": [
+              {
+                "id": "protocol-flow:2f00753070db1010",
+                "kind": "dynamic_event",
+                "name": "time.LocL",
+                "confidence": 1.0,
+                "sources": [
+                  "protocol_capture"
+                ],
+                "attributes": {
+                  "domain": "network",
+                  "transport": null,
+                  "endpoint_a": null,
+                  "endpoint_b": null,
+                  "endpoint": "time.LocL",
+                  "message_count": 0
+                }
+              },
+              {
+                "id": "protocol-flow:63ae3452a5da35da",
+                "kind": "dynamic_event",
+                "name": "time.UTCL",
+                "confidence": 1.0,
+                "sources": [
+                  "protocol_capture"
+                ],
+                "attributes": {
+                  "domain": "network",
+                  "transport": null,
+                  "endpoint_a": null,
+                  "endpoint_b": null,
+                  "endpoint": "time.UTCL",
+                  "message_count": 0
+                }
+              },
+              {
+                "id": "protocol-flow:7f6d8a4334c03bf2",
+                "kind": "dynamic_event",
+                "name": "time.LocH",
+                "confidence": 1.0,
+                "sources": [
+                  "protocol_capture"
+                ],
+                "attributes": {
+                  "domain": "network",
+                  "transport": null,
+                  "endpoint_a": null,
+                  "endpoint_b": null,
+                  "endpoint": "time.LocH",
+                  "message_count": 0
+                }
+              },
+              {
+                "id": "protocol-flow:acf84892f148ef6b",
+                "kind": "dynamic_event",
+                "name": "B.symtab",
+                "confidence": 1.0,
+                "sources": [
+                  "protocol_capture"
+                ],
+                "attributes": {
+                  "domain": "network",
+                  "transport": null,
+                  "endpoint_a": null,
+                  "endpoint_b": null,
+                  "endpoint": "B.symtab",
+                  "message_count": 0
+                }
+              },
+              {
+                "id": "protocol-flow:d7bac12614bb5d5a",
+                "kind": "dynamic_event",
+                "name": "B.idata",
+                "confidence": 1.0,
+                "sources": [
+                  "protocol_capture"
+                ],
+                "attributes": {
+                  "domain": "network",
+                  "transport": null,
+                  "endpoint_a": null,
+                  "endpoint_b": null,
+                  "endpoint": "B.idata",
+                  "message_count": 0
+                }
+              },
+              {
+                "id": "protocol-flow:fc5e638f7a4cafb0",
+                "kind": "dynamic_event",
+                "name": "time.DatH",
+                "confidence": 1.0,
+                "sources": [
+                  "protocol_capture"
+                ],
+                "attributes": {
+                  "domain": "network",
+                  "transport": null,
+                  "endpoint_a": null,
+                  "endpoint_b": null,
+                  "endpoint": "time.DatH",
+                  "message_count": 0
+                }
+              },
+              {
+                "id": "protocol-flow:fed67d43ace1c1cd",
+                "kind": "dynamic_event",
+                "name": "v.UH",
+                "confidence": 1.0,
+                "sources": [
+                  "protocol_capture"
+                ],
+                "attributes": {
+                  "domain": "network",
+                  "transport": null,
+                  "endpoint_a": null,
+                  "endpoint_b": null,
+                  "endpoint": "v.UH",
+                  "message_count": 0
+                }
+              }
+            ],
+            "relations": [],
+            "capabilities": [
+              {
+                "id": "capability:network:d1065cf3f3fdb360",
+                "name": "network_protocol",
+                "category": "network",
+                "confidence": 0.6,
+                "entity_ids": [
+                  "protocol-flow:2f00753070db1010",
+                  "protocol-flow:63ae3452a5da35da",
+                  "protocol-flow:7f6d8a4334c03bf2",
+                  "protocol-flow:acf84892f148ef6b",
+                  "protocol-flow:d7bac12614bb5d5a",
+                  "protocol-flow:fc5e638f7a4cafb0",
+                  "protocol-flow:fed67d43ace1c1cd"
+                ],
+                "evidence_count": 7,
+                "attributes": {
+                  "protocols": [],
+                  "message_formats": [],
+                  "protobuf_shape_count": 0,
+                  "request_response_pair_count": 0
+                }
+              }
+            ],
+            "summary": {
+              "entity_count": 7,
+              "relation_count": 0,
+              "capability_count": 1,
+              "flow_count": 7,
+              "message_shape_count": 0,
+              "request_response_pair_count": 0
+            }
+          },
+          "warnings": [],
+          "artifacts": [
+            {
+              "name": "protocol/flows.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\protocol\\flows.json",
+              "kind": "protocol-analysis"
+            },
+            {
+              "name": "protocol/field_stats.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\protocol\\field_stats.json",
+              "kind": "protocol-analysis"
+            },
+            {
+              "name": "protocol/inference.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\protocol\\inference.json",
+              "kind": "protocol-analysis"
+            }
+          ]
+        },
+        "out_dir": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis"
+      },
+      "result": {
+        "tool": "semantic_ir_build",
+        "status": "ok",
+        "data": {
+          "status": "partial",
+          "schema_version": 1,
+          "entities": [
+            {
+              "id": "protocol-flow:2f00753070db1010",
+              "kind": "dynamic_event",
+              "name": "time.LocL",
+              "confidence": 1.0,
+              "sources": [
+                "protocol_analysis.semantic_ir_fragment.entities",
+                "protocol_capture"
+              ],
+              "attributes": {
+                "domain": "network",
+                "endpoint": "time.LocL",
+                "endpoint_a": null,
+                "endpoint_b": null,
+                "message_count": 0,
+                "transport": null
+              }
+            },
+            {
+              "id": "protocol-flow:63ae3452a5da35da",
+              "kind": "dynamic_event",
+              "name": "time.UTCL",
+              "confidence": 1.0,
+              "sources": [
+                "protocol_analysis.semantic_ir_fragment.entities",
+                "protocol_capture"
+              ],
+              "attributes": {
+                "domain": "network",
+                "endpoint": "time.UTCL",
+                "endpoint_a": null,
+                "endpoint_b": null,
+                "message_count": 0,
+                "transport": null
+              }
+            },
+            {
+              "id": "protocol-flow:7f6d8a4334c03bf2",
+              "kind": "dynamic_event",
+              "name": "time.LocH",
+              "confidence": 1.0,
+              "sources": [
+                "protocol_analysis.semantic_ir_fragment.entities",
+                "protocol_capture"
+              ],
+              "attributes": {
+                "domain": "network",
+                "endpoint": "time.LocH",
+                "endpoint_a": null,
+                "endpoint_b": null,
+                "message_count": 0,
+                "transport": null
+              }
+            },
+            {
+              "id": "protocol-flow:acf84892f148ef6b",
+              "kind": "dynamic_event",
+              "name": "B.symtab",
+              "confidence": 1.0,
+              "sources": [
+                "protocol_analysis.semantic_ir_fragment.entities",
+                "protocol_capture"
+              ],
+              "attributes": {
+                "domain": "network",
+                "endpoint": "B.symtab",
+                "endpoint_a": null,
+                "endpoint_b": null,
+                "message_count": 0,
+                "transport": null
+              }
+            },
+            {
+              "id": "protocol-flow:d7bac12614bb5d5a",
+              "kind": "dynamic_event",
+              "name": "B.idata",
+              "confidence": 1.0,
+              "sources": [
+                "protocol_analysis.semantic_ir_fragment.entities",
+                "protocol_capture"
+              ],
+              "attributes": {
+                "domain": "network",
+                "endpoint": "B.idata",
+                "endpoint_a": null,
+                "endpoint_b": null,
+                "message_count": 0,
+                "transport": null
+              }
+            },
+            {
+              "id": "protocol-flow:fc5e638f7a4cafb0",
+              "kind": "dynamic_event",
+              "name": "time.DatH",
+              "confidence": 1.0,
+              "sources": [
+                "protocol_analysis.semantic_ir_fragment.entities",
+                "protocol_capture"
+              ],
+              "attributes": {
+                "domain": "network",
+                "endpoint": "time.DatH",
+                "endpoint_a": null,
+                "endpoint_b": null,
+                "message_count": 0,
+                "transport": null
+              }
+            },
+            {
+              "id": "protocol-flow:fed67d43ace1c1cd",
+              "kind": "dynamic_event",
+              "name": "v.UH",
+              "confidence": 1.0,
+              "sources": [
+                "protocol_analysis.semantic_ir_fragment.entities",
+                "protocol_capture"
+              ],
+              "attributes": {
+                "domain": "network",
+                "endpoint": "v.UH",
+                "endpoint_a": null,
+                "endpoint_b": null,
+                "message_count": 0,
+                "transport": null
+              }
+            }
+          ],
+          "relations": [],
+          "capabilities": [
+            {
+              "id": "capability:general:d1065cf3f3fdb360fb4d",
+              "name": "general",
+              "category": "general",
+              "confidence": 1.0,
+              "entity_ids": [
+                "protocol-flow:2f00753070db1010",
+                "protocol-flow:63ae3452a5da35da",
+                "protocol-flow:7f6d8a4334c03bf2",
+                "protocol-flow:acf84892f148ef6b",
+                "protocol-flow:d7bac12614bb5d5a",
+                "protocol-flow:fc5e638f7a4cafb0",
+                "protocol-flow:fed67d43ace1c1cd"
+              ],
+              "evidence_count": 14
+            },
+            {
+              "id": "capability:network:d1065cf3f3fdb360",
+              "name": "network_protocol",
+              "category": "network",
+              "confidence": 0.6,
+              "entity_ids": [
+                "protocol-flow:2f00753070db1010",
+                "protocol-flow:63ae3452a5da35da",
+                "protocol-flow:7f6d8a4334c03bf2",
+                "protocol-flow:acf84892f148ef6b",
+                "protocol-flow:d7bac12614bb5d5a",
+                "protocol-flow:fc5e638f7a4cafb0",
+                "protocol-flow:fed67d43ace1c1cd"
+              ],
+              "evidence_count": 7,
+              "sources": [
+                "protocol_analysis.semantic_ir_fragment.capabilities"
+              ],
+              "attributes": {
+                "message_formats": [],
+                "protobuf_shape_count": 0,
+                "protocols": [],
+                "request_response_pair_count": 0
+              }
+            }
+          ],
+          "summary": {
+            "entity_count": 7,
+            "relation_count": 0,
+            "capability_count": 2,
+            "function_count": 0,
+            "api_count": 0,
+            "dynamic_event_count": 7,
+            "ui_control_count": 0,
+            "ui_state_count": 0
+          },
+          "artifacts": [
+            {
+              "name": "semantic_ir.json",
+              "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\semantic_ir.json",
+              "kind": "semantic-ir"
+            }
+          ],
+          "provenance": [
+            {
+              "analysis": "protocol_analysis",
+              "source": "protocol"
+            },
+            {
+              "analysis": "protocol_analysis",
+              "source": "protocol_analysis.semantic_ir_fragment"
+            }
+          ]
+        },
+        "error": null,
+        "metadata": {},
+        "started_at": "2026-08-22T04:51:53.255172+00:00",
+        "finished_at": "2026-08-22T04:51:53.256256+00:00"
+      },
+      "error": null,
+      "iteration": 13,
+      "ok": false,
+      "status": "partial"
+    }
+  ],
+  "pe_analysis": {
+    "status": "ok",
+    "entrypoint": {
+      "rva": 559040,
+      "section": ".text",
+      "section_rva": 4096,
+      "section_executable": true,
+      "anomaly": null
+    },
+    "import_dll_count": 1,
+    "import_function_count": 48,
+    "export_count": 0,
+    "resource_count": 0,
+    "resource_types": [],
+    "tls_callback_count": 0,
+    "tls_callbacks": [],
+    "overlay_present": false,
+    "overlay_size": 0,
+    "rich_header_present": false,
+    "section_anomaly_count": 8,
+    "section_anomalies": [
+      {
+        "section": ".xdata",
+        "entropy": 1.787112262798912,
+        "raw_size": 512,
+        "virtual_size": 180,
+        "reasons": [
+          "raw_size_exceeds_virtual_size"
+        ]
+      },
+      {
+        "section": "/19",
+        "entropy": 7.996339738557158,
+        "raw_size": 701952,
+        "virtual_size": 701873,
+        "reasons": [
+          "high_entropy"
+        ]
+      },
+      {
+        "section": "/32",
+        "entropy": 7.943523387348717,
+        "raw_size": 149504,
+        "virtual_size": 149018,
+        "reasons": [
+          "high_entropy"
+        ]
+      },
+      {
+        "section": "/46",
+        "entropy": 0.8556848540171443,
+        "raw_size": 512,
+        "virtual_size": 48,
+        "reasons": [
+          "raw_size_exceeds_virtual_size"
+        ]
+      },
+      {
+        "section": "/65",
+        "entropy": 7.99832328534933,
+        "raw_size": 1140736,
+        "virtual_size": 1140551,
+        "reasons": [
+          "high_entropy"
+        ]
+      },
+      {
+        "section": "/78",
+        "entropy": 7.997876549410377,
+        "raw_size": 710144,
+        "virtual_size": 709974,
+        "reasons": [
+          "high_entropy"
+        ]
+      },
+      {
+        "section": "/95",
+        "entropy": 7.995742607236831,
+        "raw_size": 276992,
+        "virtual_size": 276493,
+        "reasons": [
+          "high_entropy"
+        ]
+      },
+      {
+        "section": "/112",
+        "entropy": 7.786341658392834,
+        "raw_size": 18432,
+        "virtual_size": 18128,
+        "reasons": [
+          "high_entropy"
+        ]
+      }
+    ],
+    "iat_anomaly_count": 0,
+    "iat_anomalies": [],
+    "shell_score": 100,
+    "shell_verdict": "likely_packed",
+    "shell_indicators": [
+      {
+        "kind": "section",
+        "section": ".xdata",
+        "reason": "raw_size_exceeds_virtual_size",
+        "weight": 10
+      },
+      {
+        "kind": "section",
+        "section": "/19",
+        "reason": "high_entropy",
+        "weight": 15
+      },
+      {
+        "kind": "section",
+        "section": "/32",
+        "reason": "high_entropy",
+        "weight": 15
+      },
+      {
+        "kind": "section",
+        "section": "/46",
+        "reason": "raw_size_exceeds_virtual_size",
+        "weight": 10
+      },
+      {
+        "kind": "section",
+        "section": "/65",
+        "reason": "high_entropy",
+        "weight": 15
+      },
+      {
+        "kind": "section",
+        "section": "/78",
+        "reason": "high_entropy",
+        "weight": 15
+      },
+      {
+        "kind": "section",
+        "section": "/95",
+        "reason": "high_entropy",
+        "weight": 15
+      },
+      {
+        "kind": "section",
+        "section": "/112",
+        "reason": "high_entropy",
+        "weight": 15
+      }
+    ]
+  },
+  "yara": {
+    "status": "unavailable",
+    "rules_path": "D:\\Project\\PE-reverse-skill\\rules\\yara",
+    "rule_files": [],
+    "match_count": 0,
+    "matches": [],
+    "error": "optional dependency yara-python unavailable: No module named 'yara'"
+  },
+  "dynamic_analysis": {},
+  "memory_analysis": {},
+  "engine_analysis": {
+    "status": "ok",
+    "schema_version": 1,
+    "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+    "platform": "windows-pe",
+    "engine": "unknown",
+    "confidence": 0.0,
+    "evidence": [
+      "No independently corroborated engine signal reached the detection threshold"
+    ],
+    "candidates": [
+      {
+        "engine": "unknown",
+        "score": 0.0,
+        "confidence": 0.0,
+        "evidence": [
+          "No independently corroborated engine signal reached the detection threshold"
+        ]
+      }
+    ],
+    "metadata": {
+      "status": "unavailable",
+      "schema_version": 1,
+      "engine": "unknown",
+      "managed_assembly_count": 0,
+      "managed_assembly_candidate_count": 0,
+      "managed_assemblies": [],
+      "managed_assembly_files": [],
+      "managed_type_definition_count": 0,
+      "managed_method_definition_count": 0,
+      "managed_field_definition_count": 0,
+      "global_metadata_present": false,
+      "global_metadata_file_present": false,
+      "global_metadata": {
+        "status": "unavailable",
+        "schema_version": 1,
+        "path": null,
+        "size": null,
+        "magic": null,
+        "magic_valid": false,
+        "version": null,
+        "header_size": null,
+        "table_count": 0,
+        "table_offsets": {},
+        "tables": [],
+        "errors": [
+          "global-metadata.dat not found"
+        ],
+        "error": "global-metadata.dat not found",
+        "string_count_scanned": 0,
+        "strings_truncated": false,
+        "definition_parser": "il2cpp-global-metadata-v1",
+        "definition_layout_supported": false,
+        "type_definition_count": 0,
+        "method_definition_count": 0,
+        "field_definition_count": 0,
+        "type_definition_record_count": 0,
+        "method_definition_record_count": 0,
+        "field_definition_record_count": 0,
+        "image_definition_count": 0,
+        "image_definition_record_count": 0,
+        "image_definition_record_size": null,
+        "method_definition_record_size": null,
+        "type_definitions": [],
+        "method_definitions": [],
+        "field_definitions": [],
+        "image_definitions": [],
+        "image_definition_errors": [],
+        "definition_errors": []
+      },
+      "global_metadata_header": {
+        "status": "unavailable",
+        "schema_version": 1,
+        "path": null,
+        "size": null,
+        "magic": null,
+        "magic_valid": false,
+        "version": null,
+        "header_size": null,
+        "table_count": 0,
+        "table_offsets": {},
+        "tables": [],
+        "errors": [
+          "global-metadata.dat not found"
+        ],
+        "error": "global-metadata.dat not found",
+        "string_count_scanned": 0,
+        "strings_truncated": false,
+        "definition_parser": "il2cpp-global-metadata-v1",
+        "definition_layout_supported": false,
+        "type_definition_count": 0,
+        "method_definition_count": 0,
+        "field_definition_count": 0,
+        "type_definition_record_count": 0,
+        "method_definition_record_count": 0,
+        "field_definition_record_count": 0,
+        "image_definition_count": 0,
+        "image_definition_record_count": 0,
+        "image_definition_record_size": null,
+        "method_definition_record_size": null,
+        "type_definitions": [],
+        "method_definitions": [],
+        "field_definitions": [],
+        "image_definitions": [],
+        "image_definition_errors": [],
+        "definition_errors": []
+      },
+      "global_metadata_files": [],
+      "global_metadata_version": null,
+      "global_metadata_tables": [],
+      "gameassembly_present": false,
+      "gameassembly_file_present": false,
+      "mono_present": false,
+      "unreal_reflection_strings": [],
+      "unreal_package_names": [],
+      "native_mapping_status": "unavailable",
+      "native_mapped_method_count": 0
+    },
+    "assets": {
+      "status": "unavailable",
+      "schema_version": 1,
+      "pak_count": 0,
+      "uasset_count": 0,
+      "umap_count": 0,
+      "pak_candidate_count": 0,
+      "uasset_candidate_count": 0,
+      "umap_candidate_count": 0,
+      "validated_package_count": 0,
+      "package_files": [],
+      "scene_like_asset_count": 0,
+      "asset_examples": [],
+      "resources_assets_present": false,
+      "resources_assets_count": 0,
+      "unity_asset_count": 0,
+      "unity_assets": [],
+      "unreal_package_names": [],
+      "unreal_asset_names": []
+    },
+    "symbols": {
+      "status": "unavailable",
+      "schema_version": 1,
+      "recovered_symbol_count": 0,
+      "recovered_symbols": [],
+      "symbol_records": [],
+      "type_symbols": [],
+      "method_symbols": [],
+      "field_symbols": [],
+      "mono_behaviour_symbols": [],
+      "monobehaviour_symbols": [],
+      "scriptable_object_symbols": [],
+      "ui_symbols": [],
+      "unreal_reflection_names": [],
+      "unreal_package_names": [],
+      "raw_string_markers": {
+        "mono_behaviour": [],
+        "scriptable_object": [],
+        "ui": []
+      }
+    },
+    "native_mapping": {
+      "status": "unavailable",
+      "schema_version": 1,
+      "engine": "unity-il2cpp",
+      "parser": "il2cpp-codegen-module-pe-v1",
+      "metadata_path": null,
+      "metadata_version": null,
+      "binary_path": null,
+      "binary_size": null,
+      "pe": {
+        "status": "unavailable",
+        "sections": [],
+        "errors": []
+      },
+      "eligible_method_count": 0,
+      "mapped_method_count": 0,
+      "codegen_modules": [],
+      "mappings": [],
+      "unmapped_methods": [],
+      "confidence": 0.0,
+      "provenance": {},
+      "errors": [],
+      "reason": null
+    },
+    "sdk_skeleton": {
+      "status": "unavailable",
+      "schema_version": 1,
+      "language": "c++17",
+      "kind": "static-evidence-skeleton",
+      "confidence": 0.0,
+      "declaration_count": 0,
+      "declarations": [],
+      "reflection_marker_count": 0,
+      "reflection_markers": [],
+      "package_paths": [],
+      "source": "",
+      "runtime_uobject_enumeration": false,
+      "sdk_dump_complete": false,
+      "provenance": {},
+      "limitations": [
+        "No runtime UObject traversal was performed.",
+        "Forward declarations do not prove class layout, inheritance, fields, or callable addresses.",
+        "Non-type reflection markers are retained as evidence and are not emitted as C++ types."
+      ]
+    },
+    "semantic_ir_fragment": {
+      "status": "unavailable",
+      "schema_version": 1,
+      "engine": "unknown",
+      "entities": [],
+      "relations": [],
+      "capabilities": [],
+      "summary": {
+        "entity_count": 0,
+        "relation_count": 0,
+        "resource_count": 0,
+        "ui_control_count": 0,
+        "native_mapped_method_count": 0,
+        "sdk_declaration_count": 0
+      },
+      "artifacts": []
+    },
+    "strategy": {
+      "name": "generic_engine_fingerprint",
+      "reason": "No dominant engine signal found; keep evidence for later fusion.",
+      "engine": "unknown",
+      "key": "unknown:generic_engine_fingerprint"
+    },
+    "diagnostics": [],
+    "artifacts": [
+      {
+        "name": "engine/fingerprint.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\fingerprint.json",
+        "kind": "engine-analysis"
+      },
+      {
+        "name": "engine/metadata.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\metadata.json",
+        "kind": "engine-analysis"
+      },
+      {
+        "name": "engine/assets.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\assets.json",
+        "kind": "engine-analysis"
+      },
+      {
+        "name": "engine/symbols.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\symbols.json",
+        "kind": "engine-analysis"
+      },
+      {
+        "name": "engine/native_mapping.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\native_mapping.json",
+        "kind": "engine-native-mapping"
+      },
+      {
+        "name": "engine/sdk_skeleton.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\sdk_skeleton.json",
+        "kind": "engine-sdk-skeleton"
+      },
+      {
+        "name": "engine/semantic_ir_fragment.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\semantic_ir_fragment.json",
+        "kind": "semantic-ir-fragment"
+      }
+    ]
+  },
+  "android_analysis": {
+    "status": "unavailable",
+    "package_type": "unknown",
+    "archive": {
+      "status": "unavailable",
+      "entry_count": 0,
+      "safe_entry_count": 0,
+      "unsafe_entry_count": 0,
+      "unsafe_entries": []
+    },
+    "framework": {
+      "name": "unknown",
+      "confidence": 0.0,
+      "score": 0.0,
+      "evidence": [
+        "Input is not an APK"
+      ],
+      "candidates": [
+        {
+          "name": "android_xml",
+          "score": 0.0,
+          "confidence": 0.0,
+          "evidence": []
+        },
+        {
+          "name": "jetpack_compose",
+          "score": 0.0,
+          "confidence": 0.0,
+          "evidence": []
+        },
+        {
+          "name": "flutter",
+          "score": 0.0,
+          "confidence": 0.0,
+          "evidence": []
+        },
+        {
+          "name": "react_native",
+          "score": 0.0,
+          "confidence": 0.0,
+          "evidence": []
+        },
+        {
+          "name": "unity",
+          "score": 0.0,
+          "confidence": 0.0,
+          "evidence": []
+        },
+        {
+          "name": "webview_hybrid",
+          "score": 0.0,
+          "confidence": 0.0,
+          "evidence": []
+        }
+      ],
+      "conflict": {
+        "is_conflicted": false,
+        "score": 0.0,
+        "runner_up": null,
+        "strong_candidates": []
+      },
+      "conflicts": [],
+      "scoring": "bounded-static-evidence-v1"
+    },
+    "manifest": {
+      "present": false,
+      "status": "unavailable",
+      "parser": "none",
+      "package": null,
+      "version_code": null,
+      "version_name": null,
+      "min_sdk": null,
+      "target_sdk": null,
+      "application": null,
+      "permissions": [],
+      "permission_count": 0,
+      "permission_hint_count": 0,
+      "activities": [],
+      "services": [],
+      "receivers": [],
+      "providers": [],
+      "component_counts": {
+        "activities": 0,
+        "services": 0,
+        "receivers": 0,
+        "providers": 0
+      },
+      "activity_hint_count": 0,
+      "uses_features": [],
+      "textual": false,
+      "element_count": 0,
+      "fallback_strings": [],
+      "warnings": []
+    },
+    "resources": {
+      "status": "unavailable",
+      "resource_arsc_present": false,
+      "resource_arsc_size": null,
+      "layout_count": 0,
+      "drawable_count": 0,
+      "values_count": 0,
+      "asset_count": 0,
+      "layout_examples": [],
+      "drawable_examples": [],
+      "layouts": [],
+      "drawables": [],
+      "layout_types": {},
+      "drawable_types": {},
+      "categories": {},
+      "web_asset_count": 0,
+      "limits": {
+        "max_examples": 40,
+        "max_xml_files_parsed": 64,
+        "max_bytes_per_xml": 1048576
+      }
+    },
+    "dex_summary": {
+      "status": "unavailable",
+      "dex_count": 0,
+      "parsed_count": 0,
+      "dex_files": [],
+      "files": [],
+      "totals": {
+        "string_ids": 0,
+        "type_ids": 0,
+        "proto_ids": 0,
+        "field_ids": 0,
+        "method_ids": 0,
+        "class_defs": 0
+      },
+      "string_ids": 0,
+      "type_ids": 0,
+      "proto_ids": 0,
+      "field_ids": 0,
+      "method_ids": 0,
+      "class_defs": 0,
+      "valid_count": 0,
+      "partial_count": 0,
+      "invalid_count": 0,
+      "string_evidence": [],
+      "limits": {
+        "max_dex_files": 32,
+        "max_bytes_per_dex": 16777216,
+        "max_string_ids_per_dex": 4096,
+        "max_string_evidence": 96
+      }
+    },
+    "native_libs": {
+      "status": "unavailable",
+      "count": 0,
+      "parsed_count": 0,
+      "abis": [],
+      "libs": [],
+      "entries": [],
+      "elf_count": 0,
+      "jni_export_count": 0,
+      "jni_exports": [],
+      "java_native_links": [],
+      "limits": {
+        "max_native_libraries": 128,
+        "max_bytes_per_library": 8388608,
+        "max_elf_symbols": 8192
+      }
+    },
+    "java_decompilation": {
+      "schema_version": 1,
+      "status": "unavailable",
+      "requested": false,
+      "provider": "jadx",
+      "reason": "JADX decompilation was not requested",
+      "dependency": {
+        "name": "jadx",
+        "state": "not_requested",
+        "executable": null,
+        "probe": {}
+      },
+      "command": [],
+      "command_metadata": {
+        "argv_only": true,
+        "shell": false,
+        "offline": true,
+        "target_code_executed": false
+      },
+      "returncode": null,
+      "stdout": "",
+      "stderr": "",
+      "output": {
+        "path": "android/jadx",
+        "file_count": 0,
+        "source_file_count": 0,
+        "java_file_count": 0,
+        "kotlin_file_count": 0,
+        "total_bytes": 0,
+        "files": []
+      },
+      "target": {
+        "sha256_before": null,
+        "sha256_after": null,
+        "unchanged": false
+      },
+      "capability_boundary": {
+        "provider_kind": "external",
+        "operation_kind": "offline_dex_java_kotlin_decompilation",
+        "dependency_state": "not_requested",
+        "required_tools": [
+          "jadx"
+        ],
+        "target_code_executed": false,
+        "network_access": false,
+        "content_recompiled": false
+      },
+      "warnings": [],
+      "artifact": "android/java_decompilation.json"
+    },
+    "semantic_ir_fragment": {
+      "schema_version": 1,
+      "source": "android_analyze",
+      "status": "unavailable",
+      "entities": [],
+      "relations": [],
+      "capabilities": [],
+      "summary": {
+        "entity_count": 0,
+        "relation_count": 0,
+        "capability_count": 0
+      },
+      "artifacts": [],
+      "limits": {
+        "max_components": 256,
+        "max_dex_files": 32,
+        "max_native_libraries": 128
+      }
+    },
+    "capability_boundary": {
+      "provider_kind": "builtin",
+      "operation_kind": "bounded_zip_static_analysis",
+      "dependency_state": "not_required",
+      "required_tools": [],
+      "content_recompiled": false,
+      "byte_preserving": true,
+      "signature_verification": "not_performed",
+      "code_executed": false,
+      "members_extracted": false
+    },
+    "strategy": {
+      "name": "unknown_static_unpack",
+      "key": "android:unknown_static_unpack",
+      "reason": "Static package structure preserves Android resources, DEX, and native-library evidence."
+    },
+    "warnings": [
+      "sample is not an APK"
+    ],
+    "artifacts": [
+      {
+        "name": "android/manifest.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\manifest.json",
+        "kind": "android-analysis"
+      },
+      {
+        "name": "android/resources.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\resources.json",
+        "kind": "android-analysis"
+      },
+      {
+        "name": "android/dex_summary.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\dex_summary.json",
+        "kind": "android-analysis"
+      },
+      {
+        "name": "android/native_libs.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\native_libs.json",
+        "kind": "android-analysis"
+      },
+      {
+        "name": "android/framework.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\framework.json",
+        "kind": "android-analysis"
+      },
+      {
+        "name": "android/java_decompilation.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\java_decompilation.json",
+        "kind": "android-analysis"
+      },
+      {
+        "name": "android/semantic_ir_fragment.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\semantic_ir_fragment.json",
+        "kind": "android-analysis"
+      }
+    ],
+    "error": "sample is not an APK",
+    "reason": "sample is not an APK"
+  },
+  "ios_analysis": {},
+  "protocol_analysis": {
+    "status": "ok",
+    "protocols": [],
+    "flows": [
+      {
+        "endpoint": "B.idata",
+        "kind": "host"
+      },
+      {
+        "endpoint": "B.symtab",
+        "kind": "host"
+      },
+      {
+        "endpoint": "time.DatH",
+        "kind": "host"
+      },
+      {
+        "endpoint": "time.LocH",
+        "kind": "host"
+      },
+      {
+        "endpoint": "time.LocL",
+        "kind": "host"
+      },
+      {
+        "endpoint": "time.UTCL",
+        "kind": "host"
+      },
+      {
+        "endpoint": "v.UH",
+        "kind": "host"
+      }
+    ],
+    "field_stats": {
+      "string_count": 2498,
+      "url_count": 0,
+      "host_count": 7,
+      "named_pipe_count": 0,
+      "format_count": 0,
+      "protocol_count": 0,
+      "capture_flow_count": 0,
+      "message_count": 0,
+      "protobuf_message_count": 0,
+      "request_response_pair_count": 0,
+      "field_count": 0,
+      "messages_with_fields": 0,
+      "fields": []
+    },
+    "inference": {
+      "primary_protocol": null,
+      "message_formats": [],
+      "probable_flow_count": 7,
+      "confidence": 0.0,
+      "request_response_pair_count": 0,
+      "field_count": 0,
+      "strategy": {
+        "name": "protocol_strings_dynamic_fusion",
+        "key": "protocol:protocol_strings_dynamic_fusion",
+        "reason": "Static strings plus dynamic/network hints provide low-friction passive protocol evidence."
+      }
+    },
+    "messages": [],
+    "field_statistics": [],
+    "request_response_pairs": [],
+    "semantic_ir_fragment": {
+      "status": "ok",
+      "schema_version": 1,
+      "source": "protocol",
+      "entities": [
+        {
+          "id": "protocol-flow:2f00753070db1010",
+          "kind": "dynamic_event",
+          "name": "time.LocL",
+          "confidence": 1.0,
+          "sources": [
+            "protocol_capture"
+          ],
+          "attributes": {
+            "domain": "network",
+            "transport": null,
+            "endpoint_a": null,
+            "endpoint_b": null,
+            "endpoint": "time.LocL",
+            "message_count": 0
+          }
+        },
+        {
+          "id": "protocol-flow:63ae3452a5da35da",
+          "kind": "dynamic_event",
+          "name": "time.UTCL",
+          "confidence": 1.0,
+          "sources": [
+            "protocol_capture"
+          ],
+          "attributes": {
+            "domain": "network",
+            "transport": null,
+            "endpoint_a": null,
+            "endpoint_b": null,
+            "endpoint": "time.UTCL",
+            "message_count": 0
+          }
+        },
+        {
+          "id": "protocol-flow:7f6d8a4334c03bf2",
+          "kind": "dynamic_event",
+          "name": "time.LocH",
+          "confidence": 1.0,
+          "sources": [
+            "protocol_capture"
+          ],
+          "attributes": {
+            "domain": "network",
+            "transport": null,
+            "endpoint_a": null,
+            "endpoint_b": null,
+            "endpoint": "time.LocH",
+            "message_count": 0
+          }
+        },
+        {
+          "id": "protocol-flow:acf84892f148ef6b",
+          "kind": "dynamic_event",
+          "name": "B.symtab",
+          "confidence": 1.0,
+          "sources": [
+            "protocol_capture"
+          ],
+          "attributes": {
+            "domain": "network",
+            "transport": null,
+            "endpoint_a": null,
+            "endpoint_b": null,
+            "endpoint": "B.symtab",
+            "message_count": 0
+          }
+        },
+        {
+          "id": "protocol-flow:d7bac12614bb5d5a",
+          "kind": "dynamic_event",
+          "name": "B.idata",
+          "confidence": 1.0,
+          "sources": [
+            "protocol_capture"
+          ],
+          "attributes": {
+            "domain": "network",
+            "transport": null,
+            "endpoint_a": null,
+            "endpoint_b": null,
+            "endpoint": "B.idata",
+            "message_count": 0
+          }
+        },
+        {
+          "id": "protocol-flow:fc5e638f7a4cafb0",
+          "kind": "dynamic_event",
+          "name": "time.DatH",
+          "confidence": 1.0,
+          "sources": [
+            "protocol_capture"
+          ],
+          "attributes": {
+            "domain": "network",
+            "transport": null,
+            "endpoint_a": null,
+            "endpoint_b": null,
+            "endpoint": "time.DatH",
+            "message_count": 0
+          }
+        },
+        {
+          "id": "protocol-flow:fed67d43ace1c1cd",
+          "kind": "dynamic_event",
+          "name": "v.UH",
+          "confidence": 1.0,
+          "sources": [
+            "protocol_capture"
+          ],
+          "attributes": {
+            "domain": "network",
+            "transport": null,
+            "endpoint_a": null,
+            "endpoint_b": null,
+            "endpoint": "v.UH",
+            "message_count": 0
+          }
+        }
+      ],
+      "relations": [],
+      "capabilities": [
+        {
+          "id": "capability:network:d1065cf3f3fdb360",
+          "name": "network_protocol",
+          "category": "network",
+          "confidence": 0.6,
+          "entity_ids": [
+            "protocol-flow:2f00753070db1010",
+            "protocol-flow:63ae3452a5da35da",
+            "protocol-flow:7f6d8a4334c03bf2",
+            "protocol-flow:acf84892f148ef6b",
+            "protocol-flow:d7bac12614bb5d5a",
+            "protocol-flow:fc5e638f7a4cafb0",
+            "protocol-flow:fed67d43ace1c1cd"
+          ],
+          "evidence_count": 7,
+          "attributes": {
+            "protocols": [],
+            "message_formats": [],
+            "protobuf_shape_count": 0,
+            "request_response_pair_count": 0
+          }
+        }
+      ],
+      "summary": {
+        "entity_count": 7,
+        "relation_count": 0,
+        "capability_count": 1,
+        "flow_count": 7,
+        "message_shape_count": 0,
+        "request_response_pair_count": 0
+      }
+    },
+    "warnings": [],
+    "artifacts": [
+      {
+        "name": "protocol/flows.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\protocol\\flows.json",
+        "kind": "protocol-analysis"
+      },
+      {
+        "name": "protocol/field_stats.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\protocol\\field_stats.json",
+        "kind": "protocol-analysis"
+      },
+      {
+        "name": "protocol/inference.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\protocol\\inference.json",
+        "kind": "protocol-analysis"
+      }
+    ]
+  },
+  "gui_analysis": {},
+  "behavior_graph": {
+    "status": "ok",
+    "version": 1,
+    "nodes": [],
+    "edges": [],
+    "summary": {
+      "node_count": 0,
+      "edge_count": 0,
+      "type_counts": {
+        "function": 0,
+        "api": 0,
+        "dynamic_event": 0,
+        "ui_control": 0,
+        "ui_handler": 0,
+        "resource": 0,
+        "ui_state": 0,
+        "ui_action": 0
+      },
+      "node_type_counts": {
+        "function": 0,
+        "api": 0,
+        "dynamic_event": 0,
+        "ui_control": 0,
+        "ui_handler": 0,
+        "resource": 0,
+        "ui_state": 0,
+        "ui_action": 0
+      },
+      "counts": {
+        "function": 0,
+        "api": 0,
+        "dynamic_event": 0,
+        "ui_control": 0,
+        "ui_handler": 0,
+        "resource": 0,
+        "ui_state": 0,
+        "ui_action": 0
+      },
+      "linked_handler_count": 0,
+      "dynamic_event_count": 0,
+      "state_count": 0,
+      "transition_count": 0,
+      "function_count": 0,
+      "api_count": 0,
+      "ui_control_count": 0,
+      "ui_handler_count": 0,
+      "resource_count": 0,
+      "ui_state_count": 0,
+      "ui_action_count": 0
+    },
+    "artifacts": [
+      {
+        "name": "analysis_graph.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\analysis_graph.json",
+        "kind": "behavior-evidence-graph"
+      }
+    ]
+  },
+  "decompiler": {},
+  "reconstruction": {},
+  "semantic_ir": {
+    "status": "partial",
+    "schema_version": 1,
+    "entities": [
+      {
+        "id": "protocol-flow:2f00753070db1010",
+        "kind": "dynamic_event",
+        "name": "time.LocL",
+        "confidence": 1.0,
+        "sources": [
+          "protocol_analysis.semantic_ir_fragment.entities",
+          "protocol_capture"
+        ],
+        "attributes": {
+          "domain": "network",
+          "endpoint": "time.LocL",
+          "endpoint_a": null,
+          "endpoint_b": null,
+          "message_count": 0,
+          "transport": null
+        }
+      },
+      {
+        "id": "protocol-flow:63ae3452a5da35da",
+        "kind": "dynamic_event",
+        "name": "time.UTCL",
+        "confidence": 1.0,
+        "sources": [
+          "protocol_analysis.semantic_ir_fragment.entities",
+          "protocol_capture"
+        ],
+        "attributes": {
+          "domain": "network",
+          "endpoint": "time.UTCL",
+          "endpoint_a": null,
+          "endpoint_b": null,
+          "message_count": 0,
+          "transport": null
+        }
+      },
+      {
+        "id": "protocol-flow:7f6d8a4334c03bf2",
+        "kind": "dynamic_event",
+        "name": "time.LocH",
+        "confidence": 1.0,
+        "sources": [
+          "protocol_analysis.semantic_ir_fragment.entities",
+          "protocol_capture"
+        ],
+        "attributes": {
+          "domain": "network",
+          "endpoint": "time.LocH",
+          "endpoint_a": null,
+          "endpoint_b": null,
+          "message_count": 0,
+          "transport": null
+        }
+      },
+      {
+        "id": "protocol-flow:acf84892f148ef6b",
+        "kind": "dynamic_event",
+        "name": "B.symtab",
+        "confidence": 1.0,
+        "sources": [
+          "protocol_analysis.semantic_ir_fragment.entities",
+          "protocol_capture"
+        ],
+        "attributes": {
+          "domain": "network",
+          "endpoint": "B.symtab",
+          "endpoint_a": null,
+          "endpoint_b": null,
+          "message_count": 0,
+          "transport": null
+        }
+      },
+      {
+        "id": "protocol-flow:d7bac12614bb5d5a",
+        "kind": "dynamic_event",
+        "name": "B.idata",
+        "confidence": 1.0,
+        "sources": [
+          "protocol_analysis.semantic_ir_fragment.entities",
+          "protocol_capture"
+        ],
+        "attributes": {
+          "domain": "network",
+          "endpoint": "B.idata",
+          "endpoint_a": null,
+          "endpoint_b": null,
+          "message_count": 0,
+          "transport": null
+        }
+      },
+      {
+        "id": "protocol-flow:fc5e638f7a4cafb0",
+        "kind": "dynamic_event",
+        "name": "time.DatH",
+        "confidence": 1.0,
+        "sources": [
+          "protocol_analysis.semantic_ir_fragment.entities",
+          "protocol_capture"
+        ],
+        "attributes": {
+          "domain": "network",
+          "endpoint": "time.DatH",
+          "endpoint_a": null,
+          "endpoint_b": null,
+          "message_count": 0,
+          "transport": null
+        }
+      },
+      {
+        "id": "protocol-flow:fed67d43ace1c1cd",
+        "kind": "dynamic_event",
+        "name": "v.UH",
+        "confidence": 1.0,
+        "sources": [
+          "protocol_analysis.semantic_ir_fragment.entities",
+          "protocol_capture"
+        ],
+        "attributes": {
+          "domain": "network",
+          "endpoint": "v.UH",
+          "endpoint_a": null,
+          "endpoint_b": null,
+          "message_count": 0,
+          "transport": null
+        }
+      }
+    ],
+    "relations": [],
+    "capabilities": [
+      {
+        "id": "capability:general:d1065cf3f3fdb360fb4d",
+        "name": "general",
+        "category": "general",
+        "confidence": 1.0,
+        "entity_ids": [
+          "protocol-flow:2f00753070db1010",
+          "protocol-flow:63ae3452a5da35da",
+          "protocol-flow:7f6d8a4334c03bf2",
+          "protocol-flow:acf84892f148ef6b",
+          "protocol-flow:d7bac12614bb5d5a",
+          "protocol-flow:fc5e638f7a4cafb0",
+          "protocol-flow:fed67d43ace1c1cd"
+        ],
+        "evidence_count": 14
+      },
+      {
+        "id": "capability:network:d1065cf3f3fdb360",
+        "name": "network_protocol",
+        "category": "network",
+        "confidence": 0.6,
+        "entity_ids": [
+          "protocol-flow:2f00753070db1010",
+          "protocol-flow:63ae3452a5da35da",
+          "protocol-flow:7f6d8a4334c03bf2",
+          "protocol-flow:acf84892f148ef6b",
+          "protocol-flow:d7bac12614bb5d5a",
+          "protocol-flow:fc5e638f7a4cafb0",
+          "protocol-flow:fed67d43ace1c1cd"
+        ],
+        "evidence_count": 7,
+        "sources": [
+          "protocol_analysis.semantic_ir_fragment.capabilities"
+        ],
+        "attributes": {
+          "message_formats": [],
+          "protobuf_shape_count": 0,
+          "protocols": [],
+          "request_response_pair_count": 0
+        }
+      }
+    ],
+    "summary": {
+      "entity_count": 7,
+      "relation_count": 0,
+      "capability_count": 2,
+      "function_count": 0,
+      "api_count": 0,
+      "dynamic_event_count": 7,
+      "ui_control_count": 0,
+      "ui_state_count": 0
+    },
+    "artifacts": [
+      {
+        "name": "semantic_ir.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\semantic_ir.json",
+        "kind": "semantic-ir"
+      }
+    ],
+    "provenance": [
+      {
+        "analysis": "protocol_analysis",
+        "source": "protocol"
+      },
+      {
+        "analysis": "protocol_analysis",
+        "source": "protocol_analysis.semantic_ir_fragment"
+      }
+    ]
+  },
+  "reconstruction_verification": {},
+  "source_reconstruction": {},
+  "findings": [
+    {
+      "id": "pe_deep_scan_packed_or_obfuscated_pe_characteristics_shell_score_100_verdict_likely_packed",
+      "title": "Packed or obfuscated PE characteristics",
+      "severity": "high",
+      "confidence": 0.95,
+      "source": "pe_deep_scan",
+      "detail": "shell_score=100 verdict=likely_packed",
+      "description": "shell_score=100 verdict=likely_packed",
+      "evidence": {
+        "entrypoint": {
+          "rva": 559040,
+          "section": ".text",
+          "section_rva": 4096,
+          "section_executable": true,
+          "anomaly": null
+        },
+        "section_anomalies": [
+          {
+            "section": ".xdata",
+            "entropy": 1.787112262798912,
+            "raw_size": 512,
+            "virtual_size": 180,
+            "reasons": [
+              "raw_size_exceeds_virtual_size"
+            ]
+          },
+          {
+            "section": "/19",
+            "entropy": 7.996339738557158,
+            "raw_size": 701952,
+            "virtual_size": 701873,
+            "reasons": [
+              "high_entropy"
+            ]
+          },
+          {
+            "section": "/32",
+            "entropy": 7.943523387348717,
+            "raw_size": 149504,
+            "virtual_size": 149018,
+            "reasons": [
+              "high_entropy"
+            ]
+          },
+          {
+            "section": "/46",
+            "entropy": 0.8556848540171443,
+            "raw_size": 512,
+            "virtual_size": 48,
+            "reasons": [
+              "raw_size_exceeds_virtual_size"
+            ]
+          },
+          {
+            "section": "/65",
+            "entropy": 7.99832328534933,
+            "raw_size": 1140736,
+            "virtual_size": 1140551,
+            "reasons": [
+              "high_entropy"
+            ]
+          },
+          {
+            "section": "/78",
+            "entropy": 7.997876549410377,
+            "raw_size": 710144,
+            "virtual_size": 709974,
+            "reasons": [
+              "high_entropy"
+            ]
+          },
+          {
+            "section": "/95",
+            "entropy": 7.995742607236831,
+            "raw_size": 276992,
+            "virtual_size": 276493,
+            "reasons": [
+              "high_entropy"
+            ]
+          },
+          {
+            "section": "/112",
+            "entropy": 7.786341658392834,
+            "raw_size": 18432,
+            "virtual_size": 18128,
+            "reasons": [
+              "high_entropy"
+            ]
+          }
+        ],
+        "shell_indicators": [
+          {
+            "kind": "section",
+            "section": ".xdata",
+            "reason": "raw_size_exceeds_virtual_size",
+            "weight": 10
+          },
+          {
+            "kind": "section",
+            "section": "/19",
+            "reason": "high_entropy",
+            "weight": 15
+          },
+          {
+            "kind": "section",
+            "section": "/32",
+            "reason": "high_entropy",
+            "weight": 15
+          },
+          {
+            "kind": "section",
+            "section": "/46",
+            "reason": "raw_size_exceeds_virtual_size",
+            "weight": 10
+          },
+          {
+            "kind": "section",
+            "section": "/65",
+            "reason": "high_entropy",
+            "weight": 15
+          },
+          {
+            "kind": "section",
+            "section": "/78",
+            "reason": "high_entropy",
+            "weight": 15
+          },
+          {
+            "kind": "section",
+            "section": "/95",
+            "reason": "high_entropy",
+            "weight": 15
+          },
+          {
+            "kind": "section",
+            "section": "/112",
+            "reason": "high_entropy",
+            "weight": 15
+          }
+        ]
+      },
+      "recommendation": "Validate whether the sample is packed, then focus manual reversing on the unpacked entry point and import resolution path."
+    },
+    {
+      "id": "packer_detect_packer_indicators_detected_score_100_indicators_6",
+      "title": "Packer indicators detected",
+      "severity": "high",
+      "confidence": 0.95,
+      "source": "packer_detect",
+      "detail": "score=100 indicators=6",
+      "description": "score=100 indicators=6",
+      "evidence": {
+        "score": 100,
+        "indicators": [
+          {
+            "type": "high_entropy",
+            "section": "/19",
+            "entropy": 7.9963
+          },
+          {
+            "type": "high_entropy",
+            "section": "/32",
+            "entropy": 7.9435
+          },
+          {
+            "type": "high_entropy",
+            "section": "/65",
+            "entropy": 7.9983
+          },
+          {
+            "type": "high_entropy",
+            "section": "/78",
+            "entropy": 7.9979
+          },
+          {
+            "type": "high_entropy",
+            "section": "/95",
+            "entropy": 7.9957
+          },
+          {
+            "type": "high_entropy",
+            "section": "/112",
+            "entropy": 7.7863
+          }
+        ]
+      },
+      "recommendation": "Inspect unpacking behavior and confirm whether imports or control flow are reconstructed at runtime."
+    },
+    {
+      "id": "section_entropy_scan_high_entropy_section_or_chunk_max_entropy_7_998323285349334",
+      "title": "High entropy section or chunk",
+      "severity": "medium",
+      "confidence": 0.7,
+      "source": "section_entropy_scan",
+      "detail": "max_entropy=7.998323285349334",
+      "description": "max_entropy=7.998323285349334",
+      "evidence": {
+        "max_entropy": 7.998323285349334,
+        "sections": [
+          {
+            "name": ".text",
+            "offset": 1536,
+            "size": 4172800,
+            "virtual_address": 4096,
+            "entropy": 6.188389033546932
+          },
+          {
+            "name": ".rdata",
+            "offset": 4174336,
+            "size": 4205056,
+            "virtual_address": 4177920,
+            "entropy": 5.685035404026879
+          },
+          {
+            "name": ".data",
+            "offset": 8379392,
+            "size": 396288,
+            "virtual_address": 8384512,
+            "entropy": 5.901060245078486
+          },
+          {
+            "name": ".pdata",
+            "offset": 8775680,
+            "size": 92672,
+            "virtual_address": 42692608,
+            "entropy": 5.66982402677424
+          },
+          {
+            "name": ".xdata",
+            "offset": 8868352,
+            "size": 512,
+            "virtual_address": 42786816,
+            "entropy": 1.7871122627989118
+          },
+          {
+            "name": "/4",
+            "offset": 8868864,
+            "size": 512,
+            "virtual_address": 42790912,
+            "entropy": 5.672569187791102
+          },
+          {
+            "name": "/19",
+            "offset": 8869376,
+            "size": 701952,
+            "virtual_address": 42795008,
+            "entropy": 7.996339738557158
+          },
+          {
+            "name": "/32",
+            "offset": 9571328,
+            "size": 149504,
+            "virtual_address": 43499520,
+            "entropy": 7.943523387348714
+          },
+          {
+            "name": "/46",
+            "offset": 9720832,
+            "size": 512,
+            "virtual_address": 43651072,
+            "entropy": 0.8556848540171442
+          },
+          {
+            "name": "/65",
+            "offset": 9721344,
+            "size": 1140736,
+            "virtual_address": 43655168,
+            "entropy": 7.998323285349334
+          },
+          {
+            "name": "/78",
+            "offset": 10862080,
+            "size": 710144,
+            "virtual_address": 44797952,
+            "entropy": 7.997876549410379
+          },
+          {
+            "name": "/95",
+            "offset": 11572224,
+            "size": 276992,
+            "virtual_address": 45510656,
+            "entropy": 7.995742607236834
+          },
+          {
+            "name": "/112",
+            "offset": 11849216,
+            "size": 18432,
+            "virtual_address": 45789184,
+            "entropy": 7.786341658392833
+          },
+          {
+            "name": ".idata",
+            "offset": 11867648,
+            "size": 1536,
+            "virtual_address": 45809664,
+            "entropy": 4.22593235002151
+          },
+          {
+            "name": ".reloc",
+            "offset": 11869184,
+            "size": 76800,
+            "virtual_address": 45813760,
+            "entropy": 5.4321400545328355
+          },
+          {
+            "name": ".symtab",
+            "offset": 11945984,
+            "size": 639488,
+            "virtual_address": 45891584,
+            "entropy": 5.389928703898848
+          }
+        ]
+      },
+      "recommendation": "Inspect high-entropy regions for compression, encryption, or packed payloads."
+    },
+    {
+      "id": "yara_scan_yara_scanning_unavailable_yara_python_is_not_installed_or_the_scanner_could_not_start",
+      "title": "YARA scanning unavailable",
+      "severity": "info",
+      "confidence": 0.95,
+      "source": "yara_scan",
+      "detail": "yara-python is not installed or the scanner could not start.",
+      "description": "yara-python is not installed or the scanner could not start.",
+      "evidence": {
+        "rules_path": "D:\\Project\\PE-reverse-skill\\rules\\yara",
+        "error": "optional dependency yara-python unavailable: No module named 'yara'"
+      },
+      "recommendation": "Install yara-python to enable rule-based scanning with the bundled ruleset."
+    }
+  ],
+  "recommendations": [
+    "Validate whether the sample is packed, then focus manual reversing on the unpacked entry point and import resolution path.",
+    "Inspect unpacking behavior and confirm whether imports or control flow are reconstructed at runtime.",
+    "Inspect high-entropy regions for compression, encryption, or packed payloads.",
+    "Install yara-python to enable rule-based scanning with the bundled ruleset.",
+    "Prioritize containment and deeper manual validation of high-severity indicators.",
+    "Inspect the entry point, suspicious sections, and overlay to confirm packer or obfuscation behavior.",
+    "Install yara-python to enable rule-based scanning, or provide a compatible environment for YARA.",
+    "Preserve generated artifacts and correlate findings against trusted threat-intelligence sources."
+  ],
+  "artifacts": [
+    {
+      "timestamp": "2026-08-22T04:51:53.142619+00:00",
+      "name": "engine/fingerprint.json",
+      "kind": "engine-analysis",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\fingerprint.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "engine/fingerprint.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\fingerprint.json",
+        "kind": "engine-analysis"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.146464+00:00",
+      "name": "engine/metadata.json",
+      "kind": "engine-analysis",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\metadata.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "engine/metadata.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\metadata.json",
+        "kind": "engine-analysis"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.150358+00:00",
+      "name": "engine/assets.json",
+      "kind": "engine-analysis",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\assets.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "engine/assets.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\assets.json",
+        "kind": "engine-analysis"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.154350+00:00",
+      "name": "engine/symbols.json",
+      "kind": "engine-analysis",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\symbols.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "engine/symbols.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\symbols.json",
+        "kind": "engine-analysis"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.158334+00:00",
+      "name": "engine/native_mapping.json",
+      "kind": "engine-native-mapping",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\native_mapping.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "engine/native_mapping.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\native_mapping.json",
+        "kind": "engine-native-mapping"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.162210+00:00",
+      "name": "engine/sdk_skeleton.json",
+      "kind": "engine-sdk-skeleton",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\sdk_skeleton.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "engine/sdk_skeleton.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\sdk_skeleton.json",
+        "kind": "engine-sdk-skeleton"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.165944+00:00",
+      "name": "engine/semantic_ir_fragment.json",
+      "kind": "semantic-ir-fragment",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\semantic_ir_fragment.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "engine/semantic_ir_fragment.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\engine\\semantic_ir_fragment.json",
+        "kind": "semantic-ir-fragment"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.178030+00:00",
+      "name": "android/manifest.json",
+      "kind": "android-analysis",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\manifest.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "android/manifest.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\manifest.json",
+        "kind": "android-analysis"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.182930+00:00",
+      "name": "android/resources.json",
+      "kind": "android-analysis",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\resources.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "android/resources.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\resources.json",
+        "kind": "android-analysis"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.187273+00:00",
+      "name": "android/dex_summary.json",
+      "kind": "android-analysis",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\dex_summary.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "android/dex_summary.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\dex_summary.json",
+        "kind": "android-analysis"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.191517+00:00",
+      "name": "android/native_libs.json",
+      "kind": "android-analysis",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\native_libs.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "android/native_libs.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\native_libs.json",
+        "kind": "android-analysis"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.195607+00:00",
+      "name": "android/framework.json",
+      "kind": "android-analysis",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\framework.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "android/framework.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\framework.json",
+        "kind": "android-analysis"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.199637+00:00",
+      "name": "android/java_decompilation.json",
+      "kind": "android-analysis",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\java_decompilation.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "android/java_decompilation.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\java_decompilation.json",
+        "kind": "android-analysis"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.204057+00:00",
+      "name": "android/semantic_ir_fragment.json",
+      "kind": "android-analysis",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\semantic_ir_fragment.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "android/semantic_ir_fragment.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\android\\semantic_ir_fragment.json",
+        "kind": "android-analysis"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.229641+00:00",
+      "name": "protocol/flows.json",
+      "kind": "protocol-analysis",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\protocol\\flows.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "protocol/flows.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\protocol\\flows.json",
+        "kind": "protocol-analysis"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.234475+00:00",
+      "name": "protocol/field_stats.json",
+      "kind": "protocol-analysis",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\protocol\\field_stats.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "protocol/field_stats.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\protocol\\field_stats.json",
+        "kind": "protocol-analysis"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.239050+00:00",
+      "name": "protocol/inference.json",
+      "kind": "protocol-analysis",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\protocol\\inference.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "protocol/inference.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\protocol\\inference.json",
+        "kind": "protocol-analysis"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.250568+00:00",
+      "name": "analysis_graph.json",
+      "kind": "behavior-evidence-graph",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\analysis_graph.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "analysis_graph.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\analysis_graph.json",
+        "kind": "behavior-evidence-graph"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.261973+00:00",
+      "name": "semantic_ir.json",
+      "kind": "semantic-ir",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\semantic_ir.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "semantic_ir.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\semantic_ir.json",
+        "kind": "semantic-ir"
+      }
+    },
+    {
+      "timestamp": "2026-08-22T04:51:53.318974+00:00",
+      "name": "evidence-manifest.json",
+      "kind": "evidence_manifest",
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\evidence-manifest.json",
+      "flow": null,
+      "task": null,
+      "subtask": null,
+      "data": {
+        "name": "evidence-manifest.json",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\evidence-manifest.json",
+        "kind": "evidence_manifest",
+        "role": "integrity_manifest",
+        "tool": "evidence_manifest",
+        "status": "ok"
+      }
+    }
+  ],
+  "patch_analysis": {
+    "status": "unavailable"
+  },
+  "platform_core": {
+    "status": "ok",
+    "semantic_ir": {
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\semantic_ir.json",
+      "status": "partial",
+      "entity_count": 7,
+      "relation_count": 0,
+      "capability_count": 2,
+      "artifact_count": 1,
+      "module_count": 1,
+      "runtime_count": 0
+    },
+    "evidence_graph": {
+      "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\evidence_graph.json",
+      "node_count": 62,
+      "edge_count": 94
+    },
+    "capability_registry": {
+      "capability_count": 23,
+      "capabilities": {
+        "android_instrumentation": [
+          "frida_android_instrumentation"
+        ],
+        "android_native_patch": [
+          "local_android_native_patch"
+        ],
+        "android_rebuild": [
+          "local_android_rebuild",
+          "mock"
+        ],
+        "anti_tamper_lab": [
+          "anti_tamper_lab_detection_analysis"
+        ],
+        "dma_memory": [
+          "dma_memory_readonly"
+        ],
+        "engine_runtime": [
+          "windows_engine_runtime"
+        ],
+        "graphics_present_runtime": [
+          "windows_presentmon"
+        ],
+        "hardware_identity_virtualization": [
+          "hardware_identity_audited"
+        ],
+        "hook_runtime": [
+          "frida_hook_runtime",
+          "mock"
+        ],
+        "hook_target_resolver": [
+          "deterministic_hook_target_resolver"
+        ],
+        "imgui_renderer_runtime": [
+          "dear_imgui_inprocess_renderer"
+        ],
+        "injector": [
+          "windows_controlled_injector",
+          "mock"
+        ],
+        "ios_instrumentation": [
+          "frida_ios_instrumentation"
+        ],
+        "ios_rebuild": [
+          "local_ios_rebuild"
+        ],
+        "kernel_driver_memory_runtime": [
+          "windows_kernel_memory_driver"
+        ],
+        "llm_jailbreak": [
+          "openai_compatible_jailbreak"
+        ],
+        "memory_runtime": [
+          "windows_memory_runtime",
+          "mock"
+        ],
+        "native_debugger": [
+          "windows_native_debugger"
+        ],
+        "native_hook": [
+          "windows_native_hook"
+        ],
+        "patch_executor": [
+          "local_verified_patch",
+          "mock"
+        ],
+        "protocol_runtime": [
+          "local_loopback_protocol_runtime",
+          "mock_protocol_runtime"
+        ],
+        "render_overlay_runtime": [
+          "windows_gdi_overlay"
+        ],
+        "target_control_simulation": [
+          "offline_target_control_simulator"
+        ]
+      }
+    },
+    "capability_audit": {
+      "record_count": 0,
+      "records": [],
+      "summary": {
+        "record_count": 0,
+        "status_counts": {},
+        "rollback_supported_count": 0,
+        "manifest_reference_count": 0,
+        "dashboard_trace_count": 0
+      }
+    }
+  },
+  "analysis_outcome": {
+    "status": "succeeded",
+    "hard_failure": false,
+    "partial": false,
+    "stages": [
+      {
+        "name": "engine_analyze",
+        "index": 0,
+        "status": "ok",
+        "required": false,
+        "hard_failure": false
+      },
+      {
+        "name": "android_analyze",
+        "index": 1,
+        "status": "unavailable",
+        "required": false,
+        "hard_failure": false
+      },
+      {
+        "name": "protocol_analyze",
+        "index": 2,
+        "status": "ok",
+        "required": false,
+        "hard_failure": false
+      }
+    ],
+    "failed_stages": [],
+    "partial_stages": [],
+    "optional_unavailable_stages": [
+      {
+        "name": "android_analyze",
+        "index": 1,
+        "status": "unavailable",
+        "required": false,
+        "hard_failure": false
+      }
+    ]
+  },
+  "knowledge_context": {
+    "status": "recalled",
+    "query": "suffix .exe size 12585472 shell_score 100 shell_verdict likely_packed import_dll_count 1 section_anomaly_count 8 status unavailable partial schema_version entity_count 7 capability_count 2 general network_protocol",
+    "match_count": 5,
+    "matches": [
+      {
+        "score": 0.1667,
+        "id": "6344aaa165314716a3abd862844e3e17",
+        "type": "memory",
+        "title": "Reverse analysis: MonoGame.exe",
+        "scope": "reverse:exe",
+        "tags": [
+          "exe",
+          "general",
+          "gui",
+          "network_protocol",
+          "reverse"
+        ]
+      },
+      {
+        "score": 0.1667,
+        "id": "bd93b2a683cb4848818f5a92a7f79e82",
+        "type": "memory",
+        "title": "Reverse analysis: MonoGame.exe",
+        "scope": "reverse:exe",
+        "tags": [
+          "exe",
+          "general",
+          "gui",
+          "network_protocol",
+          "reverse"
+        ]
+      },
+      {
+        "score": 0.1667,
+        "id": "7af5fe295d86496590840fbc3f2cc9d1",
+        "type": "memory",
+        "title": "Reverse analysis: MonoGame.exe",
+        "scope": "reverse:exe",
+        "tags": [
+          "exe",
+          "general",
+          "gui",
+          "network_protocol",
+          "reverse"
+        ]
+      },
+      {
+        "score": 0.1667,
+        "id": "505f5899dcde4f519868a8114b95adff",
+        "type": "memory",
+        "title": "Reverse analysis: MonoGame.exe",
+        "scope": "reverse:exe",
+        "tags": [
+          "exe",
+          "general",
+          "gui",
+          "network_protocol",
+          "reverse"
+        ]
+      },
+      {
+        "score": 0.1667,
+        "id": "c1ddd35741014c00bbbe23f6308438f5",
+        "type": "memory",
+        "title": "Reverse analysis: MonoGame.exe",
+        "scope": "reverse:exe",
+        "tags": [
+          "exe",
+          "general",
+          "gui",
+          "network_protocol",
+          "reverse"
+        ]
+      }
+    ],
+    "stored_document_id": "cf101c3493af4ef9ba3e93bf6c113db2",
+    "storage_status": "stored"
+  }
+}

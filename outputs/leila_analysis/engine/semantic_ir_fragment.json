@@ -1,0 +1,17 @@
+{
+  "artifacts": [],
+  "capabilities": [],
+  "engine": "unknown",
+  "entities": [],
+  "relations": [],
+  "schema_version": 1,
+  "status": "unavailable",
+  "summary": {
+    "entity_count": 0,
+    "native_mapped_method_count": 0,
+    "relation_count": 0,
+    "resource_count": 0,
+    "sdk_declaration_count": 0,
+    "ui_control_count": 0
+  }
+}

@@ -35,6 +35,10 @@ _GPT_UNRESTRICTED_ASSET = _BuiltinAssetSource(
     "gpt5.5-unrestricted",
     Path("scripts/codex-instruct-examples/gpt5.5-unrestricted.md"),
 )
+_TOPO_AC_UNRESTRICTED_ASSET = _BuiltinAssetSource(
+    "topo-ac-unrestricted",
+    Path("scripts/codex-instruct-examples/topo-ac-unrestricted.md"),
+)
 _REVERSE_SKILLS_LLM_SECURITY_ASSETS = (
     _BuiltinAssetSource(
         "reverse-skills-llm-security",
@@ -92,6 +96,9 @@ _CTF_UNIFIED_REVERSE_SKILLS_ASSETS = (
 _BUILTIN_PROFILES = {
     "ctf-sandbox": _BuiltinProfile((_CTF_SANDBOX_ASSET,), 8 * 1024),
     "gpt5.5-unrestricted": _BuiltinProfile((_GPT_UNRESTRICTED_ASSET,), 4 * 1024),
+    "topo-ac-unrestricted": _BuiltinProfile(
+        (_TOPO_AC_UNRESTRICTED_ASSET,), 12 * 1024
+    ),
     "reverse-skills-llm-security": _BuiltinProfile(
         _REVERSE_SKILLS_LLM_SECURITY_ASSETS,
         32 * 1024,
@@ -112,6 +119,9 @@ _PROFILE_ALIASES = {
     "gpt55": "gpt5.5-unrestricted",
     "unrestricted": "gpt5.5-unrestricted",
     "gpt55unrestricted": "gpt5.5-unrestricted",
+    "topo": "topo-ac-unrestricted",
+    "topoac": "topo-ac-unrestricted",
+    "topoacunrestricted": "topo-ac-unrestricted",
     "llmsecurity": "reverse-skills-llm-security",
     "reversellmsecurity": "reverse-skills-llm-security",
     "reversesecurity": "reverse-skills-llm-security",

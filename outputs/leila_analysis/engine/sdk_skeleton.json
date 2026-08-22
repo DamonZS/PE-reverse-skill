@@ -1,0 +1,21 @@
+{
+  "confidence": 0.0,
+  "declaration_count": 0,
+  "declarations": [],
+  "kind": "static-evidence-skeleton",
+  "language": "c++17",
+  "limitations": [
+    "No runtime UObject traversal was performed.",
+    "Forward declarations do not prove class layout, inheritance, fields, or callable addresses.",
+    "Non-type reflection markers are retained as evidence and are not emitted as C++ types."
+  ],
+  "package_paths": [],
+  "provenance": {},
+  "reflection_marker_count": 0,
+  "reflection_markers": [],
+  "runtime_uobject_enumeration": false,
+  "schema_version": 1,
+  "sdk_dump_complete": false,
+  "source": "",
+  "status": "unavailable"
+}

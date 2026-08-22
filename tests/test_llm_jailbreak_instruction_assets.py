@@ -62,6 +62,7 @@ class InstructionProfileTests(unittest.TestCase):
             (
                 "ctf-sandbox",
                 "gpt5.5-unrestricted",
+                "topo-ac-unrestricted",
                 "reverse-skills-llm-security",
                 "codex-unified",
                 "ctf-unified",

@@ -1,0 +1,21 @@
+{
+  "field_symbols": [],
+  "method_symbols": [],
+  "mono_behaviour_symbols": [],
+  "monobehaviour_symbols": [],
+  "raw_string_markers": {
+    "mono_behaviour": [],
+    "scriptable_object": [],
+    "ui": []
+  },
+  "recovered_symbol_count": 0,
+  "recovered_symbols": [],
+  "schema_version": 1,
+  "scriptable_object_symbols": [],
+  "status": "unavailable",
+  "symbol_records": [],
+  "type_symbols": [],
+  "ui_symbols": [],
+  "unreal_package_names": [],
+  "unreal_reflection_names": []
+}

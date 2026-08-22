@@ -1,0 +1,17 @@
+{
+  "abis": [],
+  "count": 0,
+  "elf_count": 0,
+  "entries": [],
+  "java_native_links": [],
+  "jni_export_count": 0,
+  "jni_exports": [],
+  "libs": [],
+  "limits": {
+    "max_bytes_per_library": 8388608,
+    "max_elf_symbols": 8192,
+    "max_native_libraries": 128
+  },
+  "parsed_count": 0,
+  "status": "unavailable"
+}

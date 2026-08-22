@@ -1,0 +1,22 @@
+{
+  "asset_count": 0,
+  "categories": {},
+  "drawable_count": 0,
+  "drawable_examples": [],
+  "drawable_types": {},
+  "drawables": [],
+  "layout_count": 0,
+  "layout_examples": [],
+  "layout_types": {},
+  "layouts": [],
+  "limits": {
+    "max_bytes_per_xml": 1048576,
+    "max_examples": 40,
+    "max_xml_files_parsed": 64
+  },
+  "resource_arsc_present": false,
+  "resource_arsc_size": null,
+  "status": "unavailable",
+  "values_count": 0,
+  "web_asset_count": 0
+}

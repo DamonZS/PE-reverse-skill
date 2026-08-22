@@ -1,0 +1,24 @@
+{
+  "binary_path": null,
+  "binary_size": null,
+  "codegen_modules": [],
+  "confidence": 0.0,
+  "eligible_method_count": 0,
+  "engine": "unity-il2cpp",
+  "errors": [],
+  "mapped_method_count": 0,
+  "mappings": [],
+  "metadata_path": null,
+  "metadata_version": null,
+  "parser": "il2cpp-codegen-module-pe-v1",
+  "pe": {
+    "errors": [],
+    "sections": [],
+    "status": "unavailable"
+  },
+  "provenance": {},
+  "reason": null,
+  "schema_version": 1,
+  "status": "unavailable",
+  "unmapped_methods": []
+}

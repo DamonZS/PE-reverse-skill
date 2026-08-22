@@ -1,0 +1,31 @@
+{
+  "class_defs": 0,
+  "dex_count": 0,
+  "dex_files": [],
+  "field_ids": 0,
+  "files": [],
+  "invalid_count": 0,
+  "limits": {
+    "max_bytes_per_dex": 16777216,
+    "max_dex_files": 32,
+    "max_string_evidence": 96,
+    "max_string_ids_per_dex": 4096
+  },
+  "method_ids": 0,
+  "parsed_count": 0,
+  "partial_count": 0,
+  "proto_ids": 0,
+  "status": "unavailable",
+  "string_evidence": [],
+  "string_ids": 0,
+  "totals": {
+    "class_defs": 0,
+    "field_ids": 0,
+    "method_ids": 0,
+    "proto_ids": 0,
+    "string_ids": 0,
+    "type_ids": 0
+  },
+  "type_ids": 0,
+  "valid_count": 0
+}

@@ -1,0 +1,54 @@
+{
+  "candidates": [
+    {
+      "confidence": 0.0,
+      "evidence": [],
+      "name": "android_xml",
+      "score": 0.0
+    },
+    {
+      "confidence": 0.0,
+      "evidence": [],
+      "name": "jetpack_compose",
+      "score": 0.0
+    },
+    {
+      "confidence": 0.0,
+      "evidence": [],
+      "name": "flutter",
+      "score": 0.0
+    },
+    {
+      "confidence": 0.0,
+      "evidence": [],
+      "name": "react_native",
+      "score": 0.0
+    },
+    {
+      "confidence": 0.0,
+      "evidence": [],
+      "name": "unity",
+      "score": 0.0
+    },
+    {
+      "confidence": 0.0,
+      "evidence": [],
+      "name": "webview_hybrid",
+      "score": 0.0
+    }
+  ],
+  "confidence": 0.0,
+  "conflict": {
+    "is_conflicted": false,
+    "runner_up": null,
+    "score": 0.0,
+    "strong_candidates": []
+  },
+  "conflicts": [],
+  "evidence": [
+    "Input is not an APK"
+  ],
+  "name": "unknown",
+  "score": 0.0,
+  "scoring": "bounded-static-evidence-v1"
+}

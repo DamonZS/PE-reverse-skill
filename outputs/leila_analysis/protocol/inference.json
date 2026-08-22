@@ -1,0 +1,13 @@
+{
+  "confidence": 0.0,
+  "field_count": 0,
+  "message_formats": [],
+  "primary_protocol": null,
+  "probable_flow_count": 7,
+  "request_response_pair_count": 0,
+  "strategy": {
+    "key": "protocol:protocol_strings_dynamic_fusion",
+    "name": "protocol_strings_dynamic_fusion",
+    "reason": "Static strings plus dynamic/network hints provide low-friction passive protocol evidence."
+  }
+}

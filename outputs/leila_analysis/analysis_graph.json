@@ -1,0 +1,51 @@
+{
+  "edges": [],
+  "nodes": [],
+  "status": "ok",
+  "summary": {
+    "api_count": 0,
+    "counts": {
+      "api": 0,
+      "dynamic_event": 0,
+      "function": 0,
+      "resource": 0,
+      "ui_action": 0,
+      "ui_control": 0,
+      "ui_handler": 0,
+      "ui_state": 0
+    },
+    "dynamic_event_count": 0,
+    "edge_count": 0,
+    "function_count": 0,
+    "linked_handler_count": 0,
+    "node_count": 0,
+    "node_type_counts": {
+      "api": 0,
+      "dynamic_event": 0,
+      "function": 0,
+      "resource": 0,
+      "ui_action": 0,
+      "ui_control": 0,
+      "ui_handler": 0,
+      "ui_state": 0
+    },
+    "resource_count": 0,
+    "state_count": 0,
+    "transition_count": 0,
+    "type_counts": {
+      "api": 0,
+      "dynamic_event": 0,
+      "function": 0,
+      "resource": 0,
+      "ui_action": 0,
+      "ui_control": 0,
+      "ui_handler": 0,
+      "ui_state": 0
+    },
+    "ui_action_count": 0,
+    "ui_control_count": 0,
+    "ui_handler_count": 0,
+    "ui_state_count": 0
+  },
+  "version": 1
+}

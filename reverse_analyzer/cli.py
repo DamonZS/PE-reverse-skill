@@ -4538,6 +4538,45 @@ def _add_capability_alias_options(
         parser.set_defaults(rollback=False)
 
 
+def _codex_command(args: argparse.Namespace) -> int:
+    from .codex.cli import main as codex_main
+
+    import json as _json
+
+    def _flag(name: str) -> list[str]:
+        value = getattr(args, name, None)
+        if value is None or value is False:
+            return []
+        return [f"--{name.replace('_', '-')}", str(value)]
+
+    # Reconstruct the codex-subcommand argument vector from the parsed main
+    # Namespace so the dedicated codex CLI can re-parse it consistently.
+    argv: list[str] = [args.codex_command]
+    for field in ("target", "instruction_profile"):
+        argv.extend(_flag(field))
+    if getattr(args, "allowed", False):
+        argv.append("--allowed")
+    if getattr(args, "unrestricted", False):
+        argv.append("--force")
+    if getattr(args, "dry_run", False):
+        argv.append("--dry-run")
+    if getattr(args, "json_output", False) or getattr(args, "json", False):
+        argv.append("--json")
+    return codex_main(argv)
+
+
+def codex_inspect_command(args: argparse.Namespace) -> int:
+    return _codex_command(args)
+
+
+def codex_inject_command(args: argparse.Namespace) -> int:
+    return _codex_command(args)
+
+
+def codex_restore_command(args: argparse.Namespace) -> int:
+    return _codex_command(args)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="reverse_analyzer",
@@ -5425,6 +5464,41 @@ def build_parser() -> argparse.ArgumentParser:
     list_tools = subparsers.add_parser("list-tools", help="List built-in and future runtime tools.")
     list_tools.add_argument("--json", action="store_true", help="Emit JSON.")
     list_tools.set_defaults(func=list_tools_command)
+
+    codex = subparsers.add_parser(
+        "codex",
+        help="Inspect and, under an explicit authorized target, instrument a local Codex config directory.",
+    )
+    codex_commands = codex.add_subparsers(dest="codex_command", required=True)
+
+    codex_inspect = codex_commands.add_parser(
+        "inspect",
+        help="Read-only scan for instruction-file redirect, planted skills, and activation words.",
+    )
+    codex_inspect.add_argument("--target", default=None, help="Exact .codex directory to inspect.")
+    codex_inspect.add_argument("--json", action="store_true", help="Emit JSON.")
+    codex_inspect.set_defaults(func=codex_inspect_command)
+
+    codex_inject = codex_commands.add_parser(
+        "inject",
+        help="Deploy the instruction bundle into an explicit authorized codex directory.",
+    )
+    codex_inject.add_argument("--target", required=True, help="Exact .codex directory.")
+    codex_inject.add_argument("--allowed", action="store_true", default=False, help="Confirm you own/are authorized to instrument the target.")
+    codex_inject.add_argument("--force", action="store_true", dest="unrestricted", default=False, help="Unrestricted/force-deploy: skip --allowed and allow initialising a directory with no config.toml (for a target you fully control).")
+    codex_inject.add_argument("--instruction-profile", default="gpt5.5-unrestricted", help="Instruction profile to deploy.")
+    codex_inject.add_argument("--dry-run", action="store_true", help="Emit the plan without writing.")
+    codex_inject.add_argument("--json", action="store_true", help="Emit JSON.")
+    codex_inject.set_defaults(func=codex_inject_command)
+
+    codex_restore = codex_commands.add_parser(
+        "restore",
+        help="Restore a prior inject from the recorded backup manifest.",
+    )
+    codex_restore.add_argument("--target", required=True, help="Exact .codex directory.")
+    codex_restore.add_argument("--json", action="store_true", help="Emit JSON.")
+    codex_restore.set_defaults(func=codex_restore_command)
+
     return parser
 
 

@@ -1,0 +1,6 @@
+interface:
+  display_name: "拓扑 Identity"
+  short_description: "Use 拓扑's fixed personal assistant identity"
+  default_prompt: "Use $topo-identity to introduce yourself."
+policy:
+  allow_implicit_invocation: true

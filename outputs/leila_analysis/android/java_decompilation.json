@@ -1,0 +1,50 @@
+{
+  "artifact": "android/java_decompilation.json",
+  "capability_boundary": {
+    "content_recompiled": false,
+    "dependency_state": "not_requested",
+    "network_access": false,
+    "operation_kind": "offline_dex_java_kotlin_decompilation",
+    "provider_kind": "external",
+    "required_tools": [
+      "jadx"
+    ],
+    "target_code_executed": false
+  },
+  "command": [],
+  "command_metadata": {
+    "argv_only": true,
+    "offline": true,
+    "shell": false,
+    "target_code_executed": false
+  },
+  "dependency": {
+    "executable": null,
+    "name": "jadx",
+    "probe": {},
+    "state": "not_requested"
+  },
+  "output": {
+    "file_count": 0,
+    "files": [],
+    "java_file_count": 0,
+    "kotlin_file_count": 0,
+    "path": "android/jadx",
+    "source_file_count": 0,
+    "total_bytes": 0
+  },
+  "provider": "jadx",
+  "reason": "JADX decompilation was not requested",
+  "requested": false,
+  "returncode": null,
+  "schema_version": 1,
+  "status": "unavailable",
+  "stderr": "",
+  "stdout": "",
+  "target": {
+    "sha256_after": null,
+    "sha256_before": null,
+    "unchanged": false
+  },
+  "warnings": []
+}

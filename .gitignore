@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 *.pyo
+*.exe
 .pytest_cache/
 .venv/
 .codex-tmp*/

@@ -1,0 +1,1839 @@
+{
+  "edges": [
+    {
+      "edge_id": "edge:sha256:05c778cc2ee3f841da887cf44daebdd603295aa28d0b856b29ef09375a826eb2",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:5498554afb10a913fb9c176f3106b3b467ab34ce0f7afb4bcc2d677cc3a3d2d8"
+    },
+    {
+      "edge_id": "edge:sha256:093e2ffa4dbfe0065494327af149286b074aa9b73c6e366462fed53a63f6f8f6",
+      "edge_type": "analysis_pending",
+      "properties": {
+        "execution_kind": "unknown",
+        "section": "gui_analysis",
+        "status": "unknown"
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "gui_analysis:sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "edge_id": "edge:sha256:0a2e56f00835d11508e40aa18eda7c1e629f16f4afd65fca3380d5a2641346e2",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:282465e66965e88e4de2c6641ebc461a5ff2b32d22c0304910fd43e1a321b542"
+    },
+    {
+      "edge_id": "edge:sha256:0f3f8bd473244c0b296e41b8d63f5fcb3c78f20e06a0b7d3264c271f515c8649",
+      "edge_type": "analysis_unavailable",
+      "properties": {
+        "execution_kind": "unavailable",
+        "section": "patch_analysis",
+        "status": "unavailable"
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "patch_analysis:sha256:774a5957e1e1b76e5ba7d6a9b803e215b28d31ac0fae1df873a96758e7fb35ef"
+    },
+    {
+      "edge_id": "edge:sha256:0f7884758e44cbe97dfbc9f17e4f1af1b9c81c0836f877c74dbe8a607e689648",
+      "edge_type": "has_evidence_reference",
+      "properties": {
+        "reference_field": "semantic_entity.sources"
+      },
+      "source": "protocol-flow:fed67d43ace1c1cd",
+      "target": "evidence_reference:sha256:3c9d85814314a1e7630d44277ffbe95eb6bdf4bfc0c2aa50fcc0c4f2b86dcb64"
+    },
+    {
+      "edge_id": "edge:sha256:1308074fea45ca633c6bdbba299485f5bdc523ea20f2886f53910c31838085aa",
+      "edge_type": "has_evidence_reference",
+      "properties": {
+        "reference_field": "semantic_entity.sources"
+      },
+      "source": "protocol-flow:acf84892f148ef6b",
+      "target": "evidence_reference:sha256:82a2d87d62f63923c842e86c516d49bbf3cf5b4e301998148e234fa123a8c7f4"
+    },
+    {
+      "edge_id": "edge:sha256:137dec739269a2c50701dd32c5fad2b21064c571444102430b0f21efd332ee2a",
+      "edge_type": "contains_entity",
+      "source": "semantic_ir:sha256:cfede7c68b0bb6ae15273224597e310a6bf3f5a3bfa7a4a6bb59e3a97b6873e7",
+      "target": "protocol-flow:acf84892f148ef6b"
+    },
+    {
+      "edge_id": "edge:sha256:1ab3a72bf1890d03cc6c0115360bf961a612b584828b34e8e7f0153b417a9942",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:537b3ca246ad2c8649cea7d5b5b0286567700ab53226f871efd52701b0061e59",
+      "target": "artifact_hash:sha256:d555411e55f1c8789cdc36fa1da649b04507a1c4441a2c70d15f59fda4face09"
+    },
+    {
+      "edge_id": "edge:sha256:1ae2c395bc3a74d9a2a0f23d62afbde859bd90743a303707c04e87306ad27e57",
+      "edge_type": "has_evidence_reference",
+      "properties": {
+        "reference_field": "semantic_entity.sources"
+      },
+      "source": "protocol-flow:63ae3452a5da35da",
+      "target": "evidence_reference:sha256:3c9d85814314a1e7630d44277ffbe95eb6bdf4bfc0c2aa50fcc0c4f2b86dcb64"
+    },
+    {
+      "edge_id": "edge:sha256:237ba7f511becfa4c10b100a5ebd2134f6dbc587e803af10752ed3c78bd46a15",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:d77e22b2f75ddd9a5630f4648dc2689ce5e76a8455f9e20abbcf8ef32e76e8e4"
+    },
+    {
+      "edge_id": "edge:sha256:2957fe497ac8d2e3c0d0c84de62d30cd136c77fd4d0a7b0c491b9296d8536563",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:d77e22b2f75ddd9a5630f4648dc2689ce5e76a8455f9e20abbcf8ef32e76e8e4",
+      "target": "artifact_hash:sha256:3e40e05775ecc46ee69f0bbb5c8f21566b654c0cd8141e70119dd3fbb9744098"
+    },
+    {
+      "edge_id": "edge:sha256:29989aba7f86a87d30e174e57a001094229f79edecf3421e0bd171573c70a176",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 8,
+          "tool": "engine_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:99ebaaa330f82086f391951cf50304ccd96a17d47420b7d5fa15e7116e409861"
+    },
+    {
+      "edge_id": "edge:sha256:2f03118da8606a5585aa7af9360ab503da6676c74945452e772f3795d5f36516",
+      "edge_type": "has_evidence_reference",
+      "properties": {
+        "reference_field": "semantic_entity.sources"
+      },
+      "source": "protocol-flow:fc5e638f7a4cafb0",
+      "target": "evidence_reference:sha256:82a2d87d62f63923c842e86c516d49bbf3cf5b4e301998148e234fa123a8c7f4"
+    },
+    {
+      "edge_id": "edge:sha256:3300aec1873e08240af073b7d25db8afb545c6ab45ad2035aa395fb13dbdd09a",
+      "edge_type": "has_evidence_reference",
+      "properties": {
+        "reference_field": "semantic_entity.sources"
+      },
+      "source": "protocol-flow:fc5e638f7a4cafb0",
+      "target": "evidence_reference:sha256:3c9d85814314a1e7630d44277ffbe95eb6bdf4bfc0c2aa50fcc0c4f2b86dcb64"
+    },
+    {
+      "edge_id": "edge:sha256:348937c9bf513fe20dd746e1918468ec9af26b573ed94d013a06fdfcfc47f375",
+      "edge_type": "has_evidence_reference",
+      "properties": {
+        "reference_field": "semantic_entity.sources"
+      },
+      "source": "protocol-flow:2f00753070db1010",
+      "target": "evidence_reference:sha256:82a2d87d62f63923c842e86c516d49bbf3cf5b4e301998148e234fa123a8c7f4"
+    },
+    {
+      "edge_id": "edge:sha256:34dfc2e9e7d7b203c05ad07369d024a6d395fd977bb5be79745b805f3e03543f",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 10,
+          "tool": "protocol_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:d77e22b2f75ddd9a5630f4648dc2689ce5e76a8455f9e20abbcf8ef32e76e8e4"
+    },
+    {
+      "edge_id": "edge:sha256:355ed6289a20166b97e38475a569ea3c8581b40fe544b88b338b44e518476f48",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 9,
+          "tool": "android_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:38c33f887f9a805108fa0ff12d6b199e9f77837816ed22fba286bbd4c50516d5"
+    },
+    {
+      "edge_id": "edge:sha256:357400c15bb8d1001633f018f78ab7840734f3e7f6acd60b31efd18be6b37062",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:21906c27b95ef93d05aa21f4389b65bfa70d8f82cb724e3b17c1f93119cfdd98",
+      "target": "artifact_hash:sha256:cbc0bc686f6bd86105761bb946184ca109494b7571ed784b9599932a5e6ce375"
+    },
+    {
+      "edge_id": "edge:sha256:374e77ef3402d23de947a67307900b6cd8c5fc6b8738d41dfb759437686dcf27",
+      "edge_type": "has_evidence_reference",
+      "properties": {
+        "reference_field": "semantic_entity.sources"
+      },
+      "source": "protocol-flow:63ae3452a5da35da",
+      "target": "evidence_reference:sha256:82a2d87d62f63923c842e86c516d49bbf3cf5b4e301998148e234fa123a8c7f4"
+    },
+    {
+      "edge_id": "edge:sha256:39b6f52c766bde3a00271cb42ff9945ead5bd6a7cee95535ee8dd7fca9c7c170",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 8,
+          "tool": "engine_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:0fe7bab7ad3798326f69e2cff9b894f8b2e7eda09e517a74dc6b7e0d88da49c8"
+    },
+    {
+      "edge_id": "edge:sha256:3c541886d65bdfef0b19b437035155a5ba5465258ff85b7495dd6fcb091a11e9",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:9049fc82d07108da0198e7c4f1296a42532be4a96e0f5429f7e970f59896d29f",
+      "target": "artifact_hash:sha256:9c206dc1728b59e7d0c11c1be1c47a06213aabd0c4e10fa0bcd18c31e27a7ff3"
+    },
+    {
+      "edge_id": "edge:sha256:3d4eb30ffe0b86e0cb7539f3a926f66c12d5ab04e3e962904e0992260716ac68",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:38c33f887f9a805108fa0ff12d6b199e9f77837816ed22fba286bbd4c50516d5"
+    },
+    {
+      "edge_id": "edge:sha256:402ab6b380895b5114bdd2170eed613d35a9d593075614a69824bfe798d9b51f",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:0fe7bab7ad3798326f69e2cff9b894f8b2e7eda09e517a74dc6b7e0d88da49c8",
+      "target": "artifact_hash:sha256:079c56c665ca6ec935a511ce3c2857624f0d504dcbdec6f205afd62cb8f7545a"
+    },
+    {
+      "edge_id": "edge:sha256:43154a9e02fc6a1e254f7db24b9efe7640b63e51c3229c53ae11d78303ccbce6",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:c49e3fc0bb7426c6f82b3f6b88afc792ceef3a037fd2e79be4dc9fd391c26a37"
+    },
+    {
+      "edge_id": "edge:sha256:466b863aff03cc5b62f4a12c13d75859b35019e03c97d3bc560ccfe1b1ad5a37",
+      "edge_type": "contains_entity",
+      "source": "semantic_ir:sha256:cfede7c68b0bb6ae15273224597e310a6bf3f5a3bfa7a4a6bb59e3a97b6873e7",
+      "target": "protocol-flow:63ae3452a5da35da"
+    },
+    {
+      "edge_id": "edge:sha256:46bf2aef2cedefe1bc619d4ed6b01b2f734a33f2eec9b9b9f3063f530516eac1",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 9,
+          "tool": "android_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:626db4beabf19db325c65c1664ce7e977e88668d476cd897780cfc492737ae6e"
+    },
+    {
+      "edge_id": "edge:sha256:49a7ec31b844a9b7934d992743872fa09ae3cd23b849745478efbf6caf2dce2f",
+      "edge_type": "analysis_pending",
+      "properties": {
+        "execution_kind": "unknown",
+        "section": "ios_analysis",
+        "status": "unknown"
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "ios_analysis:sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "edge_id": "edge:sha256:556af9a35ba33a19feb1fb17a782bacdef34a44ed209655b2da8d8c088394f21",
+      "edge_type": "has_evidence_reference",
+      "properties": {
+        "reference_field": "semantic_entity.sources"
+      },
+      "source": "protocol-flow:7f6d8a4334c03bf2",
+      "target": "evidence_reference:sha256:82a2d87d62f63923c842e86c516d49bbf3cf5b4e301998148e234fa123a8c7f4"
+    },
+    {
+      "edge_id": "edge:sha256:637e1a5142f36c1a9b6a95ca36723d1e0337ec9be044f5bd3d47c33c6dee2f1a",
+      "edge_type": "has_evidence_reference",
+      "properties": {
+        "reference_field": "semantic_entity.sources"
+      },
+      "source": "protocol-flow:d7bac12614bb5d5a",
+      "target": "evidence_reference:sha256:82a2d87d62f63923c842e86c516d49bbf3cf5b4e301998148e234fa123a8c7f4"
+    },
+    {
+      "edge_id": "edge:sha256:65d22371a259dd4c6b7f46a6cfee1e46d3a6f7fbd3bf2ca01e8edef5de4d9b53",
+      "edge_type": "contains_entity",
+      "source": "semantic_ir:sha256:cfede7c68b0bb6ae15273224597e310a6bf3f5a3bfa7a4a6bb59e3a97b6873e7",
+      "target": "protocol-flow:d7bac12614bb5d5a"
+    },
+    {
+      "edge_id": "edge:sha256:6cbeb2321e66debf76fd17458fc5fff5e04390a5bb329f66c6d05264d73369f1",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:7d2049cfc0353b2bcd4b3898d997e0ed93021b1047d60eb562c208b6e90b621d",
+      "target": "artifact_hash:sha256:ee8d222503bcd362351b2fc0868676d19b76fb3d29756908b4949cbef85f261e"
+    },
+    {
+      "edge_id": "edge:sha256:6edabeebf4a4645687ed135d3215fa0208c844dbdce2a3226466b47d7e4987b7",
+      "edge_type": "analysis_pending",
+      "properties": {
+        "execution_kind": "unknown",
+        "section": "source_reconstruction",
+        "status": "unknown"
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "source_reconstruction:sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "edge_id": "edge:sha256:716453295107be740588dc285a231e6306e6a700fa193106a1e5f432fa750466",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:4cf915ef20e9ac05e395af2fee3e38b80bb35a5068bcb4f5e8302c46a8e714f1"
+    },
+    {
+      "edge_id": "edge:sha256:766e652f90ec9d40619c1482d2e90c41f8321b5fdd2d27ab244b10db6a1eb065",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:efb03eaf4dd54c94f1cbb6c9351176573820ea2b013e3fb3a98b75cff841ddf6",
+      "target": "artifact_hash:sha256:cd409f14b6ae2399bb695589ce813bd70be903ff1f4f71675a014d502ef585e4"
+    },
+    {
+      "edge_id": "edge:sha256:77979f82980a16daf2dee00f9b550dda6aeb19a3711d4aa55e0cbdec25cf1fa2",
+      "edge_type": "references_evidence",
+      "source": "semantic_ir:sha256:cfede7c68b0bb6ae15273224597e310a6bf3f5a3bfa7a4a6bb59e3a97b6873e7",
+      "target": "artifact:sha256:619c1e58562e52db2833772c59ec4786a2ecb32db20d27b29b63de9787a31058"
+    },
+    {
+      "edge_id": "edge:sha256:7b08581fa580a5588467eab59abad89c94ac51f9983aed3c1e5cf69e34c94125",
+      "edge_type": "declares_sample",
+      "properties": {
+        "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe",
+        "status": "ok",
+        "verification_scope": "external"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e"
+    },
+    {
+      "edge_id": "edge:sha256:7fb2e7d01861cf0011e090ab68367befd87747e0947d7dfad925cbe292dd80b4",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:2d1e97a6c2fb8c16e758616e7450abdb31a5e708a95e49a7587a4feda442fa82"
+    },
+    {
+      "edge_id": "edge:sha256:82af89049b232a776031e56ef4898453551991af51364ee296473cf56ed55f7a",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 9,
+          "tool": "android_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:9ba513c791f4e130127960afa519f7d90a88fbb94afaca47a85d529ebf89bbb1"
+    },
+    {
+      "edge_id": "edge:sha256:82d466c1a4adb7d13ba9b136cf161423fe0825e911ff6991348d322e6c6c5305",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 9,
+          "tool": "android_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:21906c27b95ef93d05aa21f4389b65bfa70d8f82cb724e3b17c1f93119cfdd98"
+    },
+    {
+      "edge_id": "edge:sha256:83a0e9ac3050009428c8389de4dad94c5c66b288d2c3ce6e7f3881d2af1c248a",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 9,
+          "tool": "android_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:282465e66965e88e4de2c6641ebc461a5ff2b32d22c0304910fd43e1a321b542"
+    },
+    {
+      "edge_id": "edge:sha256:9020f60776224f13ed878f897725e636ba4ed8a6abad4df6eef80bcca838aa4a",
+      "edge_type": "has_analysis",
+      "properties": {
+        "execution_kind": "completed",
+        "section": "protocol_analysis",
+        "status": "ok"
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "protocol_analysis:sha256:3541f3b5478fdebfe6945b76d2dcf1cecb701bfeafe00918da5b59b66aab8d4b"
+    },
+    {
+      "edge_id": "edge:sha256:95195f91c0acd05a5cf12f87745f02667a5b4fe961cf2640a8c310829774309c",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:38c33f887f9a805108fa0ff12d6b199e9f77837816ed22fba286bbd4c50516d5",
+      "target": "artifact_hash:sha256:91346c247d3251918e457fa745cc33fb90689f42550ac980644bf9e65ae550be"
+    },
+    {
+      "edge_id": "edge:sha256:95396a749138635880e4950d7de66da9dfd0678302378bd52d3e30bcba53ae87",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 10,
+          "tool": "protocol_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:43d71bbed4776234baed8f094c1b46691ba6424a30bbc2453ec23eca19bbb50a"
+    },
+    {
+      "edge_id": "edge:sha256:960c13b57c7b0bec08b1a6ac57845dc21a7bcb139a73a46bc3f66454b3682ab4",
+      "edge_type": "has_semantic_ir",
+      "properties": {
+        "status": "partial"
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "semantic_ir:sha256:cfede7c68b0bb6ae15273224597e310a6bf3f5a3bfa7a4a6bb59e3a97b6873e7"
+    },
+    {
+      "edge_id": "edge:sha256:97574a84ee401215943f5df307793484b67fccf409a640f5bf5dbc41a1f7bd14",
+      "edge_type": "contains_entity",
+      "source": "semantic_ir:sha256:cfede7c68b0bb6ae15273224597e310a6bf3f5a3bfa7a4a6bb59e3a97b6873e7",
+      "target": "protocol-flow:2f00753070db1010"
+    },
+    {
+      "edge_id": "edge:sha256:98bc30b4a6f0ae860900ef76b1a789ab2165147870e7df93540ec1bf93c48fd7",
+      "edge_type": "has_evidence_reference",
+      "properties": {
+        "reference_field": "semantic_entity.sources"
+      },
+      "source": "protocol-flow:7f6d8a4334c03bf2",
+      "target": "evidence_reference:sha256:3c9d85814314a1e7630d44277ffbe95eb6bdf4bfc0c2aa50fcc0c4f2b86dcb64"
+    },
+    {
+      "edge_id": "edge:sha256:9984baef48dac5788b5a7ae399294505d69e3eb89aa316c9412ee03036c2ccbc",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:99ebaaa330f82086f391951cf50304ccd96a17d47420b7d5fa15e7116e409861",
+      "target": "artifact_hash:sha256:25f070c79eb2d0a16400c0ab96c9f143a29ddf092a36c59031230ce827168477"
+    },
+    {
+      "edge_id": "edge:sha256:9b272d9642ad01858959b19cb6e10f1e46d2d81fc3c04c6462bc6c49a0aa7b59",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest.sample"
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact_hash:sha256:f4e009622ecab4ef60201f5bf00f708c35a7a9209a124f0a5d9762fb89a60238"
+    },
+    {
+      "edge_id": "edge:sha256:9b405b91c5488959770595b1e3782eab5614790d1aa6d717cb2d1e45df31af64",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:6485624cb2a3815fe4a97218e8c967e03102e0dd839aa8c2ff0a4100bfbd2416",
+      "target": "artifact_hash:sha256:e30a68ee554a56d20d04da13155ad487c25e1c3d8b03e8ed6368396faae8a36b"
+    },
+    {
+      "edge_id": "edge:sha256:9f23a45dcb6b69910435db3586cb50c37d5d5bbece7895cf8725aa290d3cdc6c",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:6485624cb2a3815fe4a97218e8c967e03102e0dd839aa8c2ff0a4100bfbd2416"
+    },
+    {
+      "edge_id": "edge:sha256:a5b1929147f7922338cd5847af1ca63050c406752eafaab57e81421719307b99",
+      "edge_type": "has_analysis",
+      "properties": {
+        "execution_kind": "completed",
+        "section": "evidence_integrity",
+        "status": "ok"
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "evidence_integrity:sha256:0b1cf628d30e0701661db3884aa681230dd6122cee00fdf4a1f4fd726ef730e7"
+    },
+    {
+      "edge_id": "edge:sha256:a78df3896e9116267bbed058630892249ea299b7c7b80a25ab617a1d8d24277d",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:626db4beabf19db325c65c1664ce7e977e88668d476cd897780cfc492737ae6e",
+      "target": "artifact_hash:sha256:f8f0bc5dd615583c0277915c4d3803711db3c66749d43d3928d2da6454176676"
+    },
+    {
+      "edge_id": "edge:sha256:a9160522a426bbc94a9861baf181eec059b8898735f30b9b4e7595a0d9eb1394",
+      "edge_type": "contains_entity",
+      "source": "semantic_ir:sha256:cfede7c68b0bb6ae15273224597e310a6bf3f5a3bfa7a4a6bb59e3a97b6873e7",
+      "target": "protocol-flow:fc5e638f7a4cafb0"
+    },
+    {
+      "edge_id": "edge:sha256:a938dab968dc84382f466af3bad57be61afa7e5f1f9a30afd7ad1409ab9d2eba",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 9,
+          "tool": "android_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:537b3ca246ad2c8649cea7d5b5b0286567700ab53226f871efd52701b0061e59"
+    },
+    {
+      "edge_id": "edge:sha256:a9a86350a0da285399f36c59f2a6d99407652a0d7ee80d6da413e91f6c5f31ce",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 12,
+          "tool": "semantic_ir_build"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:619c1e58562e52db2833772c59ec4786a2ecb32db20d27b29b63de9787a31058"
+    },
+    {
+      "edge_id": "edge:sha256:ac6011f6843dc6790bb06bed738e7f5927c866fb5fd70c3e8d19f1d7f8582606",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:43d71bbed4776234baed8f094c1b46691ba6424a30bbc2453ec23eca19bbb50a",
+      "target": "artifact_hash:sha256:446c835ea9361a3879ded6e401bb5757411cf29b08e1a373e98f886fbf05929d"
+    },
+    {
+      "edge_id": "edge:sha256:ad6dd38ae9de324a48c67381cf69b7cf2e4658d225e7de41350b1a5d386d303b",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:5498554afb10a913fb9c176f3106b3b467ab34ce0f7afb4bcc2d677cc3a3d2d8",
+      "target": "artifact_hash:sha256:e4fe74b4dcd1ce6351a363009408e46f13c97a4688d82e925b10574dfe162b10"
+    },
+    {
+      "edge_id": "edge:sha256:adcea93b6236b1a92b2cbe15fba5ca7e92337128a8aa4d263247b320d48517f1",
+      "edge_type": "has_evidence_reference",
+      "properties": {
+        "reference_field": "engine_analysis.evidence"
+      },
+      "source": "engine_analysis:sha256:9c8c870438425f0ca9879822b5ab11769f156568d947082134bfff328bf3d032",
+      "target": "evidence_reference:sha256:90cdc384cd9a0760085a13678a007d65482d1995e460e89e3609492575395860"
+    },
+    {
+      "edge_id": "edge:sha256:b2a2f880dabd8eca64429e4e545d0ab0878aa8ac5dd0dc31356f4718c85976b0",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:282465e66965e88e4de2c6641ebc461a5ff2b32d22c0304910fd43e1a321b542",
+      "target": "artifact_hash:sha256:ec64ef7ee8c3b4bb3dbf0d30c453caeba545f329fb9a08ec41b376d5dc310cc9"
+    },
+    {
+      "edge_id": "edge:sha256:b395d03fe22355934486155648c9352e442c1281b332182e8208722723263f28",
+      "edge_type": "has_evidence_reference",
+      "properties": {
+        "reference_field": "semantic_entity.sources"
+      },
+      "source": "protocol-flow:fed67d43ace1c1cd",
+      "target": "evidence_reference:sha256:82a2d87d62f63923c842e86c516d49bbf3cf5b4e301998148e234fa123a8c7f4"
+    },
+    {
+      "edge_id": "edge:sha256:b9363aae12f2b7b1611ec704ec6cf2045341d847d4667123f5293dba6eb7cfc4",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:626db4beabf19db325c65c1664ce7e977e88668d476cd897780cfc492737ae6e"
+    },
+    {
+      "edge_id": "edge:sha256:b9f6b5e5c6c0a322f995ed94a953511d705651ec75a061bec2028514869777c4",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 8,
+          "tool": "engine_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:efb03eaf4dd54c94f1cbb6c9351176573820ea2b013e3fb3a98b75cff841ddf6"
+    },
+    {
+      "edge_id": "edge:sha256:bb9a98e0ba670fa0e03666abad100744bd5d50b426c7c373bc68a69520245093",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:9049fc82d07108da0198e7c4f1296a42532be4a96e0f5429f7e970f59896d29f"
+    },
+    {
+      "edge_id": "edge:sha256:bee022ebda47674ab5e59a8fbc4f0569dc394085f5906ec77b2c3d10f894b771",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:2d1e97a6c2fb8c16e758616e7450abdb31a5e708a95e49a7587a4feda442fa82",
+      "target": "artifact_hash:sha256:4be2537ed5f11b043ca0fb7b9677e0aac3a9adb2c436422882cfc7abb36c02ba"
+    },
+    {
+      "edge_id": "edge:sha256:c04e744619721c052eb33faf7e927b79111656c3438f3e98a9745f30e2a53832",
+      "edge_type": "contains_entity",
+      "source": "semantic_ir:sha256:cfede7c68b0bb6ae15273224597e310a6bf3f5a3bfa7a4a6bb59e3a97b6873e7",
+      "target": "protocol-flow:7f6d8a4334c03bf2"
+    },
+    {
+      "edge_id": "edge:sha256:c09dac8ca53dc6da8bee4df5f7d5879ca4bb1dbfefe0a2026e5b4d9d66d94307",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 9,
+          "tool": "android_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:6485624cb2a3815fe4a97218e8c967e03102e0dd839aa8c2ff0a4100bfbd2416"
+    },
+    {
+      "edge_id": "edge:sha256:c11c6175c521d03ea07593c75d1e02533b586fda290f92143ab5e37fe46e9a51",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:619c1e58562e52db2833772c59ec4786a2ecb32db20d27b29b63de9787a31058"
+    },
+    {
+      "edge_id": "edge:sha256:c1c5b54fd45bacb97deb04f3c793beebabd992feb8026c3d3d6eeea377d5d559",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:619c1e58562e52db2833772c59ec4786a2ecb32db20d27b29b63de9787a31058",
+      "target": "artifact_hash:sha256:9fdf807cb2a201a6c4d334316fa79a1a97101bad40c5ef7b20f0cd62689268ff"
+    },
+    {
+      "edge_id": "edge:sha256:c1d483f4e7e38e7847548fed0cd286eeea89f2a0a2f347fff1ceabef073c02e1",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:0fe7bab7ad3798326f69e2cff9b894f8b2e7eda09e517a74dc6b7e0d88da49c8"
+    },
+    {
+      "edge_id": "edge:sha256:c340f5ab668360d81de213fa9a803c170c20aa41300f74cce3d62138a2559405",
+      "edge_type": "analysis_pending",
+      "properties": {
+        "execution_kind": "unknown",
+        "section": "memory_analysis",
+        "status": "unknown"
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "memory_analysis:sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "edge_id": "edge:sha256:c416bdca330e6bf12555689eeca50ac825a765d36cdfaf5a67d7da2370897481",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:43d71bbed4776234baed8f094c1b46691ba6424a30bbc2453ec23eca19bbb50a"
+    },
+    {
+      "edge_id": "edge:sha256:c4436bddb326382200bc957851845d5e0517e156768ce1a529704d25ec40c752",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:7d2049cfc0353b2bcd4b3898d997e0ed93021b1047d60eb562c208b6e90b621d"
+    },
+    {
+      "edge_id": "edge:sha256:c4c5e1e7ab67f7f06ccc4a9b3990559338fd24b81a6fc0f55af88865a9310521",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:9ba513c791f4e130127960afa519f7d90a88fbb94afaca47a85d529ebf89bbb1"
+    },
+    {
+      "edge_id": "edge:sha256:c5d1a89d4cc86fccea3ac593c854130dee5a5e8cc95e0135be24861f6b9e3570",
+      "edge_type": "has_evidence_reference",
+      "properties": {
+        "reference_field": "semantic_entity.sources"
+      },
+      "source": "protocol-flow:2f00753070db1010",
+      "target": "evidence_reference:sha256:3c9d85814314a1e7630d44277ffbe95eb6bdf4bfc0c2aa50fcc0c4f2b86dcb64"
+    },
+    {
+      "edge_id": "edge:sha256:c86a49214093b37d19576a66f058b2ff9b3f7e7a69bf52c8e6a2c0757109a546",
+      "edge_type": "analysis_unavailable",
+      "properties": {
+        "execution_kind": "unavailable",
+        "section": "android_analysis",
+        "status": "unavailable"
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "android_analysis:sha256:df5eadf9a1a5dbc61a6a4fa66e3a55be4cbd8cbdfcec19c97af48caf2e1ec041"
+    },
+    {
+      "edge_id": "edge:sha256:cbdc64a58d7cf52d1dbdde4cbeef011e34b2d3f9c237e7ae55e2cb1f5ea2b712",
+      "edge_type": "has_evidence_reference",
+      "properties": {
+        "reference_field": "semantic_entity.sources"
+      },
+      "source": "protocol-flow:acf84892f148ef6b",
+      "target": "evidence_reference:sha256:3c9d85814314a1e7630d44277ffbe95eb6bdf4bfc0c2aa50fcc0c4f2b86dcb64"
+    },
+    {
+      "edge_id": "edge:sha256:cd0877311abc1b79ab690751d478ee16b2105ccd15b2e53939d2d8ee5bb71932",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 10,
+          "tool": "protocol_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:2d1e97a6c2fb8c16e758616e7450abdb31a5e708a95e49a7587a4feda442fa82"
+    },
+    {
+      "edge_id": "edge:sha256:cd24e3a40bc97d1e144e9e8b9253835e410ec9262fc454e8ce97f822955c0271",
+      "edge_type": "contains_entity",
+      "source": "semantic_ir:sha256:cfede7c68b0bb6ae15273224597e310a6bf3f5a3bfa7a4a6bb59e3a97b6873e7",
+      "target": "protocol-flow:fed67d43ace1c1cd"
+    },
+    {
+      "edge_id": "edge:sha256:d19a6f4bffe01984e27c276c73bf50a4d1501e90766cf4fff0cc5a81aa0ea899",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:99ebaaa330f82086f391951cf50304ccd96a17d47420b7d5fa15e7116e409861"
+    },
+    {
+      "edge_id": "edge:sha256:d2a8eee6c417d4de94d183d38869a2924b9bd3c8e892012e57ee0045fcfb9365",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:c49e3fc0bb7426c6f82b3f6b88afc792ceef3a037fd2e79be4dc9fd391c26a37",
+      "target": "artifact_hash:sha256:19ea41d261d5bd7f2abdc821d27a39bc9acf7b82f26008f752c11bfd7aaa0718"
+    },
+    {
+      "edge_id": "edge:sha256:d30e4784e17f79bab3721318add9ba1a2a777172a2a25cb86d7e66e32c547fab",
+      "edge_type": "has_verification",
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "evidence_verification:sha256:ad99373e09090edbcba25a24a85eff772aa26ec0351a7d091ac1db3840e6efaf"
+    },
+    {
+      "edge_id": "edge:sha256:d981dcdf47d3eebad459cff6f6d8ed7c0108e65c9c7f4b7badaec4edca2e1092",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:537b3ca246ad2c8649cea7d5b5b0286567700ab53226f871efd52701b0061e59"
+    },
+    {
+      "edge_id": "edge:sha256:dcdb23717a9c7c78259c5515f34ee1f72bf13a58ef1c8babdbe9807ff18cfb82",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 8,
+          "tool": "engine_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:c49e3fc0bb7426c6f82b3f6b88afc792ceef3a037fd2e79be4dc9fd391c26a37"
+    },
+    {
+      "edge_id": "edge:sha256:de23cee553aeff580a824420120451c543608720f9c97760adde1c9dd87b1fc2",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:4cf915ef20e9ac05e395af2fee3e38b80bb35a5068bcb4f5e8302c46a8e714f1",
+      "target": "artifact_hash:sha256:25c5dda5df0c5617503d7900b1c333de0170cd67bbe3d0419d41811a34653b9c"
+    },
+    {
+      "edge_id": "edge:sha256:e0498768cf03fe8e1c22c9f0c952e35be976b3d02afda8bea5d245c2eb94e053",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 8,
+          "tool": "engine_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:4cf915ef20e9ac05e395af2fee3e38b80bb35a5068bcb4f5e8302c46a8e714f1"
+    },
+    {
+      "edge_id": "edge:sha256:e713e4af52138c98f64c68fff38ba3c9cb0cb8a3e1d49deef57dfd0bee60ee57",
+      "edge_type": "has_evidence_manifest",
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039"
+    },
+    {
+      "edge_id": "edge:sha256:e74c9b5bf21782e463848366aaace051e305207ab2b889d3085739641bbb36e2",
+      "edge_type": "has_analysis",
+      "properties": {
+        "execution_kind": "completed",
+        "section": "engine_analysis",
+        "status": "ok"
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "engine_analysis:sha256:9c8c870438425f0ca9879822b5ab11769f156568d947082134bfff328bf3d032"
+    },
+    {
+      "edge_id": "edge:sha256:e8ea9f279eae29be9531062980f6fd161a5391547e9cb4b7dccaa0e0c8bb324c",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 8,
+          "tool": "engine_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:9049fc82d07108da0198e7c4f1296a42532be4a96e0f5429f7e970f59896d29f"
+    },
+    {
+      "edge_id": "edge:sha256:efc6bbdc1e79de468685a9a7704a77f5db6b5b16144b7571cd8f56f683bd41e7",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 8,
+          "tool": "engine_analyze"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:5498554afb10a913fb9c176f3106b3b467ab34ce0f7afb4bcc2d677cc3a3d2d8"
+    },
+    {
+      "edge_id": "edge:sha256:f0d275a28fea7c6df55d68259afdacce4719c8ccb24151baa99cd51d2f79bd21",
+      "edge_type": "has_declared_hash",
+      "properties": {
+        "evidence_source": "evidence_manifest"
+      },
+      "source": "artifact:sha256:9ba513c791f4e130127960afa519f7d90a88fbb94afaca47a85d529ebf89bbb1",
+      "target": "artifact_hash:sha256:e75a31ac882e3e92e7c3f816df3dc579c08ad035e63db29054b4fef7afd84664"
+    },
+    {
+      "edge_id": "edge:sha256:f5d9ef743dc6170d84df05c8969a32defea5f71bba0dffe180aa204171cfb51c",
+      "edge_type": "generated_artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 11,
+          "tool": "gui_behavior_graph"
+        }
+      },
+      "source": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "target": "artifact:sha256:7d2049cfc0353b2bcd4b3898d997e0ed93021b1047d60eb562c208b6e90b621d"
+    },
+    {
+      "edge_id": "edge:sha256:f6e24e7f848540210b36e7728e267f573511a53a5d927846361e896f71ef8edc",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:efb03eaf4dd54c94f1cbb6c9351176573820ea2b013e3fb3a98b75cff841ddf6"
+    },
+    {
+      "edge_id": "edge:sha256:f85065609855d833bec9539627585dae079e4822a9af38563922e0d2e5669122",
+      "edge_type": "declares_artifact",
+      "properties": {
+        "status": "ok"
+      },
+      "source": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "target": "artifact:sha256:21906c27b95ef93d05aa21f4389b65bfa70d8f82cb724e3b17c1f93119cfdd98"
+    },
+    {
+      "edge_id": "edge:sha256:f9933db790de591836baa9fe6dcd7e5121219a27c84f6cc79b2b9fa1f4f1859c",
+      "edge_type": "has_evidence_reference",
+      "properties": {
+        "reference_field": "semantic_entity.sources"
+      },
+      "source": "protocol-flow:d7bac12614bb5d5a",
+      "target": "evidence_reference:sha256:3c9d85814314a1e7630d44277ffbe95eb6bdf4bfc0c2aa50fcc0c4f2b86dcb64"
+    }
+  ],
+  "nodes": [
+    {
+      "label": "reverse-analyzer-server.exe",
+      "node_id": "sample:sha256:7e867f2b1e9c268b25ac43dda8068caa25086ba66d5a9ea01a8e74a47dc7ba8e",
+      "node_type": "sample",
+      "properties": {
+        "path": "D:\\Project\\PE-reverse-skill\\reverse-analyzer-server.exe"
+      }
+    },
+    {
+      "label": "{'name': 'unknown', 'confidence': 0.0, 'score': 0.0, 'evidence': ['Input is not an APK'], 'candidates': [{'name': 'android_xml', 'score': 0.0, 'confidence': 0.0, 'evidence': []}, {'name': 'jetpack_compose', 'score': 0.0, 'confidence': 0.0, 'evidence': []}, {'name': 'flutter', 'score': 0.0, 'confidence': 0.0, 'evidence': []}, {'name': 'react_native', 'score': 0.0, 'confidence': 0.0, 'evidence': []}, {'name': 'unity', 'score': 0.0, 'confidence': 0.0, 'evidence': []}, {'name': 'webview_hybrid', 'score': 0.0, 'confidence': 0.0, 'evidence': []}], 'conflict': {'is_conflicted': False, 'score': 0.0, 'runner_up': None, 'strong_candidates': []}, 'conflicts': [], 'scoring': 'bounded-static-evidence-v1'}",
+      "node_id": "android_analysis:sha256:df5eadf9a1a5dbc61a6a4fa66e3a55be4cbd8cbdfcec19c97af48caf2e1ec041",
+      "node_type": "android_analysis",
+      "properties": {
+        "execution_kind": "unavailable",
+        "status": "unavailable"
+      }
+    },
+    {
+      "label": "engine/sdk_skeleton.json",
+      "node_id": "artifact:sha256:0fe7bab7ad3798326f69e2cff9b894f8b2e7eda09e517a74dc6b7e0d88da49c8",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 8,
+          "tool": "engine_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "engine-sdk-skeleton",
+        "name": "engine/sdk_skeleton.json",
+        "path": "engine/sdk_skeleton.json",
+        "role": "artifact",
+        "sha256": "079c56c665ca6ec935a511ce3c2857624f0d504dcbdec6f205afd62cb8f7545a",
+        "size": 660,
+        "source_trace_index": 8,
+        "status": "ok",
+        "tool": "engine_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "android/native_libs.json",
+      "node_id": "artifact:sha256:21906c27b95ef93d05aa21f4389b65bfa70d8f82cb724e3b17c1f93119cfdd98",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 9,
+          "tool": "android_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "android-analysis",
+        "name": "android/native_libs.json",
+        "path": "android/native_libs.json",
+        "role": "artifact",
+        "sha256": "cbc0bc686f6bd86105761bb946184ca109494b7571ed784b9599932a5e6ce375",
+        "size": 336,
+        "source_trace_index": 9,
+        "status": "ok",
+        "tool": "android_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "android/java_decompilation.json",
+      "node_id": "artifact:sha256:282465e66965e88e4de2c6641ebc461a5ff2b32d22c0304910fd43e1a321b542",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 9,
+          "tool": "android_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "android-analysis",
+        "name": "android/java_decompilation.json",
+        "path": "android/java_decompilation.json",
+        "role": "artifact",
+        "sha256": "ec64ef7ee8c3b4bb3dbf0d30c453caeba545f329fb9a08ec41b376d5dc310cc9",
+        "size": 1169,
+        "source_trace_index": 9,
+        "status": "ok",
+        "tool": "android_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "protocol/field_stats.json",
+      "node_id": "artifact:sha256:2d1e97a6c2fb8c16e758616e7450abdb31a5e708a95e49a7587a4feda442fa82",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 10,
+          "tool": "protocol_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "protocol-analysis",
+        "name": "protocol/field_stats.json",
+        "path": "protocol/field_stats.json",
+        "role": "artifact",
+        "sha256": "4be2537ed5f11b043ca0fb7b9677e0aac3a9adb2c436422882cfc7abb36c02ba",
+        "size": 329,
+        "source_trace_index": 10,
+        "status": "ok",
+        "tool": "protocol_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "android/framework.json",
+      "node_id": "artifact:sha256:38c33f887f9a805108fa0ff12d6b199e9f77837816ed22fba286bbd4c50516d5",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 9,
+          "tool": "android_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "android-analysis",
+        "name": "android/framework.json",
+        "path": "android/framework.json",
+        "role": "artifact",
+        "sha256": "91346c247d3251918e457fa745cc33fb90689f42550ac980644bf9e65ae550be",
+        "size": 1010,
+        "source_trace_index": 9,
+        "status": "ok",
+        "tool": "android_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "protocol/inference.json",
+      "node_id": "artifact:sha256:43d71bbed4776234baed8f094c1b46691ba6424a30bbc2453ec23eca19bbb50a",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 10,
+          "tool": "protocol_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "protocol-analysis",
+        "name": "protocol/inference.json",
+        "path": "protocol/inference.json",
+        "role": "artifact",
+        "sha256": "446c835ea9361a3879ded6e401bb5757411cf29b08e1a373e98f886fbf05929d",
+        "size": 403,
+        "source_trace_index": 10,
+        "status": "ok",
+        "tool": "protocol_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "engine/assets.json",
+      "node_id": "artifact:sha256:4cf915ef20e9ac05e395af2fee3e38b80bb35a5068bcb4f5e8302c46a8e714f1",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 8,
+          "tool": "engine_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "engine-analysis",
+        "name": "engine/assets.json",
+        "path": "engine/assets.json",
+        "role": "artifact",
+        "sha256": "25c5dda5df0c5617503d7900b1c333de0170cd67bbe3d0419d41811a34653b9c",
+        "size": 503,
+        "source_trace_index": 8,
+        "status": "ok",
+        "tool": "engine_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "android/dex_summary.json",
+      "node_id": "artifact:sha256:537b3ca246ad2c8649cea7d5b5b0286567700ab53226f871efd52701b0061e59",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 9,
+          "tool": "android_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "android-analysis",
+        "name": "android/dex_summary.json",
+        "path": "android/dex_summary.json",
+        "role": "artifact",
+        "sha256": "d555411e55f1c8789cdc36fa1da649b04507a1c4441a2c70d15f59fda4face09",
+        "size": 618,
+        "source_trace_index": 9,
+        "status": "ok",
+        "tool": "android_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "engine/semantic_ir_fragment.json",
+      "node_id": "artifact:sha256:5498554afb10a913fb9c176f3106b3b467ab34ce0f7afb4bcc2d677cc3a3d2d8",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 8,
+          "tool": "engine_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "semantic-ir-fragment",
+        "name": "engine/semantic_ir_fragment.json",
+        "path": "engine/semantic_ir_fragment.json",
+        "role": "artifact",
+        "sha256": "e4fe74b4dcd1ce6351a363009408e46f13c97a4688d82e925b10574dfe162b10",
+        "size": 359,
+        "source_trace_index": 8,
+        "status": "ok",
+        "tool": "engine_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "semantic_ir.json",
+      "node_id": "artifact:sha256:619c1e58562e52db2833772c59ec4786a2ecb32db20d27b29b63de9787a31058",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 12,
+          "tool": "semantic_ir_build"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "semantic-ir",
+        "name": "semantic_ir.json",
+        "path": "semantic_ir.json",
+        "role": "artifact",
+        "sha256": "9fdf807cb2a201a6c4d334316fa79a1a97101bad40c5ef7b20f0cd62689268ff",
+        "size": 5375,
+        "source_trace_index": 12,
+        "status": "ok",
+        "tool": "semantic_ir_build",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "android/semantic_ir_fragment.json",
+      "node_id": "artifact:sha256:626db4beabf19db325c65c1664ce7e977e88668d476cd897780cfc492737ae6e",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 9,
+          "tool": "android_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "android-analysis",
+        "name": "android/semantic_ir_fragment.json",
+        "path": "android/semantic_ir_fragment.json",
+        "role": "artifact",
+        "sha256": "f8f0bc5dd615583c0277915c4d3803711db3c66749d43d3928d2da6454176676",
+        "size": 378,
+        "source_trace_index": 9,
+        "status": "ok",
+        "tool": "android_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "android/manifest.json",
+      "node_id": "artifact:sha256:6485624cb2a3815fe4a97218e8c967e03102e0dd839aa8c2ff0a4100bfbd2416",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 9,
+          "tool": "android_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "android-analysis",
+        "name": "android/manifest.json",
+        "path": "android/manifest.json",
+        "role": "artifact",
+        "sha256": "e30a68ee554a56d20d04da13155ad487c25e1c3d8b03e8ed6368396faae8a36b",
+        "size": 628,
+        "source_trace_index": 9,
+        "status": "ok",
+        "tool": "android_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "analysis_graph.json",
+      "node_id": "artifact:sha256:7d2049cfc0353b2bcd4b3898d997e0ed93021b1047d60eb562c208b6e90b621d",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 11,
+          "tool": "gui_behavior_graph"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "behavior-evidence-graph",
+        "name": "analysis_graph.json",
+        "path": "analysis_graph.json",
+        "role": "artifact",
+        "sha256": "ee8d222503bcd362351b2fc0868676d19b76fb3d29756908b4949cbef85f261e",
+        "size": 1064,
+        "source_trace_index": 11,
+        "status": "ok",
+        "tool": "gui_behavior_graph",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "engine/metadata.json",
+      "node_id": "artifact:sha256:9049fc82d07108da0198e7c4f1296a42532be4a96e0f5429f7e970f59896d29f",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 8,
+          "tool": "engine_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "engine-analysis",
+        "name": "engine/metadata.json",
+        "path": "engine/metadata.json",
+        "role": "artifact",
+        "sha256": "9c206dc1728b59e7d0c11c1be1c47a06213aabd0c4e10fa0bcd18c31e27a7ff3",
+        "size": 3035,
+        "source_trace_index": 8,
+        "status": "ok",
+        "tool": "engine_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "engine/symbols.json",
+      "node_id": "artifact:sha256:99ebaaa330f82086f391951cf50304ccd96a17d47420b7d5fa15e7116e409861",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 8,
+          "tool": "engine_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "engine-analysis",
+        "name": "engine/symbols.json",
+        "path": "engine/symbols.json",
+        "role": "artifact",
+        "sha256": "25f070c79eb2d0a16400c0ab96c9f143a29ddf092a36c59031230ce827168477",
+        "size": 505,
+        "source_trace_index": 8,
+        "status": "ok",
+        "tool": "engine_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "android/resources.json",
+      "node_id": "artifact:sha256:9ba513c791f4e130127960afa519f7d90a88fbb94afaca47a85d529ebf89bbb1",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 9,
+          "tool": "android_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "android-analysis",
+        "name": "android/resources.json",
+        "path": "android/resources.json",
+        "role": "artifact",
+        "sha256": "e75a31ac882e3e92e7c3f816df3dc579c08ad035e63db29054b4fef7afd84664",
+        "size": 487,
+        "source_trace_index": 9,
+        "status": "ok",
+        "tool": "android_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "engine/native_mapping.json",
+      "node_id": "artifact:sha256:c49e3fc0bb7426c6f82b3f6b88afc792ceef3a037fd2e79be4dc9fd391c26a37",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 8,
+          "tool": "engine_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "engine-native-mapping",
+        "name": "engine/native_mapping.json",
+        "path": "engine/native_mapping.json",
+        "role": "artifact",
+        "sha256": "19ea41d261d5bd7f2abdc821d27a39bc9acf7b82f26008f752c11bfd7aaa0718",
+        "size": 530,
+        "source_trace_index": 8,
+        "status": "ok",
+        "tool": "engine_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "protocol/flows.json",
+      "node_id": "artifact:sha256:d77e22b2f75ddd9a5630f4648dc2689ce5e76a8455f9e20abbcf8ef32e76e8e4",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 10,
+          "tool": "protocol_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "protocol-analysis",
+        "name": "protocol/flows.json",
+        "path": "protocol/flows.json",
+        "role": "artifact",
+        "sha256": "3e40e05775ecc46ee69f0bbb5c8f21566b654c0cd8141e70119dd3fbb9744098",
+        "size": 424,
+        "source_trace_index": 10,
+        "status": "ok",
+        "tool": "protocol_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "engine/fingerprint.json",
+      "node_id": "artifact:sha256:efb03eaf4dd54c94f1cbb6c9351176573820ea2b013e3fb3a98b75cff841ddf6",
+      "node_type": "artifact",
+      "properties": {
+        "generated_by": {
+          "input": "sample",
+          "source_trace_index": 8,
+          "tool": "engine_analyze"
+        },
+        "ingested_from": "evidence_manifest",
+        "kind": "engine-analysis",
+        "name": "engine/fingerprint.json",
+        "path": "engine/fingerprint.json",
+        "role": "artifact",
+        "sha256": "cd409f14b6ae2399bb695589ce813bd70be903ff1f4f71675a014d502ef585e4",
+        "size": 6870,
+        "source_trace_index": 8,
+        "status": "ok",
+        "tool": "engine_analyze",
+        "verification_status": "verified"
+      }
+    },
+    {
+      "label": "sha256:079c56c665ca6ec935a511ce3c2857624f0d504dcbdec6f205afd62cb8f7545a",
+      "node_id": "artifact_hash:sha256:079c56c665ca6ec935a511ce3c2857624f0d504dcbdec6f205afd62cb8f7545a",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "079c56c665ca6ec935a511ce3c2857624f0d504dcbdec6f205afd62cb8f7545a"
+      }
+    },
+    {
+      "label": "sha256:19ea41d261d5bd7f2abdc821d27a39bc9acf7b82f26008f752c11bfd7aaa0718",
+      "node_id": "artifact_hash:sha256:19ea41d261d5bd7f2abdc821d27a39bc9acf7b82f26008f752c11bfd7aaa0718",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "19ea41d261d5bd7f2abdc821d27a39bc9acf7b82f26008f752c11bfd7aaa0718"
+      }
+    },
+    {
+      "label": "sha256:25c5dda5df0c5617503d7900b1c333de0170cd67bbe3d0419d41811a34653b9c",
+      "node_id": "artifact_hash:sha256:25c5dda5df0c5617503d7900b1c333de0170cd67bbe3d0419d41811a34653b9c",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "25c5dda5df0c5617503d7900b1c333de0170cd67bbe3d0419d41811a34653b9c"
+      }
+    },
+    {
+      "label": "sha256:25f070c79eb2d0a16400c0ab96c9f143a29ddf092a36c59031230ce827168477",
+      "node_id": "artifact_hash:sha256:25f070c79eb2d0a16400c0ab96c9f143a29ddf092a36c59031230ce827168477",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "25f070c79eb2d0a16400c0ab96c9f143a29ddf092a36c59031230ce827168477"
+      }
+    },
+    {
+      "label": "sha256:3e40e05775ecc46ee69f0bbb5c8f21566b654c0cd8141e70119dd3fbb9744098",
+      "node_id": "artifact_hash:sha256:3e40e05775ecc46ee69f0bbb5c8f21566b654c0cd8141e70119dd3fbb9744098",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "3e40e05775ecc46ee69f0bbb5c8f21566b654c0cd8141e70119dd3fbb9744098"
+      }
+    },
+    {
+      "label": "sha256:446c835ea9361a3879ded6e401bb5757411cf29b08e1a373e98f886fbf05929d",
+      "node_id": "artifact_hash:sha256:446c835ea9361a3879ded6e401bb5757411cf29b08e1a373e98f886fbf05929d",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "446c835ea9361a3879ded6e401bb5757411cf29b08e1a373e98f886fbf05929d"
+      }
+    },
+    {
+      "label": "sha256:4be2537ed5f11b043ca0fb7b9677e0aac3a9adb2c436422882cfc7abb36c02ba",
+      "node_id": "artifact_hash:sha256:4be2537ed5f11b043ca0fb7b9677e0aac3a9adb2c436422882cfc7abb36c02ba",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "4be2537ed5f11b043ca0fb7b9677e0aac3a9adb2c436422882cfc7abb36c02ba"
+      }
+    },
+    {
+      "label": "sha256:91346c247d3251918e457fa745cc33fb90689f42550ac980644bf9e65ae550be",
+      "node_id": "artifact_hash:sha256:91346c247d3251918e457fa745cc33fb90689f42550ac980644bf9e65ae550be",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "91346c247d3251918e457fa745cc33fb90689f42550ac980644bf9e65ae550be"
+      }
+    },
+    {
+      "label": "sha256:9c206dc1728b59e7d0c11c1be1c47a06213aabd0c4e10fa0bcd18c31e27a7ff3",
+      "node_id": "artifact_hash:sha256:9c206dc1728b59e7d0c11c1be1c47a06213aabd0c4e10fa0bcd18c31e27a7ff3",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "9c206dc1728b59e7d0c11c1be1c47a06213aabd0c4e10fa0bcd18c31e27a7ff3"
+      }
+    },
+    {
+      "label": "sha256:9fdf807cb2a201a6c4d334316fa79a1a97101bad40c5ef7b20f0cd62689268ff",
+      "node_id": "artifact_hash:sha256:9fdf807cb2a201a6c4d334316fa79a1a97101bad40c5ef7b20f0cd62689268ff",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "9fdf807cb2a201a6c4d334316fa79a1a97101bad40c5ef7b20f0cd62689268ff"
+      }
+    },
+    {
+      "label": "sha256:cbc0bc686f6bd86105761bb946184ca109494b7571ed784b9599932a5e6ce375",
+      "node_id": "artifact_hash:sha256:cbc0bc686f6bd86105761bb946184ca109494b7571ed784b9599932a5e6ce375",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "cbc0bc686f6bd86105761bb946184ca109494b7571ed784b9599932a5e6ce375"
+      }
+    },
+    {
+      "label": "sha256:cd409f14b6ae2399bb695589ce813bd70be903ff1f4f71675a014d502ef585e4",
+      "node_id": "artifact_hash:sha256:cd409f14b6ae2399bb695589ce813bd70be903ff1f4f71675a014d502ef585e4",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "cd409f14b6ae2399bb695589ce813bd70be903ff1f4f71675a014d502ef585e4"
+      }
+    },
+    {
+      "label": "sha256:d555411e55f1c8789cdc36fa1da649b04507a1c4441a2c70d15f59fda4face09",
+      "node_id": "artifact_hash:sha256:d555411e55f1c8789cdc36fa1da649b04507a1c4441a2c70d15f59fda4face09",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "d555411e55f1c8789cdc36fa1da649b04507a1c4441a2c70d15f59fda4face09"
+      }
+    },
+    {
+      "label": "sha256:e30a68ee554a56d20d04da13155ad487c25e1c3d8b03e8ed6368396faae8a36b",
+      "node_id": "artifact_hash:sha256:e30a68ee554a56d20d04da13155ad487c25e1c3d8b03e8ed6368396faae8a36b",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "e30a68ee554a56d20d04da13155ad487c25e1c3d8b03e8ed6368396faae8a36b"
+      }
+    },
+    {
+      "label": "sha256:e4fe74b4dcd1ce6351a363009408e46f13c97a4688d82e925b10574dfe162b10",
+      "node_id": "artifact_hash:sha256:e4fe74b4dcd1ce6351a363009408e46f13c97a4688d82e925b10574dfe162b10",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "e4fe74b4dcd1ce6351a363009408e46f13c97a4688d82e925b10574dfe162b10"
+      }
+    },
+    {
+      "label": "sha256:e75a31ac882e3e92e7c3f816df3dc579c08ad035e63db29054b4fef7afd84664",
+      "node_id": "artifact_hash:sha256:e75a31ac882e3e92e7c3f816df3dc579c08ad035e63db29054b4fef7afd84664",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "e75a31ac882e3e92e7c3f816df3dc579c08ad035e63db29054b4fef7afd84664"
+      }
+    },
+    {
+      "label": "sha256:ec64ef7ee8c3b4bb3dbf0d30c453caeba545f329fb9a08ec41b376d5dc310cc9",
+      "node_id": "artifact_hash:sha256:ec64ef7ee8c3b4bb3dbf0d30c453caeba545f329fb9a08ec41b376d5dc310cc9",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "ec64ef7ee8c3b4bb3dbf0d30c453caeba545f329fb9a08ec41b376d5dc310cc9"
+      }
+    },
+    {
+      "label": "sha256:ee8d222503bcd362351b2fc0868676d19b76fb3d29756908b4949cbef85f261e",
+      "node_id": "artifact_hash:sha256:ee8d222503bcd362351b2fc0868676d19b76fb3d29756908b4949cbef85f261e",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "ee8d222503bcd362351b2fc0868676d19b76fb3d29756908b4949cbef85f261e"
+      }
+    },
+    {
+      "label": "sha256:f4e009622ecab4ef60201f5bf00f708c35a7a9209a124f0a5d9762fb89a60238",
+      "node_id": "artifact_hash:sha256:f4e009622ecab4ef60201f5bf00f708c35a7a9209a124f0a5d9762fb89a60238",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "f4e009622ecab4ef60201f5bf00f708c35a7a9209a124f0a5d9762fb89a60238"
+      }
+    },
+    {
+      "label": "sha256:f8f0bc5dd615583c0277915c4d3803711db3c66749d43d3928d2da6454176676",
+      "node_id": "artifact_hash:sha256:f8f0bc5dd615583c0277915c4d3803711db3c66749d43d3928d2da6454176676",
+      "node_type": "artifact_hash",
+      "properties": {
+        "algorithm": "sha256",
+        "digest": "f8f0bc5dd615583c0277915c4d3803711db3c66749d43d3928d2da6454176676"
+      }
+    },
+    {
+      "label": "unknown",
+      "node_id": "engine_analysis:sha256:9c8c870438425f0ca9879822b5ab11769f156568d947082134bfff328bf3d032",
+      "node_type": "engine_analysis",
+      "properties": {
+        "confidence": 0.0,
+        "execution_kind": "completed",
+        "status": "ok"
+      }
+    },
+    {
+      "label": "evidence_integrity",
+      "node_id": "evidence_integrity:sha256:0b1cf628d30e0701661db3884aa681230dd6122cee00fdf4a1f4fd726ef730e7",
+      "node_type": "evidence_integrity",
+      "properties": {
+        "execution_kind": "completed",
+        "status": "ok"
+      }
+    },
+    {
+      "label": "evidence-manifest.json",
+      "node_id": "evidence_manifest:sha256:809c5e1f9558597583cef222728ccecb95ef8a6be36f5824ef9119ca5b4de039",
+      "node_type": "evidence_manifest",
+      "properties": {
+        "hash_algorithm": "sha256",
+        "manifest_id": "sha256:e5b918ca5c70555ea2b3f50155d3a3a3e7bd833110c541ecba985220b94a12fc",
+        "path": "D:\\Project\\PE-reverse-skill\\outputs\\leila_analysis\\evidence-manifest.json",
+        "reported_status": "ok",
+        "schema": "reverse_analyzer.evidence_manifest/v1",
+        "valid": true,
+        "verification_source": "live",
+        "verification_status": "ok"
+      }
+    },
+    {
+      "label": "protocol_analysis.semantic_ir_fragment.entities",
+      "node_id": "evidence_reference:sha256:3c9d85814314a1e7630d44277ffbe95eb6bdf4bfc0c2aa50fcc0c4f2b86dcb64",
+      "node_type": "evidence_reference",
+      "properties": {
+        "reference": "protocol_analysis.semantic_ir_fragment.entities"
+      }
+    },
+    {
+      "label": "protocol_capture",
+      "node_id": "evidence_reference:sha256:82a2d87d62f63923c842e86c516d49bbf3cf5b4e301998148e234fa123a8c7f4",
+      "node_type": "evidence_reference",
+      "properties": {
+        "reference": "protocol_capture"
+      }
+    },
+    {
+      "label": "No independently corroborated engine signal reached the detection threshold",
+      "node_id": "evidence_reference:sha256:90cdc384cd9a0760085a13678a007d65482d1995e460e89e3609492575395860",
+      "node_type": "evidence_reference",
+      "properties": {
+        "reference": "No independently corroborated engine signal reached the detection threshold"
+      }
+    },
+    {
+      "label": "manifest verification",
+      "node_id": "evidence_verification:sha256:ad99373e09090edbcba25a24a85eff772aa26ec0351a7d091ac1db3840e6efaf",
+      "node_type": "evidence_verification",
+      "properties": {
+        "expected_manifest_id": "sha256:e5b918ca5c70555ea2b3f50155d3a3a3e7bd833110c541ecba985220b94a12fc",
+        "manifest_id": "sha256:e5b918ca5c70555ea2b3f50155d3a3a3e7bd833110c541ecba985220b94a12fc",
+        "skipped_file_count": 0,
+        "status": "ok",
+        "valid": true,
+        "verification_source": "live",
+        "verified_file_count": 19
+      }
+    },
+    {
+      "label": "gui_analysis",
+      "node_id": "gui_analysis:sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "node_type": "gui_analysis",
+      "properties": {
+        "execution_kind": "unknown",
+        "status": "unknown"
+      }
+    },
+    {
+      "label": "ios_analysis",
+      "node_id": "ios_analysis:sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "node_type": "ios_analysis",
+      "properties": {
+        "execution_kind": "unknown",
+        "status": "unknown"
+      }
+    },
+    {
+      "label": "memory_analysis",
+      "node_id": "memory_analysis:sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "node_type": "memory_analysis",
+      "properties": {
+        "execution_kind": "unknown",
+        "status": "unknown"
+      }
+    },
+    {
+      "label": "patch_analysis",
+      "node_id": "patch_analysis:sha256:774a5957e1e1b76e5ba7d6a9b803e215b28d31ac0fae1df873a96758e7fb35ef",
+      "node_type": "patch_analysis",
+      "properties": {
+        "execution_kind": "unavailable",
+        "status": "unavailable"
+      }
+    },
+    {
+      "label": "time.LocL",
+      "node_id": "protocol-flow:2f00753070db1010",
+      "node_type": "semantic_entity",
+      "properties": {
+        "attributes": {
+          "domain": "network",
+          "endpoint": "time.LocL",
+          "message_count": 0
+        },
+        "confidence": 1.0,
+        "kind": "dynamic_event",
+        "semantic_id": "protocol-flow:2f00753070db1010",
+        "sources": [
+          "protocol_analysis.semantic_ir_fragment.entities",
+          "protocol_capture"
+        ]
+      }
+    },
+    {
+      "label": "time.UTCL",
+      "node_id": "protocol-flow:63ae3452a5da35da",
+      "node_type": "semantic_entity",
+      "properties": {
+        "attributes": {
+          "domain": "network",
+          "endpoint": "time.UTCL",
+          "message_count": 0
+        },
+        "confidence": 1.0,
+        "kind": "dynamic_event",
+        "semantic_id": "protocol-flow:63ae3452a5da35da",
+        "sources": [
+          "protocol_analysis.semantic_ir_fragment.entities",
+          "protocol_capture"
+        ]
+      }
+    },
+    {
+      "label": "time.LocH",
+      "node_id": "protocol-flow:7f6d8a4334c03bf2",
+      "node_type": "semantic_entity",
+      "properties": {
+        "attributes": {
+          "domain": "network",
+          "endpoint": "time.LocH",
+          "message_count": 0
+        },
+        "confidence": 1.0,
+        "kind": "dynamic_event",
+        "semantic_id": "protocol-flow:7f6d8a4334c03bf2",
+        "sources": [
+          "protocol_analysis.semantic_ir_fragment.entities",
+          "protocol_capture"
+        ]
+      }
+    },
+    {
+      "label": "B.symtab",
+      "node_id": "protocol-flow:acf84892f148ef6b",
+      "node_type": "semantic_entity",
+      "properties": {
+        "attributes": {
+          "domain": "network",
+          "endpoint": "B.symtab",
+          "message_count": 0
+        },
+        "confidence": 1.0,
+        "kind": "dynamic_event",
+        "semantic_id": "protocol-flow:acf84892f148ef6b",
+        "sources": [
+          "protocol_analysis.semantic_ir_fragment.entities",
+          "protocol_capture"
+        ]
+      }
+    },
+    {
+      "label": "B.idata",
+      "node_id": "protocol-flow:d7bac12614bb5d5a",
+      "node_type": "semantic_entity",
+      "properties": {
+        "attributes": {
+          "domain": "network",
+          "endpoint": "B.idata",
+          "message_count": 0
+        },
+        "confidence": 1.0,
+        "kind": "dynamic_event",
+        "semantic_id": "protocol-flow:d7bac12614bb5d5a",
+        "sources": [
+          "protocol_analysis.semantic_ir_fragment.entities",
+          "protocol_capture"
+        ]
+      }
+    },
+    {
+      "label": "time.DatH",
+      "node_id": "protocol-flow:fc5e638f7a4cafb0",
+      "node_type": "semantic_entity",
+      "properties": {
+        "attributes": {
+          "domain": "network",
+          "endpoint": "time.DatH",
+          "message_count": 0
+        },
+        "confidence": 1.0,
+        "kind": "dynamic_event",
+        "semantic_id": "protocol-flow:fc5e638f7a4cafb0",
+        "sources": [
+          "protocol_analysis.semantic_ir_fragment.entities",
+          "protocol_capture"
+        ]
+      }
+    },
+    {
+      "label": "v.UH",
+      "node_id": "protocol-flow:fed67d43ace1c1cd",
+      "node_type": "semantic_entity",
+      "properties": {
+        "attributes": {
+          "domain": "network",
+          "endpoint": "v.UH",
+          "message_count": 0
+        },
+        "confidence": 1.0,
+        "kind": "dynamic_event",
+        "semantic_id": "protocol-flow:fed67d43ace1c1cd",
+        "sources": [
+          "protocol_analysis.semantic_ir_fragment.entities",
+          "protocol_capture"
+        ]
+      }
+    },
+    {
+      "label": "protocol_analysis",
+      "node_id": "protocol_analysis:sha256:3541f3b5478fdebfe6945b76d2dcf1cecb701bfeafe00918da5b59b66aab8d4b",
+      "node_type": "protocol_analysis",
+      "properties": {
+        "execution_kind": "completed",
+        "status": "ok"
+      }
+    },
+    {
+      "label": "Semantic IR",
+      "node_id": "semantic_ir:sha256:cfede7c68b0bb6ae15273224597e310a6bf3f5a3bfa7a4a6bb59e3a97b6873e7",
+      "node_type": "semantic_ir",
+      "properties": {
+        "schema_version": 1,
+        "status": "partial",
+        "summary": {
+          "api_count": 0,
+          "artifact_count": 1,
+          "capability_count": 2,
+          "domain_statuses": {
+            "android": "unavailable",
+            "engine": "ok",
+            "protocol": "ok"
+          },
+          "dynamic_event_count": 7,
+          "entity_count": 7,
+          "function_count": 0,
+          "module_count": 1,
+          "note_count": 0,
+          "relation_count": 0,
+          "runtime_count": 0,
+          "ui_control_count": 0,
+          "ui_state_count": 0
+        }
+      }
+    },
+    {
+      "label": "source_reconstruction",
+      "node_id": "source_reconstruction:sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "node_type": "source_reconstruction",
+      "properties": {
+        "execution_kind": "unknown",
+        "status": "unknown"
+      }
+    }
+  ]
+}

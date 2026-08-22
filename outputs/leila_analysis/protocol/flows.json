@@ -1,0 +1,30 @@
+[
+  {
+    "endpoint": "B.idata",
+    "kind": "host"
+  },
+  {
+    "endpoint": "B.symtab",
+    "kind": "host"
+  },
+  {
+    "endpoint": "time.DatH",
+    "kind": "host"
+  },
+  {
+    "endpoint": "time.LocH",
+    "kind": "host"
+  },
+  {
+    "endpoint": "time.LocL",
+    "kind": "host"
+  },
+  {
+    "endpoint": "time.UTCL",
+    "kind": "host"
+  },
+  {
+    "endpoint": "v.UH",
+    "kind": "host"
+  }
+]

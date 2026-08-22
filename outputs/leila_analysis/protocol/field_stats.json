@@ -1,0 +1,15 @@
+{
+  "capture_flow_count": 0,
+  "field_count": 0,
+  "fields": [],
+  "format_count": 0,
+  "host_count": 7,
+  "message_count": 0,
+  "messages_with_fields": 0,
+  "named_pipe_count": 0,
+  "protobuf_message_count": 0,
+  "protocol_count": 0,
+  "request_response_pair_count": 0,
+  "string_count": 2498,
+  "url_count": 0
+}

@@ -1,0 +1,30 @@
+{
+  "activities": [],
+  "activity_hint_count": 0,
+  "application": null,
+  "component_counts": {
+    "activities": 0,
+    "providers": 0,
+    "receivers": 0,
+    "services": 0
+  },
+  "element_count": 0,
+  "fallback_strings": [],
+  "min_sdk": null,
+  "package": null,
+  "parser": "none",
+  "permission_count": 0,
+  "permission_hint_count": 0,
+  "permissions": [],
+  "present": false,
+  "providers": [],
+  "receivers": [],
+  "services": [],
+  "status": "unavailable",
+  "target_sdk": null,
+  "textual": false,
+  "uses_features": [],
+  "version_code": null,
+  "version_name": null,
+  "warnings": []
+}

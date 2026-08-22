@@ -1,0 +1,19 @@
+{
+  "artifacts": [],
+  "capabilities": [],
+  "entities": [],
+  "limits": {
+    "max_components": 256,
+    "max_dex_files": 32,
+    "max_native_libraries": 128
+  },
+  "relations": [],
+  "schema_version": 1,
+  "source": "android_analyze",
+  "status": "unavailable",
+  "summary": {
+    "capability_count": 0,
+    "entity_count": 0,
+    "relation_count": 0
+  }
+}

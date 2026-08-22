@@ -1,0 +1,4 @@
+interface:
+  display_name: "AC"
+  short_description: "AC 激活的七路任务路由、直接执行、验证与回滚工作流"
+  default_prompt: "使用 $ac，并输入“AC”激活任务路由。"
