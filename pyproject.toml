@@ -12,6 +12,7 @@ dependencies = ["pefile>=2023.2.7", "capstone>=5.0", "requests>=2.28", "h2>=4.1,
 [project.scripts]
 reverse-jailbreak = "reverse_analyzer.llm_jailbreak.cli:main"
 reverse-analyzer = "reverse_analyzer.cli:main"
+reverse-instruct = "reverse_analyzer.instructions.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["reverse_analyzer*"]

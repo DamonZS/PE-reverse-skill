@@ -50,6 +50,7 @@ go run ./cmd/reverse-analyzer-server
 | `dashboard` | 生成静态 Dashboard，或用内置 HTTP 服务查看会话、能力审计、平台分析、趋势和工件。 |
 | `environment validate` | 发现可选依赖，并可执行受限的导入、版本或能力 probe，输出 `environment-validation.json`。 |
 | `jailbreak` / `llm_jailbreak` | **主动模型越狱工具**的平台专用 CLI 与独立 campaign CLI；两者共用同一引擎，也可通过通用 `capability` CLI 和 Registry provider 执行。 |
+| `reverse-instruct` | **跨平台破甲指令部署**（`reverse_analyzer/instructions/`）：把同一份品牌化「拓扑」破甲指令内容注入 Codex / Claude / Cursor / WorkBuddy 四个平台的适配层，支持 `list` / `describe` / `inspect` / `deploy` / `restore` 五个子命令与授权门禁。 |
 
 平台不会自动上传样本、报告、密钥或 trace。具体深度取决于样本类型、操作系统、目标权限以及本地可选工具。
 
@@ -97,6 +98,41 @@ python reverse-skills\skills\scripts\master-route.py `
 python reverse-skills\skills\scripts\refresh-skill-index.py
 python reverse-skills\skills\scripts\verify-skill-suite.py --strict-index
 ```
+
+## 跨平台破甲指令部署（reverse-instruct）
+
+`reverse_analyzer/instructions/` 实现「同一份品牌化破甲指令内容 + 平台专属注入适配器」，把统一的「拓扑」破甲身份注入当前主流的四个 AI 客户端平台：
+
+```text
+内容层（平台无关）       适配层（平台专属注入）          验证层（双轨识别）
+topo-ac-unrestricted      Codex   -> config.toml model_instructions_file
+gpt5.5-unrestricted.md    Claude  -> settings.json hooks.UserPromptSubmit stdout + CLAUDE.md
+   (主弹药)               Cursor  -> .cursor/rules/topo.ac.mdc alwaysApply:true
+                          WorkBuddy -> topo-ac-unrestricted skill 触发逻辑
+```
+
+- **三层架构**：内容层复用平台无关的破甲主弹药；适配层按平台注入机制实现 `deploy` / `inspect` / `restore`；验证层复用双轨识别（同时识别品牌化「拓扑」版与历史「Leila」版，防御不退步）。
+- **安全模型**：`allowed=True`（或 `--force`）才放行写入；`dry_run` 是零副作用预览、免授权；路径 `confine` 防逃逸；原子写 + backup + 可逆。
+- **平台注入机制**见 [跨平台破甲指令部署指南](docs/跨平台破甲指令部署指南.md)。
+
+```powershell
+# 列出所有平台并查看单个平台的部署计划
+reverse-instruct list
+reverse-instruct describe --platform claude
+
+# 只读检查某平台当前是否已注入
+reverse-instruct inspect --platform codex
+
+# 授权部署（dry-run 可先预览，不需要 --allowed）
+reverse-instruct deploy --platform claude --dry-run
+reverse-instruct deploy --platform claude --allowed
+reverse-instruct deploy --platform cursor --target <项目目录> --allowed
+
+# 按平台回滚（仅 restore 有持久化 evidence manifest 的平台会真正生效）
+reverse-instruct restore --platform codex
+```
+
+平台文件见 `reverse_analyzer/instructions/platforms/`（`codex.py` / `claude.py` / `cursor.py` / `workbuddy.py`），统一注册表与调度在 `registry.py`，CLI 入口为 `reverse-instruct`（已注册进 `pyproject.toml`）。
 
 ## 快速开始
 

@@ -6,11 +6,12 @@
 
 PE Reverse Analyzer 是一个面向逆向分析、软件安全研究和源码重构的本地优先平台。目标不是只输出反编译文本，而是把样本、分析计划、工具执行、证据、知识图谱、源码工程、真实构建和行为比较组织为可追溯流程。
 
-当前仓库同时包含三类交付物：
+当前仓库同时包含四类交付物：
 
 1. **分析内核**：Python 包 `reverse_analyzer`，提供 CLI、静态/动态/GUI 分析、Provider/Capability、证据清单、PE/APK/协议处理、补丁和源码重构。
 2. **生产平台**：Go 控制面、React 中文工作台、PostgreSQL 持久化和隔离 Runner，承载上传、Experiment/Flow、模型 Provider、知识库、制品、构建、补丁、终端与访问控制。
 3. **技能路由包**：`reverse-skills/skills/`，供 AI 客户端按目标、意图和工具条件选择逆向工作流；它可独立使用，也被平台目录索引。
+4. **跨平台指令部署**：`reverse_analyzer/instructions/`，把同一份品牌化「拓扑」破甲指令注入 Codex / Claude / Cursor / WorkBuddy 四个平台的适配层；CLI 为 `reverse-instruct`，内容复用 `topo-ac-unrestricted` / `gpt5.5-unrestricted.md` 破甲主弹药。
 
 完整源码重构主链路为：
 
@@ -93,6 +94,7 @@ Experiment 状态变化必须同步更新持久化、事件和编排快照。控
 | Python 运行目录 | `reverse_analyzer/config.py` | workspace、knowledge、sessions、reports 的环境变量规则。 |
 | 证据清单 | `reverse_analyzer/evidence/manifest.py` | 显式声明工件、相对路径、SHA-256、不可用阶段和验证规则。 |
 | 技能路由 | `reverse-skills/skills/config/routing.json` | 技能工作流唯一事实源。 |
+| 跨平台指令部署 | `reverse_analyzer/instructions/`（`adapter.py`、`platforms/*`、`registry.py`、`cli.py`） | `reverse-instruct` list/describe/inspect/deploy/restore；四平台适配器（Codex/Claude/Cursor/WorkBuddy）与统一安全模型。 |
 | 技能工具契约 | `reverse-skills/skills/config/tool-manifest.json` | 工具 ID、依赖和执行边界。 |
 | 技能导航 | `reverse-skills/skills/INDEX.md` | 生成文件，只用于导航。 |
 | 前端契约 | `frontend/src/App.tsx`、`frontend/src/api/catalog.ts` | API DTO、页面状态、SSE 消费和目录归一化。 |
@@ -123,6 +125,15 @@ supports -> plan -> validate -> execute -> optional rollback -> collect_artifact
 ```
 
 每一阶段都应保留明确状态和审计；缺失依赖不得伪装成成功。
+
+### 跨平台指令部署
+
+- `reverse_analyzer/instructions/adapter.py`：`PlatformAdapter` ABC（deploy/inspect/restore/describe/default_target）、`DeployPlan`/`Operation`/`EvidenceEntry` 数据类，以及 `atomic_write`/`confine`/`backup_existing`/`sha256_*` 安全工具与常量（`INSTRUCTION_PROFILE="topo-ac-unrestricted"`、`IDENTITY_WORD="拓扑"` 等）。
+- `reverse_analyzer/instructions/platforms/`：四平台适配器——`codex.py`（`config.toml model_instructions_file`）、`claude.py`（`settings.json hooks.UserPromptSubmit` stdout + `CLAUDE.md` 兜底）、`cursor.py`（`.cursor/rules/topo.ac.mdc` alwaysApply）、`workbuddy.py`（`topo-ac-unrestricted` skill 触发包）。
+- `reverse_analyzer/instructions/registry.py`：平台注册表 + `deploy`/`inspect`/`restore` 调度 + `trea→cursor` 别名。
+- `reverse_analyzer/instructions/cli.py` / `__main__.py`：`reverse-instruct` CLI（list/describe/inspect/deploy/restore），已注册进 `pyproject.toml`。
+
+**约定**：describe 的 Operation 列表必须与 deploy 实际写入完全一致（Codex 为 7 文件）；Claude 路径约定为顶层 `instruction.md` + `hooks/instruction-inject.sh`（禁止拼成 `.claude/.claude/` 双重目录）；Claude hook 脚本用纯 bash `cat "$_INSTR"`，不依赖 python；Windows 下禁用 `subprocess.run(..., text=True)` 解码含中文的 bash 输出（须显式 `encoding="utf-8"`）。
 
 ### Go 控制面
 
