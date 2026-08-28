@@ -38,10 +38,13 @@ from .registry import (
     adapter_for,
     canonical_platform,
     deploy,
+    deploy_all,
     inspect,
+    inspect_all,
     list_platforms,
     platform_aliases,
     restore,
+    restore_all,
 )
 
 __all__ = [
@@ -61,8 +64,11 @@ __all__ = [
     "adapter_for",
     "canonical_platform",
     "deploy",
+    "deploy_all",
     "inspect",
+    "inspect_all",
     "list_platforms",
     "platform_aliases",
     "restore",
+    "restore_all",
 ]

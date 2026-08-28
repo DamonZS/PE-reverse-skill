@@ -24,9 +24,11 @@ from reverse_analyzer.instructions import (
     adapter_for,
     canonical_platform,
     deploy,
+    deploy_all,
     inspect,
     list_platforms,
     platform_aliases,
+    restore_all,
 )
 from reverse_analyzer.instructions.adapter import (
     InstructionDeployError,
@@ -106,6 +108,38 @@ class SharedSafetyModelTests(unittest.TestCase):
                 self.assertEqual(result["status"], "dry-run")
                 self.assertEqual(result["platform"], key)
                 self.assertIn("plan", result)
+
+
+class BatchDeployTests(unittest.TestCase):
+    """deploy_all / restore_all cover every platform without touching the host."""
+
+    def test_deploy_all_dry_run_previews_every_platform(self):
+        # dry-run needs no allowed and writes nothing.
+        result = deploy_all(allowed=False, force=False, dry_run=True)
+        results = result["results"]
+        self.assertEqual(set(results), set(ALL_PLATFORMS))
+        for name in ALL_PLATFORMS:
+            with self.subTest(platform=name):
+                self.assertEqual(results[name]["status"], "dry-run")
+                self.assertEqual(results[name]["platform"], name)
+                self.assertIn("plan", results[name])
+
+    def test_deploy_all_requires_allowed_unless_force(self):
+        # Without allowed/force, every platform must refuse (status error), and
+        # the batch must not abort on a single refusal.
+        result = deploy_all(allowed=False, force=False, dry_run=False)
+        for name in ALL_PLATFORMS:
+            with self.subTest(platform=name):
+                self.assertEqual(result["results"][name]["status"], "error")
+
+    def test_restore_all_runs_on_every_platform(self):
+        result = restore_all()
+        self.assertEqual(set(result["results"]), set(ALL_PLATFORMS))
+        for name in ALL_PLATFORMS:
+            with self.subTest(platform=name):
+                # restore may error (adapter not wired to a manifest) but must
+                # not raise out of the batch; it is captured per platform.
+                self.assertIn("status", result["results"][name])
 
 
 class CodexAdapterTests(unittest.TestCase):

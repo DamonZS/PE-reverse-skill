@@ -128,11 +128,23 @@ reverse-instruct deploy --platform claude --dry-run
 reverse-instruct deploy --platform claude --allowed
 reverse-instruct deploy --platform cursor --target <项目目录> --allowed
 
+# 一键部署到本地全部平台（Codex / Claude / Cursor / WorkBuddy）
+reverse-instruct deploy-all --dry-run   # 预览，零副作用
+reverse-instruct deploy-all --allowed   # 授权部署到所有平台
+reverse-instruct inspect-all            # 只读巡检全部平台
+reverse-instruct restore-all            # 全部还原
+
+# 一键执行脚本（默认 verb 即 deploy）
+python scripts\reverse-instruct-all.py --dry-run
+python scripts\reverse-instruct-all.py --allowed
+python scripts\reverse-instruct-all.py inspect
+python scripts\reverse-instruct-all.py restore
+
 # 按平台回滚（仅 restore 有持久化 evidence manifest 的平台会真正生效）
 reverse-instruct restore --platform codex
 ```
 
-平台文件见 `reverse_analyzer/instructions/platforms/`（`codex.py` / `claude.py` / `cursor.py` / `workbuddy.py`），统一注册表与调度在 `registry.py`，CLI 入口为 `reverse-instruct`（已注册进 `pyproject.toml`）。
+平台文件见 `reverse_analyzer/instructions/platforms/`（`codex.py` / `claude.py` / `cursor.py` / `workbuddy.py`），统一注册表与调度在 `registry.py`，CLI 入口为 `reverse-instruct`（已注册进 `pyproject.toml`）。聚合动词 `deploy-all` / `inspect-all` / `restore-all` 按平台默认 target 逐个操作且互不阻断；一键脚本见 `scripts/reverse-instruct-all.py`。
 
 ## 快速开始
 

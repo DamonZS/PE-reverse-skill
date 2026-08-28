@@ -20,10 +20,13 @@ from .adapter import InstructionDeployError
 from .registry import (
     adapter_for,
     deploy,
+    deploy_all,
     inspect,
+    inspect_all,
     list_platforms,
     platform_aliases,
     restore,
+    restore_all,
 )
 
 
@@ -79,6 +82,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     restore_cmd.add_argument("--platform", required=True)
     restore_cmd.add_argument("--target", type=Path, default=None)
+
+    # --- bulk verbs: operate on every supported platform at once ---
+    inspect_all_cmd = commands.add_parser(
+        "inspect-all",
+        help="read-only scan every supported platform via its default target",
+    )
+
+    deploy_all_cmd = commands.add_parser(
+        "deploy-all",
+        help="deploy the branded bundle to every supported platform's default target",
+    )
+    deploy_all_cmd.add_argument("--allowed", action="store_true", default=False)
+    deploy_all_cmd.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        dest="force",
+        help="unrestricted/force-deploy: skip --allowed for every platform",
+    )
+    deploy_all_cmd.add_argument("--dry-run", action="store_true")
+
+    restore_all_cmd = commands.add_parser(
+        "restore-all",
+        help="restore every supported platform from its recorded evidence manifest",
+    )
 
     return parser
 
@@ -140,6 +168,40 @@ def _restore_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _inspect_all_command() -> int:
+    try:
+        result = inspect_all()
+    except InstructionDeployError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    _print_json(result)
+    return 0
+
+
+def _deploy_all_command(args: argparse.Namespace) -> int:
+    try:
+        result = deploy_all(
+            allowed=args.allowed,
+            force=args.force,
+            dry_run=args.dry_run,
+        )
+    except InstructionDeployError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    _print_json(result)
+    return 0
+
+
+def _restore_all_command() -> int:
+    try:
+        result = restore_all()
+    except InstructionDeployError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    _print_json(result)
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -154,6 +216,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return _deploy_command(args)
         if args.command == "restore":
             return _restore_command(args)
+        if args.command == "inspect-all":
+            return _inspect_all_command()
+        if args.command == "deploy-all":
+            return _deploy_all_command(args)
+        if args.command == "restore-all":
+            return _restore_all_command()
     except InstructionDeployError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

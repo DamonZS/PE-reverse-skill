@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .adapter import ALL_PLATFORMS, PLATFORM_CLAUDE, PLATFORM_CODEX, PLATFORM_CURSOR, PLATFORM_WORKBUDDY
+from .adapter import ALL_PLATFORMS, InstructionDeployError, PLATFORM_CLAUDE, PLATFORM_CODEX, PLATFORM_CURSOR, PLATFORM_WORKBUDDY
 from .platforms import (
     ClaudeAdapter,
     CodexAdapter,
@@ -75,9 +75,50 @@ def deploy(
     return adapter.deploy(Path(target) if target else None, allowed=allowed, force=force, dry_run=dry_run)
 
 
+def deploy_all(
+    *,
+    allowed: bool = False,
+    force: bool = False,
+    dry_run: bool = False,
+) -> Mapping[str, Any]:
+    """Deploy (or, when ``dry_run``, preview) the instruction bundle to every
+    supported platform via its default target, in canonical order.
+
+    Each platform is handled independently.  A ``allowed``/``force`` failure on
+    one platform does not abort the rest; any error is captured per platform
+    and reported in the per-platform result map.
+    """
+    results: dict[str, Any] = {}
+    for name in ALL_PLATFORMS:
+        adapter = adapter_for(name)
+        try:
+            results[name] = adapter.deploy(
+                None, allowed=allowed, force=force, dry_run=dry_run
+            )
+        except InstructionDeployError as exc:
+            results[name] = {
+                "platform": name,
+                "status": "error",
+                "error": str(exc),
+            }
+    return {"results": results}
+
+
 def inspect(platform: str, target: str | None = None) -> Mapping[str, Any]:
     adapter = adapter_for(platform)
     return adapter.inspect(Path(target) if target else None)
+
+
+def inspect_all() -> Mapping[str, Any]:
+    """Read-only scan of every supported platform via its default target."""
+    results: dict[str, Any] = {}
+    for name in ALL_PLATFORMS:
+        adapter = adapter_for(name)
+        try:
+            results[name] = adapter.inspect(None)
+        except InstructionDeployError as exc:
+            results[name] = {"platform": name, "status": "error", "error": str(exc)}
+    return {"results": results}
 
 
 def restore(platform: str, target: str | None = None) -> Mapping[str, Any]:
@@ -85,12 +126,31 @@ def restore(platform: str, target: str | None = None) -> Mapping[str, Any]:
     return adapter.restore(Path(target) if target else None)
 
 
+def restore_all() -> Mapping[str, Any]:
+    """Restore every supported platform via its default target."""
+    results: dict[str, Any] = {}
+    for name in ALL_PLATFORMS:
+        adapter = adapter_for(name)
+        try:
+            results[name] = adapter.restore(None)
+        except InstructionDeployError as exc:
+            results[name] = {
+                "platform": name,
+                "status": "error",
+                "error": str(exc),
+            }
+    return {"results": results}
+
+
 __all__ = [
     "adapter_for",
     "canonical_platform",
     "deploy",
+    "deploy_all",
     "inspect",
+    "inspect_all",
     "list_platforms",
     "platform_aliases",
     "restore",
+    "restore_all",
 ]
